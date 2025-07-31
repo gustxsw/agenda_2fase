@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { pool } from './db.js';
 import { authenticate, authorize } from './middleware/auth.js';
+import { v2 as cloudinary } from 'cloudinary';
 
 dotenv.config();
 
@@ -1754,33 +1755,6 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
   }
 });
 
-// 🔥 CATCH-ALL ROUTE - SERVE REACT APP
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ message: 'Erro interno do servidor' });
-});
-
-// Start server
-const startServer = async () => {
-  try {
-    await initDatabase();
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log('🔥 LOGIN NA URL RAIZ IMPLEMENTADO!');
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-};
-
-startServer();
 // ==================== SCHEDULING SYSTEM ROUTES ====================
 
 // Professional schedule settings
@@ -2600,3 +2574,31 @@ app.post('/api/scheduling-payment-webhook', async (req, res) => {
 });
 
 // ==================== END SCHEDULING SYSTEM ROUTES ====================
+
+// 🔥 CATCH-ALL ROUTE - SERVE REACT APP
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ message: 'Erro interno do servidor' });
+});
+
+// Start server
+const startServer = async () => {
+  try {
+    await initDatabase();
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log('🔥 LOGIN NA URL RAIZ IMPLEMENTADO!');
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();

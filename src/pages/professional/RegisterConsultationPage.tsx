@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Search, Calendar, User, Users, AlertTriangle } from 'lucide-react';
+import { Search, Calendar, User, Users, AlertTriangle, MapPin } from 'lucide-react';
 
 type Service = {
   id: number;
@@ -35,6 +35,19 @@ type Dependent = {
   client_subscription_status: string;
 };
 
+type AttendanceLocation = {
+  id: number;
+  name: string;
+  address: string;
+  is_default: boolean;
+};
+
+type PrivatePatient = {
+  id: number;
+  name: string;
+  cpf: string;
+};
+
 const RegisterConsultationPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -49,6 +62,7 @@ const RegisterConsultationPage: React.FC = () => {
   const [foundDependent, setFoundDependent] = useState<Dependent | null>(null);
   const [categoryId, setCategoryId] = useState<string>('');
   const [serviceId, setServiceId] = useState<number | null>(null);
+  const [locationId, setLocationId] = useState<string>('');
   const [value, setValue] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -57,6 +71,10 @@ const RegisterConsultationPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
+  const [attendanceLocations, setAttendanceLocations] = useState<AttendanceLocation[]>([]);
+  const [privatePatients, setPrivatePatients] = useState<PrivatePatient[]>([]);
+  const [hasSchedulingSubscription, setHasSchedulingSubscription] = useState(false);
+  const [selectedPrivatePatient, setSelectedPrivatePatient] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState('');
@@ -112,6 +130,53 @@ const RegisterConsultationPage: React.FC = () => {
         
         const servicesData = await servicesResponse.json();
         setServices(servicesData);
+        
+        // Fetch attendance locations
+        const locationsResponse = await fetch(`${apiUrl}/api/attendance-locations`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (locationsResponse.ok) {
+          const locationsData = await locationsResponse.json();
+          setAttendanceLocations(locationsData);
+          
+          // Set default location if exists
+          const defaultLocation = locationsData.find((loc: AttendanceLocation) => loc.is_default);
+          if (defaultLocation) {
+            setLocationId(defaultLocation.id.toString());
+          }
+        }
+        
+        // Check if professional has scheduling subscription
+        const subscriptionResponse = await fetch(`${apiUrl}/api/scheduling-subscription-status`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (subscriptionResponse.ok) {
+          const subscriptionData = await subscriptionResponse.json();
+          setHasSchedulingSubscription(subscriptionData.status === 'active');
+          
+          // If has subscription, fetch private patients
+          if (subscriptionData.status === 'active') {
+            const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            });
+            
+            if (patientsResponse.ok) {
+              const patientsData = await patientsResponse.json();
+              setPrivatePatients(patientsData);
+            }
+          }
+        }
       } catch (error) {
         console.error('Error fetching data:', error);
         setError('Não foi possível carregar os dados necessários');
@@ -322,10 +387,12 @@ const RegisterConsultationPage: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          client_id: selectedDependentId ? null : clientId,
+          client_id: hasSchedulingSubscription ? null : (selectedDependentId ? null : clientId),
           dependent_id: selectedDependentId,
+          private_patient_id: hasSchedulingSubscription ? (selectedPrivatePatient ? parseInt(selectedPrivatePatient) : null) : null,
           professional_id: user?.id,
           service_id: serviceId,
+          location_id: locationId ? parseInt(locationId) : null,
           value: Number(value),
           date: dateTime.toISOString(),
         }),
@@ -343,8 +410,10 @@ const RegisterConsultationPage: React.FC = () => {
       setSelectedDependentId(null);
       setFoundDependent(null);
       setDependents([]);
+      setSelectedPrivatePatient('');
       setCategoryId('');
       setServiceId(null);
+      setLocationId('');
       setValue('');
       setDate('');
       setTime('');
@@ -419,7 +488,45 @@ const RegisterConsultationPage: React.FC = () => {
         )}
         
         <form onSubmit={handleSubmit}>
-          <div className="mb-6">
+          {/* Show different forms based on subscription status */}
+          {hasSchedulingSubscription ? (
+            // Form for professionals with scheduling subscription
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-3 flex items-center">
+                <User className="h-5 w-5 mr-2 text-red-600" />
+                Selecionar Paciente Particular
+              </h2>
+              
+              <div>
+                <label htmlFor="privatePatient" className="block text-sm font-medium text-gray-700 mb-1">
+                  Paciente *
+                </label>
+                <select
+                  id="privatePatient"
+                  value={selectedPrivatePatient}
+                  onChange={(e) => setSelectedPrivatePatient(e.target.value)}
+                  className="input"
+                  disabled={isLoading}
+                  required
+                >
+                  <option value="">Selecione um paciente</option>
+                  {privatePatients.map((patient) => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.name} - CPF: {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                    </option>
+                  ))}
+                </select>
+                
+                {privatePatients.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    Você precisa cadastrar pacientes particulares primeiro.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            // Original form for professionals without subscription
+            <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3 flex items-center">
               <Search className="h-5 w-5 mr-2 text-red-600" />
               Buscar por CPF (Cliente ou Dependente)
@@ -534,9 +641,10 @@ const RegisterConsultationPage: React.FC = () => {
               </div>
             )}
           </div>
+          )}
           
           {/* Only show consultation details if subscription is active */}
-          {subscriptionStatus === 'active' && (
+          {(hasSchedulingSubscription && selectedPrivatePatient) || (!hasSchedulingSubscription && subscriptionStatus === 'active') ? (
             <div className="mb-6">
               <h2 className="text-lg font-semibold mb-3 flex items-center">
                 <Calendar className="h-5 w-5 mr-2 text-red-600" />
@@ -587,6 +695,31 @@ const RegisterConsultationPage: React.FC = () => {
                 </div>
                 
                 <div>
+                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                    Local de Atendimento
+                  </label>
+                  <select
+                    id="location"
+                    value={locationId}
+                    onChange={(e) => setLocationId(e.target.value)}
+                    className="input"
+                    disabled={isLoading}
+                  >
+                    <option value="">Selecione um local</option>
+                    {attendanceLocations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name} {location.is_default && '(Padrão)'}
+                      </option>
+                    ))}
+                  </select>
+                  {attendanceLocations.length === 0 && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Configure seus locais de atendimento no perfil.
+                    </p>
+                  )}
+                </div>
+                
+                <div>
                   <label htmlFor="value" className="block text-sm font-medium text-gray-700 mb-1">
                     Valor (R$)
                   </label>
@@ -634,7 +767,7 @@ const RegisterConsultationPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
           
           <div className="flex justify-end">
             <button
@@ -649,14 +782,17 @@ const RegisterConsultationPage: React.FC = () => {
             <button
               type="submit"
               className={`btn btn-primary ${
-                isLoading || subscriptionStatus !== 'active' 
+                isLoading || 
+                (hasSchedulingSubscription && !selectedPrivatePatient) ||
+                (!hasSchedulingSubscription && subscriptionStatus !== 'active')
                   ? 'opacity-70 cursor-not-allowed' 
                   : ''
               }`}
               disabled={
                 isLoading || 
-                subscriptionStatus !== 'active' ||
-                (!clientId && !selectedDependentId) || 
+                (hasSchedulingSubscription && !selectedPrivatePatient) ||
+                (!hasSchedulingSubscription && subscriptionStatus !== 'active') ||
+                (!hasSchedulingSubscription && !clientId && !selectedDependentId) || 
                 !serviceId || 
                 !value || 
                 !date || 
