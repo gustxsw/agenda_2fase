@@ -657,6 +657,7 @@ app.post('/api/auth/select-role', async (req, res) => {
     if (!userId || !role) {
       return res.status(400).json({ message: 'ID do usuário e role são obrigatórios' });
     }
+
     // Professional schedule settings
     await pool.query(`
       CREATE TABLE IF NOT EXISTS professional_schedule_settings (
