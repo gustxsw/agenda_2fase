@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { pool } from './db.js';
 import { authenticate, authorize } from './middleware/auth.js';
 
@@ -13,6 +14,11 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize MercadoPago
+const mpClient = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN,
+});
 
 // Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -650,6 +656,172 @@ app.post('/api/auth/select-role', async (req, res) => {
     if (!userId || !role) {
       return res.status(400).json({ message: 'ID do usuário e role são obrigatórios' });
     }
+    // Professional schedule settings
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS professional_schedule_settings (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        work_days INTEGER[] DEFAULT '{1,2,3,4,5}',
+        work_start_time TIME DEFAULT '08:00',
+        work_end_time TIME DEFAULT '18:00',
+        break_start_time TIME DEFAULT '12:00',
+        break_end_time TIME DEFAULT '13:00',
+        consultation_duration INTEGER DEFAULT 60,
+        has_scheduling_subscription BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(professional_id)
+      )
+    `);
+
+    // Attendance locations
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS attendance_locations (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        address TEXT,
+        address_number VARCHAR(20),
+        address_complement VARCHAR(255),
+        neighborhood VARCHAR(255),
+        city VARCHAR(255),
+        state VARCHAR(2),
+        zip_code VARCHAR(10),
+        phone VARCHAR(20),
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Private patients
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS private_patients (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        cpf VARCHAR(11) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(20),
+        birth_date DATE,
+        address TEXT,
+        address_number VARCHAR(20),
+        address_complement VARCHAR(255),
+        neighborhood VARCHAR(255),
+        city VARCHAR(255),
+        state VARCHAR(2),
+        zip_code VARCHAR(10),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(professional_id, cpf)
+      )
+    `);
+
+    // Appointments
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS appointments (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER REFERENCES private_patients(id) ON DELETE CASCADE,
+        client_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        dependent_id INTEGER REFERENCES dependents(id) ON DELETE CASCADE,
+        service_id INTEGER REFERENCES services(id) ON DELETE SET NULL,
+        appointment_date DATE NOT NULL,
+        appointment_time TIME NOT NULL,
+        location_id INTEGER REFERENCES attendance_locations(id) ON DELETE SET NULL,
+        value DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'scheduled',
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT check_patient_type CHECK (
+          (private_patient_id IS NOT NULL AND client_id IS NULL AND dependent_id IS NULL) OR
+          (private_patient_id IS NULL AND client_id IS NOT NULL AND dependent_id IS NULL) OR
+          (private_patient_id IS NULL AND client_id IS NULL AND dependent_id IS NOT NULL)
+        )
+      )
+    `);
+
+    // Medical records
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS medical_records (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER REFERENCES private_patients(id) ON DELETE CASCADE,
+        client_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        dependent_id INTEGER REFERENCES dependents(id) ON DELETE CASCADE,
+        appointment_id INTEGER REFERENCES appointments(id) ON DELETE SET NULL,
+        chief_complaint TEXT,
+        history_present_illness TEXT,
+        past_medical_history TEXT,
+        medications TEXT,
+        allergies TEXT,
+        physical_examination TEXT,
+        diagnosis TEXT,
+        treatment_plan TEXT,
+        notes TEXT,
+        vital_signs JSONB,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT check_patient_type CHECK (
+          (private_patient_id IS NOT NULL AND client_id IS NULL AND dependent_id IS NULL) OR
+          (private_patient_id IS NULL AND client_id IS NOT NULL AND dependent_id IS NULL) OR
+          (private_patient_id IS NULL AND client_id IS NULL AND dependent_id IS NOT NULL)
+        )
+      )
+    `);
+
+    // Professional scheduling subscriptions
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS professional_scheduling_subscriptions (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status VARCHAR(20) DEFAULT 'active',
+        expires_at TIMESTAMPTZ NOT NULL,
+        payment_id INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(professional_id)
+      )
+    `);
+
+    // Professional scheduling payments
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS professional_scheduling_payments (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        mp_preference_id VARCHAR(255),
+        mp_payment_id VARCHAR(255),
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        external_reference VARCHAR(255),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    // Medical documents
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS medical_documents (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER REFERENCES private_patients(id) ON DELETE CASCADE,
+        client_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        dependent_id INTEGER REFERENCES dependents(id) ON DELETE CASCADE,
+        document_type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        document_url VARCHAR(500),
+        signature_url VARCHAR(500),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT check_patient_type CHECK (
+          (private_patient_id IS NOT NULL AND client_id IS NULL AND dependent_id IS NULL) OR
+          (private_patient_id IS NULL AND client_id IS NOT NULL AND dependent_id IS NULL) OR
+          (private_patient_id IS NULL AND client_id IS NULL AND dependent_id IS NOT NULL)
+        )
+      )
+    `);
 
     const result = await pool.query(
       'SELECT id, name, cpf, roles FROM users WHERE id = $1',
@@ -1609,3 +1781,822 @@ const startServer = async () => {
 };
 
 startServer();
+// ==================== SCHEDULING SYSTEM ROUTES ====================
+
+// Professional schedule settings
+app.get('/api/scheduling/settings', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM professional_schedule_settings WHERE professional_id = $1`,
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      // Return default settings if none exist
+      return res.json({
+        professional_id: req.user.id,
+        work_days: [1, 2, 3, 4, 5], // Monday to Friday
+        work_start_time: '08:00',
+        work_end_time: '18:00',
+        break_start_time: '12:00',
+        break_end_time: '13:00',
+        consultation_duration: 60,
+        has_scheduling_subscription: false
+      });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching schedule settings:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.put('/api/scheduling/settings', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const {
+      work_days,
+      work_start_time,
+      work_end_time,
+      break_start_time,
+      break_end_time,
+      consultation_duration
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO professional_schedule_settings 
+       (professional_id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (professional_id) 
+       DO UPDATE SET 
+         work_days = $2,
+         work_start_time = $3,
+         work_end_time = $4,
+         break_start_time = $5,
+         break_end_time = $6,
+         consultation_duration = $7,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [req.user.id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration]
+    );
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating schedule settings:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Attendance locations
+app.get('/api/attendance-locations', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM attendance_locations 
+       WHERE professional_id = $1 
+       ORDER BY is_default DESC, name`,
+      [req.user.id]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching attendance locations:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.post('/api/attendance-locations', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const {
+      name,
+      address,
+      address_number,
+      address_complement,
+      neighborhood,
+      city,
+      state,
+      zip_code,
+      phone,
+      is_default
+    } = req.body;
+
+    // If this is set as default, remove default from others
+    if (is_default) {
+      await pool.query(
+        `UPDATE attendance_locations SET is_default = false WHERE professional_id = $1`,
+        [req.user.id]
+      );
+    }
+
+    const result = await pool.query(
+      `INSERT INTO attendance_locations 
+       (professional_id, name, address, address_number, address_complement, 
+        neighborhood, city, state, zip_code, phone, is_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [req.user.id, name, address, address_number, address_complement,
+       neighborhood, city, state, zip_code, phone, is_default]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating attendance location:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.put('/api/attendance-locations/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      address,
+      address_number,
+      address_complement,
+      neighborhood,
+      city,
+      state,
+      zip_code,
+      phone,
+      is_default
+    } = req.body;
+
+    // If this is set as default, remove default from others
+    if (is_default) {
+      await pool.query(
+        `UPDATE attendance_locations SET is_default = false 
+         WHERE professional_id = $1 AND id != $2`,
+        [req.user.id, id]
+      );
+    }
+
+    const result = await pool.query(
+      `UPDATE attendance_locations 
+       SET name = $1, address = $2, address_number = $3, address_complement = $4,
+           neighborhood = $5, city = $6, state = $7, zip_code = $8, phone = $9,
+           is_default = $10, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $11 AND professional_id = $12
+       RETURNING *`,
+      [name, address, address_number, address_complement, neighborhood, city, state,
+       zip_code, phone, is_default, id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Local de atendimento não encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating attendance location:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.delete('/api/attendance-locations/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if location has appointments
+    const appointmentsCheck = await pool.query(
+      `SELECT COUNT(*) FROM appointments WHERE location_id = $1`,
+      [id]
+    );
+
+    if (parseInt(appointmentsCheck.rows[0].count) > 0) {
+      return res.status(400).json({ 
+        message: 'Não é possível excluir local que possui agendamentos' 
+      });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM attendance_locations WHERE id = $1 AND professional_id = $2 RETURNING *`,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Local de atendimento não encontrado' });
+    }
+
+    res.json({ message: 'Local de atendimento excluído com sucesso' });
+  } catch (error) {
+    console.error('Error deleting attendance location:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Private patients
+app.get('/api/private-patients', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM private_patients 
+       WHERE professional_id = $1 
+       ORDER BY name`,
+      [req.user.id]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching private patients:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.get('/api/private-patients/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT * FROM private_patients 
+       WHERE id = $1 AND professional_id = $2`,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Paciente não encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching private patient:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.post('/api/private-patients', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const {
+      name,
+      cpf,
+      email,
+      phone,
+      birth_date,
+      address,
+      address_number,
+      address_complement,
+      neighborhood,
+      city,
+      state,
+      zip_code
+    } = req.body;
+
+    // Check if CPF already exists for this professional
+    const existingPatient = await pool.query(
+      `SELECT id FROM private_patients WHERE cpf = $1 AND professional_id = $2`,
+      [cpf, req.user.id]
+    );
+
+    if (existingPatient.rows.length > 0) {
+      return res.status(400).json({ message: 'Já existe um paciente cadastrado com este CPF' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO private_patients 
+       (professional_id, name, cpf, email, phone, birth_date, address, 
+        address_number, address_complement, neighborhood, city, state, zip_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       RETURNING *`,
+      [req.user.id, name, cpf, email, phone, birth_date, address, 
+       address_number, address_complement, neighborhood, city, state, zip_code]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating private patient:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.put('/api/private-patients/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      email,
+      phone,
+      birth_date,
+      address,
+      address_number,
+      address_complement,
+      neighborhood,
+      city,
+      state,
+      zip_code
+    } = req.body;
+
+    const result = await pool.query(
+      `UPDATE private_patients 
+       SET name = $1, email = $2, phone = $3, birth_date = $4, address = $5,
+           address_number = $6, address_complement = $7, neighborhood = $8,
+           city = $9, state = $10, zip_code = $11, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $12 AND professional_id = $13
+       RETURNING *`,
+      [name, email, phone, birth_date, address, address_number, address_complement,
+       neighborhood, city, state, zip_code, id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Paciente não encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating private patient:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.delete('/api/private-patients/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if patient has appointments
+    const appointmentsCheck = await pool.query(
+      `SELECT COUNT(*) FROM appointments WHERE private_patient_id = $1`,
+      [id]
+    );
+
+    if (parseInt(appointmentsCheck.rows[0].count) > 0) {
+      return res.status(400).json({ 
+        message: 'Não é possível excluir paciente que possui agendamentos' 
+      });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM private_patients WHERE id = $1 AND professional_id = $2 RETURNING *`,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Paciente não encontrado' });
+    }
+
+    res.json({ message: 'Paciente excluído com sucesso' });
+  } catch (error) {
+    console.error('Error deleting private patient:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.get('/api/private-patients/search/:query', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { query } = req.params;
+
+    const result = await pool.query(
+      `SELECT * FROM private_patients 
+       WHERE professional_id = $1 
+       AND (name ILIKE $2 OR cpf LIKE $3)
+       ORDER BY name
+       LIMIT 10`,
+      [req.user.id, `%${query}%`, `%${query.replace(/\D/g, '')}%`]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error searching private patients:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Appointments
+app.get('/api/appointments', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    const result = await pool.query(
+      `SELECT a.*, 
+              COALESCE(pp.name, c.name, d.name) as patient_name,
+              COALESCE(pp.cpf, c.cpf, d.cpf) as patient_cpf,
+              s.name as service_name,
+              al.name as location_name,
+              al.address as location_address
+       FROM appointments a
+       LEFT JOIN private_patients pp ON a.private_patient_id = pp.id
+       LEFT JOIN users c ON a.client_id = c.id
+       LEFT JOIN dependents d ON a.dependent_id = d.id
+       LEFT JOIN services s ON a.service_id = s.id
+       LEFT JOIN attendance_locations al ON a.location_id = al.id
+       WHERE a.professional_id = $1
+       AND a.appointment_date >= $2
+       AND a.appointment_date <= $3
+       ORDER BY a.appointment_date, a.appointment_time`,
+      [req.user.id, start_date, end_date]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching appointments:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.post('/api/appointments', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const {
+      private_patient_id,
+      client_id,
+      dependent_id,
+      service_id,
+      appointment_date,
+      appointment_time,
+      location_id,
+      notes,
+      value
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO appointments 
+       (professional_id, private_patient_id, client_id, dependent_id, service_id, 
+        appointment_date, appointment_time, location_id, notes, value, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'scheduled')
+       RETURNING *`,
+      [req.user.id, private_patient_id, client_id, dependent_id, service_id, 
+       appointment_date, appointment_time, location_id, notes, value]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating appointment:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.put('/api/appointments/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      appointment_date,
+      appointment_time,
+      location_id,
+      notes,
+      value,
+      status
+    } = req.body;
+
+    const result = await pool.query(
+      `UPDATE appointments 
+       SET appointment_date = $1, appointment_time = $2, location_id = $3, 
+           notes = $4, value = $5, status = $6, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $7 AND professional_id = $8
+       RETURNING *`,
+      [appointment_date, appointment_time, location_id, notes, value, status, id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Agendamento não encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating appointment:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.delete('/api/appointments/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `DELETE FROM appointments WHERE id = $1 AND professional_id = $2 RETURNING *`,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Agendamento não encontrado' });
+    }
+
+    res.json({ message: 'Agendamento excluído com sucesso' });
+  } catch (error) {
+    console.error('Error deleting appointment:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Medical records
+app.get('/api/medical-records/patient/:patientId/:patientType', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { patientId, patientType } = req.params;
+
+    let whereClause = '';
+    if (patientType === 'private') {
+      whereClause = 'private_patient_id = $2';
+    } else if (patientType === 'client') {
+      whereClause = 'client_id = $2';
+    } else if (patientType === 'dependent') {
+      whereClause = 'dependent_id = $2';
+    }
+
+    const result = await pool.query(
+      `SELECT mr.*, 
+              COALESCE(pp.name, c.name, d.name) as patient_name
+       FROM medical_records mr
+       LEFT JOIN private_patients pp ON mr.private_patient_id = pp.id
+       LEFT JOIN users c ON mr.client_id = c.id
+       LEFT JOIN dependents d ON mr.dependent_id = d.id
+       WHERE mr.professional_id = $1 AND ${whereClause}
+       ORDER BY mr.created_at DESC`,
+      [req.user.id, patientId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching medical records:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.get('/api/medical-records/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT mr.*, 
+              COALESCE(pp.name, c.name, d.name) as patient_name
+       FROM medical_records mr
+       LEFT JOIN private_patients pp ON mr.private_patient_id = pp.id
+       LEFT JOIN users c ON mr.client_id = c.id
+       LEFT JOIN dependents d ON mr.dependent_id = d.id
+       WHERE mr.id = $1 AND mr.professional_id = $2`,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Prontuário não encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching medical record:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.post('/api/medical-records', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const {
+      private_patient_id,
+      client_id,
+      dependent_id,
+      appointment_id,
+      chief_complaint,
+      history_present_illness,
+      past_medical_history,
+      medications,
+      allergies,
+      physical_examination,
+      diagnosis,
+      treatment_plan,
+      notes,
+      vital_signs
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO medical_records 
+       (professional_id, private_patient_id, client_id, dependent_id, appointment_id,
+        chief_complaint, history_present_illness, past_medical_history, medications,
+        allergies, physical_examination, diagnosis, treatment_plan, notes, vital_signs)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       RETURNING *`,
+      [req.user.id, private_patient_id, client_id, dependent_id, appointment_id,
+       chief_complaint, history_present_illness, past_medical_history, medications,
+       allergies, physical_examination, diagnosis, treatment_plan, notes, vital_signs]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating medical record:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.put('/api/medical-records/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      chief_complaint,
+      history_present_illness,
+      past_medical_history,
+      medications,
+      allergies,
+      physical_examination,
+      diagnosis,
+      treatment_plan,
+      notes,
+      vital_signs
+    } = req.body;
+
+    const result = await pool.query(
+      `UPDATE medical_records 
+       SET chief_complaint = $1, history_present_illness = $2, past_medical_history = $3,
+           medications = $4, allergies = $5, physical_examination = $6, diagnosis = $7,
+           treatment_plan = $8, notes = $9, vital_signs = $10, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $11 AND professional_id = $12
+       RETURNING *`,
+      [chief_complaint, history_present_illness, past_medical_history, medications,
+       allergies, physical_examination, diagnosis, treatment_plan, notes, vital_signs, id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Prontuário não encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating medical record:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.delete('/api/medical-records/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `DELETE FROM medical_records WHERE id = $1 AND professional_id = $2 RETURNING *`,
+      [id, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Prontuário não encontrado' });
+    }
+
+    res.json({ message: 'Prontuário excluído com sucesso' });
+  } catch (error) {
+    console.error('Error deleting medical record:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Scheduling subscription payment
+app.post('/api/create-scheduling-subscription', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    console.log('🔄 Creating scheduling subscription for professional:', req.user.id);
+
+    // Check if professional already has active scheduling subscription
+    const existingSubscription = await pool.query(
+      `SELECT * FROM professional_scheduling_subscriptions 
+       WHERE professional_id = $1 AND status = 'active' AND expires_at > NOW()`,
+      [req.user.id]
+    );
+
+    if (existingSubscription.rows.length > 0) {
+      return res.status(400).json({ 
+        message: 'Você já possui uma assinatura ativa do sistema de agendamentos' 
+      });
+    }
+
+    const preference = new Preference(mpClient);
+
+    const preferenceData = {
+      items: [
+        {
+          title: 'Sistema de Agendamentos - Quiro Ferreira',
+          description: 'Assinatura mensal do sistema de agendamentos profissional',
+          quantity: 1,
+          unit_price: 49.90,
+          currency_id: 'BRL',
+        }
+      ],
+      payer: {
+        name: req.user.name,
+        email: req.user.email || `professional${req.user.id}@quiroferreira.com.br`,
+      },
+      back_urls: {
+        success: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling/payment-success`,
+        failure: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling/payment-failure`,
+        pending: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling/payment-pending`,
+      },
+      auto_return: 'approved',
+      external_reference: `scheduling_${req.user.id}_${Date.now()}`,
+      notification_url: `${process.env.API_URL || 'http://localhost:3001'}/api/scheduling-payment-webhook`,
+      statement_descriptor: 'QUIRO FERREIRA AGENDA',
+    };
+
+    console.log('🔄 Creating MercadoPago preference:', preferenceData);
+
+    const result = await preference.create({ body: preferenceData });
+
+    console.log('✅ MercadoPago preference created:', result);
+
+    // Store the payment intent in database
+    await pool.query(
+      `INSERT INTO professional_scheduling_payments 
+       (professional_id, mp_preference_id, amount, status, external_reference)
+       VALUES ($1, $2, $3, 'pending', $4)`,
+      [req.user.id, result.id, 49.90, preferenceData.external_reference]
+    );
+
+    res.json({
+      preference_id: result.id,
+      init_point: result.init_point,
+      sandbox_init_point: result.sandbox_init_point,
+    });
+  } catch (error) {
+    console.error('❌ Error creating scheduling subscription:', error);
+    res.status(500).json({ 
+      message: 'Erro ao criar pagamento da assinatura',
+      error: error.message 
+    });
+  }
+});
+
+// Get professional's scheduling subscription status
+app.get('/api/scheduling-subscription-status', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM professional_scheduling_subscriptions 
+       WHERE professional_id = $1 
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        has_subscription: false,
+        status: 'inactive',
+        expires_at: null
+      });
+    }
+
+    const subscription = result.rows[0];
+    const isActive = subscription.status === 'active' && new Date(subscription.expires_at) > new Date();
+
+    res.json({
+      has_subscription: true,
+      status: isActive ? 'active' : 'expired',
+      expires_at: subscription.expires_at,
+      created_at: subscription.created_at
+    });
+  } catch (error) {
+    console.error('Error fetching subscription status:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Handle MercadoPago webhook for scheduling payments
+app.post('/api/scheduling-payment-webhook', async (req, res) => {
+  try {
+    console.log('🔔 Scheduling payment webhook received:', req.body);
+
+    const { type, data } = req.body;
+
+    if (type === 'payment') {
+      const paymentId = data.id;
+      
+      // Here you would typically verify the payment with MercadoPago API
+      // For now, we'll simulate payment approval
+      
+      // Find the payment record
+      const paymentResult = await pool.query(
+        `SELECT * FROM professional_scheduling_payments WHERE mp_payment_id = $1`,
+        [paymentId]
+      );
+
+      if (paymentResult.rows.length > 0) {
+        const payment = paymentResult.rows[0];
+        
+        // Update payment status
+        await pool.query(
+          `UPDATE professional_scheduling_payments 
+           SET status = 'approved', updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1`,
+          [payment.id]
+        );
+
+        // Create or update scheduling subscription
+        const expiresAt = new Date();
+        expiresAt.setMonth(expiresAt.getMonth() + 1); // 1 month from now
+
+        await pool.query(
+          `INSERT INTO professional_scheduling_subscriptions 
+           (professional_id, status, expires_at, payment_id)
+           VALUES ($1, 'active', $2, $3)
+           ON CONFLICT (professional_id) 
+           DO UPDATE SET 
+             status = 'active',
+             expires_at = $2,
+             payment_id = $3,
+             updated_at = CURRENT_TIMESTAMP`,
+          [payment.professional_id, expiresAt, payment.id]
+        );
+
+        // Update professional schedule settings to enable scheduling
+        await pool.query(
+          `UPDATE professional_schedule_settings 
+           SET has_scheduling_subscription = true
+           WHERE professional_id = $1`,
+          [payment.professional_id]
+        );
+
+        console.log('✅ Scheduling subscription activated for professional:', payment.professional_id);
+      }
+    }
+
+    res.status(200).json({ received: true });
+  } catch (error) {
+    console.error('❌ Error processing scheduling payment webhook:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+// ==================== END SCHEDULING SYSTEM ROUTES ====================

@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Users, FileText, BarChart2, Calendar, UserPlus } from 'lucide-react';
+import { Home, Users, FileText, BarChart2, Calendar, UserPlus, CalendarDays, UserCheck, Stethoscope, FileImage, Settings } from 'lucide-react';
 
 type SidebarProps = {
   onItemClick?: () => void;
@@ -20,7 +20,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onItemClick }) => {
     } else if (user?.currentRole === 'professional') {
       return [
         { to: '/professional', icon: <Home size={20} />, label: 'Início' },
+        { to: '/professional/scheduling', icon: <CalendarDays size={20} />, label: 'Agenda' },
+        { to: '/professional/private-patients', icon: <UserCheck size={20} />, label: 'Pacientes Particulares' },
+        { to: '/professional/medical-records', icon: <Stethoscope size={20} />, label: 'Prontuários' },
+        { to: '/professional/documents', icon: <FileImage size={20} />, label: 'Documentos' },
         { to: '/professional/register-consultation', icon: <Calendar size={20} />, label: 'Registrar Consulta' },
+        { to: '/professional/reports', icon: <BarChart2 size={20} />, label: 'Relatórios' },
+        { to: '/professional/profile', icon: <Settings size={20} />, label: 'Perfil' },
       ];
     } else if (user?.currentRole === 'admin') {
       return [
