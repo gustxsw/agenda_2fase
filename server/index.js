@@ -2662,4 +2662,154 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌐 Frontend: http://localhost:${PORT}`);
   console.log(`🔧 API: http://localhost:${PORT}/api`);
+  
+  // Create test professional after server starts
+  setTimeout(createTestProfessional, 2000);
 });
+// Function to create test professional with complete schedule
+async function createTestProfessional() {
+  try {
+    console.log('🧪 Creating test professional with schedule...');
+    
+    // Check if test professional already exists
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE cpf = $1',
+      ['12345678901']
+    );
+    
+    if (existingUser.rows.length > 0) {
+      console.log('✅ Test professional already exists');
+      return;
+    }
+    
+    // Hash password
+    const bcrypt = await import('bcryptjs');
+    const hashedPassword = await bcrypt.hash('123456', 10);
+    
+    // 1. Create category
+    const categoryResult = await pool.query(
+      `INSERT INTO service_categories (name, description) 
+       VALUES ('Fisioterapia', 'Serviços de fisioterapia e reabilitação')
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`
+    );
+    const categoryId = categoryResult.rows[0].id;
+    
+    // 2. Create service
+    const serviceResult = await pool.query(
+      `INSERT INTO services (name, description, base_price, category_id, is_base_service)
+       VALUES ('Consulta Fisioterapêutica', 'Consulta completa de fisioterapia', 150.00, $1, true)
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      [categoryId]
+    );
+    const serviceId = serviceResult.rows[0].id;
+    
+    // 3. Create professional user
+    const userResult = await pool.query(
+      `INSERT INTO users (name, cpf, email, phone, password, roles, percentage, category_id, subscription_status, subscription_expiry)
+       VALUES ('Dr. João Silva (TESTE)', '12345678901', 'joao.teste@quiroferreira.com', '64981249199', $1, $2, 70, $3, 'active', '2025-12-31')
+       RETURNING id`,
+      [hashedPassword, JSON.stringify(['professional']), categoryId]
+    );
+    const professionalId = userResult.rows[0].id;
+    
+    // 4. Create scheduling subscription
+    const expiresAt = new Date('2025-12-31');
+    await pool.query(
+      `INSERT INTO professional_scheduling_subscriptions (professional_id, status, expires_at)
+       VALUES ($1, 'active', $2)
+       ON CONFLICT (professional_id) DO UPDATE SET status = 'active', expires_at = $2`,
+      [professionalId, expiresAt]
+    );
+    
+    // 5. Create schedule settings
+    await pool.query(
+      `INSERT INTO professional_schedule_settings 
+       (professional_id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration, has_scheduling_subscription)
+       VALUES ($1, $2, '08:00', '18:00', '12:00', '13:00', 60, true)
+       ON CONFLICT (professional_id) DO UPDATE SET has_scheduling_subscription = true`,
+      [professionalId, JSON.stringify([1, 2, 3, 4, 5])]
+    );
+    
+    // 6. Create attendance location
+    const locationResult = await pool.query(
+      `INSERT INTO attendance_locations 
+       (professional_id, name, address, address_number, neighborhood, city, state, phone, is_default)
+       VALUES ($1, 'Clínica Principal', 'Rua das Flores', '123', 'Centro', 'Goiânia', 'GO', '64981249199', true)
+       RETURNING id`,
+      [professionalId]
+    );
+    const locationId = locationResult.rows[0].id;
+    
+    // 7. Create private patients
+    const patient1Result = await pool.query(
+      `INSERT INTO private_patients 
+       (professional_id, name, cpf, email, phone, birth_date, address, city, state)
+       VALUES ($1, 'Maria Santos', '11111111111', 'maria@email.com', '64999999999', '1985-05-15', 'Rua A, 100', 'Goiânia', 'GO')
+       RETURNING id`,
+      [professionalId]
+    );
+    const patient1Id = patient1Result.rows[0].id;
+    
+    const patient2Result = await pool.query(
+      `INSERT INTO private_patients 
+       (professional_id, name, cpf, email, phone, birth_date, address, city, state)
+       VALUES ($1, 'Carlos Oliveira', '22222222222', 'carlos@email.com', '64888888888', '1978-12-03', 'Rua B, 200', 'Goiânia', 'GO')
+       RETURNING id`,
+      [professionalId]
+    );
+    const patient2Id = patient2Result.rows[0].id;
+    
+    // 8. Create appointments (next 3 days)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const dayAfter = new Date();
+    dayAfter.setDate(dayAfter.getDate() + 2);
+    
+    const dayAfter2 = new Date();
+    dayAfter2.setDate(dayAfter2.getDate() + 3);
+    
+    await pool.query(
+      `INSERT INTO appointments 
+       (professional_id, private_patient_id, service_id, appointment_date, appointment_time, location_id, value, status, notes)
+       VALUES 
+       ($1, $2, $3, $4, '09:00', $5, 150.00, 'scheduled', 'Primeira consulta - avaliação inicial'),
+       ($1, $6, $3, $7, '14:30', $5, 150.00, 'scheduled', 'Consulta de retorno'),
+       ($1, $2, $3, $8, '10:15', $5, 150.00, 'scheduled', 'Segunda sessão de tratamento')`,
+      [professionalId, patient1Id, serviceId, tomorrow.toISOString().split('T')[0], locationId, 
+       patient2Id, dayAfter.toISOString().split('T')[0], dayAfter2.toISOString().split('T')[0]]
+    );
+    
+    // 9. Create medical records
+    await pool.query(
+      `INSERT INTO medical_records 
+       (professional_id, private_patient_id, chief_complaint, history_present_illness, 
+        physical_examination, diagnosis, treatment_plan, vital_signs)
+       VALUES 
+       ($1, $2, 'Dor lombar há 2 semanas', 'Paciente relata dor lombar após esforço físico', 
+        'Tensão muscular em região lombar, amplitude de movimento reduzida', 
+        'Lombalgia mecânica', 'Fisioterapia 3x/semana, exercícios de fortalecimento', 
+        $3),
+       ($1, $4, 'Dor no ombro direito', 'Dor no ombro há 1 mês, piora com movimento', 
+        'Limitação de movimento, dor à palpação', 'Tendinite do manguito rotador', 
+        'Fisioterapia, anti-inflamatórios, repouso relativo', $5)`,
+      [professionalId, patient1Id, 
+       JSON.stringify({blood_pressure: '120/80', heart_rate: '72', temperature: '36.5'}),
+       patient2Id,
+       JSON.stringify({blood_pressure: '130/85', heart_rate: '78', temperature: '36.8'})]
+    );
+    
+    console.log('✅ Test professional created successfully!');
+    console.log('📋 Login credentials:');
+    console.log('   CPF: 123.456.789-01');
+    console.log('   Password: 123456');
+    console.log('📅 Schedule: 3 appointments created');
+    console.log('👥 Patients: 2 private patients created');
+    console.log('📋 Medical records: 2 records created');
+    
+  } catch (error) {
+    console.error('❌ Error creating test professional:', error);
+  }
+}
