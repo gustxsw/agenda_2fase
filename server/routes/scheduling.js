@@ -1,6 +1,6 @@
-import express from 'express';
-import { pool } from '../db.js';
-import { authenticate, authorize } from '../middleware/auth.js';
+const express = require('express');
+const { pool } = require('../db');
+const { authenticate, authorize } = require('../middleware/auth');
 const router = express.Router();
 
 // Get professional's schedule settings
@@ -186,4 +186,4 @@ router.delete('/appointments/:id', authenticate, authorize(['professional']), as
   }
 });
 
-export default router;
+module.exports = router;
