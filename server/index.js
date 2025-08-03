@@ -276,207 +276,262 @@ const createTables = async () => {
   }
 };
 
-// Create test professional with active scheduling subscription
+// Create test professional with complete scheduling setup
 const createTestProfessional = async () => {
   try {
-    console.log('🔄 Creating test professional with scheduling...');
+    console.log('🔄 Creating test professional...');
     
     // Check if test professional already exists
-    const existingProfessional = await pool.query(
-      `SELECT id FROM users WHERE cpf = $1`,
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE cpf = $1',
       ['12345678901']
     );
     
-    let professionalId;
-    
-    if (existingProfessional.rows.length === 0) {
-      // Create test professional
-      const hashedPassword = await bcrypt.hash('123456', 10);
-      
-      const professionalResult = await pool.query(
-        `INSERT INTO users (
-          name, cpf, email, phone, password, roles, percentage, category_id,
-          address, city, state, subscription_status, subscription_expiry
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        RETURNING id`,
-        [
-          'Dr. João Silva (Teste)',
-          '12345678901',
-          'joao.teste@quiroferreira.com',
-          '64981249199',
-          hashedPassword,
-          JSON.stringify(['professional']),
-          70, // 70% para o profissional
-          1,  // Categoria 1 (assumindo que existe)
-          'Rua das Flores, 123',
-          'Goiânia',
-          'GO',
-          'active',
-          '2025-12-31'
-        ]
-      );
-      
-      professionalId = professionalResult.rows[0].id;
-      console.log('✅ Test professional created with ID:', professionalId);
-    } else {
-      professionalId = existingProfessional.rows[0].id;
-      console.log('✅ Test professional already exists with ID:', professionalId);
+    if (existingUser.rows.length > 0) {
+      console.log('✅ Test professional already exists');
+      return;
     }
     
-    // Check if subscription already exists
-    const existingSubscription = await pool.query(
-      `SELECT id FROM professional_scheduling_subscriptions WHERE professional_id = $1`,
-      [professionalId]
+    // Hash password
+    const hashedPassword = await bcrypt.hash('123456', 10);
+    
+    // 1. Create the professional user
+    const userResult = await pool.query(
+      `INSERT INTO users (
+        name, cpf, email, phone, birth_date, address, address_number, 
+        address_complement, neighborhood, city, state, password_hash, roles,
+        percentage, category_id, subscription_status, subscription_expiry,
+        created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+      ) RETURNING id`,
+      [
+        'Dr. João Silva (TESTE)',
+        '12345678901',
+        'joao.teste@quiroferreira.com',
+        '64981249199',
+        '1980-05-15',
+        'Rua das Flores',
+        '123',
+        'Sala 101',
+        'Centro',
+        'Goiânia',
+        'GO',
+        hashedPassword,
+        JSON.stringify(['professional']),
+        70, // 70% for the professional
+        1,  // Assuming category 1 exists
+        'active',
+        '2025-12-31',
+        new Date(),
+        new Date()
+      ]
     );
     
-    if (existingSubscription.rows.length === 0) {
-      // Create active scheduling subscription
-      await pool.query(
-        `INSERT INTO professional_scheduling_subscriptions (
-          professional_id, status, expires_at, mp_preference_id, mp_payment_id, external_reference
-        ) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          professionalId,
-          'active',
-          '2025-12-31 23:59:59',
-          'TEST_PREF_' + Date.now(),
-          'TEST_PAY_' + Date.now(),
-          'scheduling_test_' + Date.now()
-        ]
-      );
-      console.log('✅ Scheduling subscription created for professional');
-    }
+    const professionalId = userResult.rows[0].id;
+    console.log(`✅ Test professional created with ID: ${professionalId}`);
     
-    // Check if schedule settings exist
-    const existingSettings = await pool.query(
-      `SELECT id FROM professional_schedule_settings WHERE professional_id = $1`,
-      [professionalId]
+    // 2. Create scheduling subscription
+    await pool.query(
+      `INSERT INTO professional_scheduling_subscriptions (
+        professional_id, status, expires_at, mp_preference_id, mp_payment_id,
+        external_reference, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        professionalId,
+        'active',
+        '2025-12-31 23:59:59',
+        'TEST_PREF_' + Date.now(),
+        'TEST_PAY_' + Date.now(),
+        'scheduling_test_' + Date.now(),
+        new Date(),
+        new Date()
+      ]
+    );
+    console.log('✅ Scheduling subscription created');
+    
+    // 3. Create schedule settings
+    await pool.query(
+      `INSERT INTO professional_schedule_settings (
+        professional_id, work_days, work_start_time, work_end_time,
+        break_start_time, break_end_time, consultation_duration,
+        has_scheduling_subscription, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        professionalId,
+        [1, 2, 3, 4, 5], // Monday to Friday
+        '08:00:00',
+        '18:00:00',
+        '12:00:00',
+        '13:00:00',
+        60,
+        true,
+        new Date(),
+        new Date()
+      ]
+    );
+    console.log('✅ Schedule settings created');
+    
+    // 4. Create default attendance location
+    await pool.query(
+      `INSERT INTO attendance_locations (
+        professional_id, name, address, address_number, address_complement,
+        neighborhood, city, state, zip_code, phone, is_default,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [
+        professionalId,
+        'Clínica Principal - TESTE',
+        'Av. Goiás',
+        '1000',
+        'Sala 205',
+        'Setor Central',
+        'Goiânia',
+        'GO',
+        '74000000',
+        '6432221234',
+        true,
+        new Date(),
+        new Date()
+      ]
+    );
+    console.log('✅ Default attendance location created');
+    
+    // 5. Create test private patients
+    const patient1Result = await pool.query(
+      `INSERT INTO private_patients (
+        professional_id, name, cpf, email, phone, birth_date,
+        address, address_number, neighborhood, city, state,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [
+        professionalId,
+        'Maria Santos (TESTE)',
+        '98765432100',
+        'maria.teste@email.com',
+        '64987654321',
+        '1990-03-20',
+        'Rua das Palmeiras',
+        '456',
+        'Jardim América',
+        'Goiânia',
+        'GO',
+        new Date(),
+        new Date()
+      ]
     );
     
-    if (existingSettings.rows.length === 0) {
-      // Create default schedule settings
-      await pool.query(
-        `INSERT INTO professional_schedule_settings (
-          professional_id, work_days, work_start_time, work_end_time,
-          break_start_time, break_end_time, consultation_duration, has_scheduling_subscription
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          professionalId,
-          JSON.stringify([1, 2, 3, 4, 5]), // Segunda a sexta
-          '08:00:00',
-          '18:00:00',
-          '12:00:00',
-          '13:00:00',
-          60,
-          true
-        ]
-      );
-      console.log('✅ Schedule settings created for professional');
-    }
-    
-    // Check if default attendance location exists
-    const existingLocation = await pool.query(
-      `SELECT id FROM attendance_locations WHERE professional_id = $1`,
-      [professionalId]
+    const patient2Result = await pool.query(
+      `INSERT INTO private_patients (
+        professional_id, name, cpf, email, phone, birth_date,
+        address, address_number, neighborhood, city, state,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [
+        professionalId,
+        'Carlos Oliveira (TESTE)',
+        '11122233344',
+        'carlos.teste@email.com',
+        '64912345678',
+        '1985-07-10',
+        'Rua dos Ipês',
+        '789',
+        'Setor Bueno',
+        'Goiânia',
+        'GO',
+        new Date(),
+        new Date()
+      ]
     );
     
-    if (existingLocation.rows.length === 0) {
-      // Create default attendance location
-      await pool.query(
-        `INSERT INTO attendance_locations (
-          professional_id, name, address, address_number, neighborhood,
-          city, state, zip_code, phone, is_default
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          professionalId,
-          'Clínica Principal',
-          'Rua das Flores',
-          '123',
-          'Centro',
-          'Goiânia',
-          'GO',
-          '74000000',
-          '64981249199',
-          true
-        ]
-      );
-      console.log('✅ Default attendance location created');
-    }
+    console.log('✅ Test private patients created');
     
-    // Create some test private patients
-    const existingPatients = await pool.query(
-      `SELECT COUNT(*) FROM private_patients WHERE professional_id = $1`,
-      [professionalId]
+    // 6. Create a test appointment for today
+    const today = new Date();
+    const appointmentTime = '14:00:00';
+    
+    await pool.query(
+      `INSERT INTO appointments (
+        professional_id, private_patient_id, service_id, appointment_date,
+        appointment_time, location_id, value, status, notes,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        professionalId,
+        patient1Result.rows[0].id,
+        1, // Assuming service ID 1 exists
+        today.toISOString().split('T')[0],
+        appointmentTime,
+        null, // Will use default location
+        150.00,
+        'scheduled',
+        'Consulta de teste - primeira consulta',
+        new Date(),
+        new Date()
+      ]
     );
+    console.log('✅ Test appointment created');
     
-    if (parseInt(existingPatients.rows[0].count) === 0) {
-      // Create test patients
-      const testPatients = [
-        {
-          name: 'Maria Silva Santos',
-          cpf: '11111111111',
-          email: 'maria.teste@email.com',
-          phone: '64999887766',
-          birth_date: '1985-05-15',
-          address: 'Rua das Palmeiras',
-          address_number: '456',
-          neighborhood: 'Setor Central',
-          city: 'Goiânia',
-          state: 'GO',
-          zip_code: '74000001'
-        },
-        {
-          name: 'José Carlos Oliveira',
-          cpf: '22222222222',
-          email: 'jose.teste@email.com',
-          phone: '64988776655',
-          birth_date: '1978-12-03',
-          address: 'Avenida Principal',
-          address_number: '789',
-          neighborhood: 'Setor Norte',
-          city: 'Goiânia',
-          state: 'GO',
-          zip_code: '74000002'
-        }
-      ];
-      
-      for (const patient of testPatients) {
-        await pool.query(
-          `INSERT INTO private_patients (
-            professional_id, name, cpf, email, phone, birth_date,
-            address, address_number, neighborhood, city, state, zip_code
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [
-            professionalId,
-            patient.name,
-            patient.cpf,
-            patient.email,
-            patient.phone,
-            patient.birth_date,
-            patient.address,
-            patient.address_number,
-            patient.neighborhood,
-            patient.city,
-            patient.state,
-            patient.zip_code
-          ]
-        );
-      }
-      console.log('✅ Test private patients created');
-    }
+    // 7. Create a test medical record
+    await pool.query(
+      `INSERT INTO medical_records (
+        professional_id, private_patient_id, chief_complaint,
+        history_present_illness, physical_examination, diagnosis,
+        treatment_plan, notes, vital_signs, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        professionalId,
+        patient1Result.rows[0].id,
+        'Dor nas costas há 3 dias',
+        'Paciente relata dor lombar após esforço físico',
+        'Tensão muscular na região lombar',
+        'Lombalgia mecânica',
+        'Fisioterapia e analgésicos',
+        'Paciente orientado sobre postura',
+        JSON.stringify({
+          blood_pressure: '120/80',
+          heart_rate: '72',
+          temperature: '36.5',
+          weight: '70',
+          height: '1.75'
+        }),
+        new Date(),
+        new Date()
+      ]
+    );
+    console.log('✅ Test medical record created');
     
-    console.log('🎉 Test professional with scheduling is ready!');
+    console.log('🎉 Test professional setup completed successfully!');
     console.log('📋 Login credentials:');
     console.log('   CPF: 123.456.789-01');
-    console.log('   Senha: 123456');
+    console.log('   Password: 123456');
     
   } catch (error) {
     console.error('❌ Error creating test professional:', error);
   }
 };
 
-// Initialize database tables
-createTables();
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    await createTables();
+    await createTestProfessional();
+    
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📊 Environment: ${NODE_ENV}`);
+      console.log(`🔗 Database connected: ${pool.options.host}`);
+      console.log('');
+      console.log('🧪 TEST PROFESSIONAL CREDENTIALS:');
+      console.log('   CPF: 123.456.789-01');
+      console.log('   Password: 123456');
+      console.log('   Role: Professional');
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+};
 
 // 🔥 AUTH ROUTES
 app.post('/api/auth/login', async (req, res) => {
@@ -2674,14 +2729,10 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
   }
 });
 
+// Initialize database and start server
+startServer();
+
 // Catch-all route for SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌐 Frontend: http://localhost:${PORT}`);
-  console.log(`🔧 API: http://localhost:${PORT}/api`);
 });
