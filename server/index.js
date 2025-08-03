@@ -4,15 +4,20 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
+import dotenv from 'dotenv';
 import { pool } from './db.js';
 import { authenticate, authorize } from './middleware/auth.js';
 import createUpload from './middleware/upload.js';
-import { MercadoPagoConfig, Preference } from 'mercadopago';
 
-dotenv.config();
+// 🔥 Load environment variables FIRST
+
+// 🔥 Debug environment variables
+console.log('🔍 Environment check:');
+console.log('NODE_ENV:', process.env.NODE_ENV || 'NOT DEFINED');
+console.log('PORT:', process.env.PORT || 'NOT DEFINED');
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'DEFINED' : 'NOT DEFINED');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 // Initialize MercadoPago
 const client = new MercadoPagoConfig({
