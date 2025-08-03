@@ -1,6 +1,6 @@
-const express = require('express');
-const { pool } = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+import express from 'express';
+import { pool } from '../db.js';
+import { authenticate, authorize } from '../middleware/auth.js';
 const router = express.Router();
 
 // Get professional's private patients
@@ -181,4 +181,4 @@ router.get('/search/:query', authenticate, authorize(['professional']), async (r
   }
 });
 
-module.exports = router;
+export default router;

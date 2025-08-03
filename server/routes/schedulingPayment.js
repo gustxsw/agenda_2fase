@@ -1,7 +1,7 @@
-const express = require('express');
-const { MercadoPagoConfig, Preference } = require('mercadopago');
-const { pool } = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+import express from 'express';
+import { MercadoPagoConfig, Preference } from 'mercadopago';
+import { pool } from '../db.js';
+import { authenticate, authorize } from '../middleware/auth.js';
 const router = express.Router();
 
 // Initialize MercadoPago
@@ -182,4 +182,4 @@ router.get('/subscription-status', authenticate, authorize(['professional']), as
   }
 });
 
-module.exports = router;
+export default router;
