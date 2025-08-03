@@ -622,7 +622,10 @@ app.get('/api/scheduling-subscription-status', authenticate, authorize(['profess
     }
 
     const subscription = result.rows[0];
-    const isActive = subscription.status === 'active' && new Date(subscription.expires_at) > new Date();
+    // 🔥 FIXED: Check if subscription is active (either by status or valid expiry date)
+    const now = new Date();
+    const expiryDate = subscription.expires_at ? new Date(subscription.expires_at) : null;
+    const isActive = subscription.status === 'active' && (!expiryDate || expiryDate > now);
 
     res.json({
       has_subscription: true,

@@ -151,7 +151,7 @@ const RegisterConsultationPage: React.FC = () => {
         }
         
         // Check if professional has scheduling subscription
-        const subscriptionResponse = await fetch(`${apiUrl}/api/scheduling-subscription-status`, {
+        const subscriptionResponse = await fetch(`${apiUrl}/api/scheduling-payment/subscription-status`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -160,6 +160,7 @@ const RegisterConsultationPage: React.FC = () => {
         
         if (subscriptionResponse.ok) {
           const subscriptionData = await subscriptionResponse.json();
+          console.log('🔍 Professional subscription status:', subscriptionData);
           setHasSchedulingSubscription(subscriptionData.status === 'active');
           
           // If has subscription, fetch private patients

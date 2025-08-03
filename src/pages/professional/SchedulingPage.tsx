@@ -73,7 +73,7 @@ const SchedulingPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (subscriptionStatus?.status === 'active') {
+    if (subscriptionStatus?.has_subscription && subscriptionStatus?.status === 'active') {
       fetchAppointments();
     }
   }, [currentDate, viewMode, subscriptionStatus]);
@@ -103,12 +103,13 @@ const SchedulingPage: React.FC = () => {
       }
 
       // Fetch subscription status
-      const subscriptionResponse = await fetch(`${apiUrl}/api/scheduling-subscription-status`, {
+      const subscriptionResponse = await fetch(`${apiUrl}/api/scheduling-payment/subscription-status`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (subscriptionResponse.ok) {
         const subscription = await subscriptionResponse.json();
+        console.log('🔍 Subscription status received:', subscription);
         setSubscriptionStatus(subscription);
       }
 
@@ -251,7 +252,8 @@ const SchedulingPage: React.FC = () => {
   }
 
   // Show subscription required screen
-  if (!subscriptionStatus?.has_subscription || subscriptionStatus.status !== 'active') {
+  if (!subscriptionStatus || !subscriptionStatus.has_subscription || subscriptionStatus.status !== 'active') {
+    console.log('🔍 Showing subscription screen. Status:', subscriptionStatus);
     return (
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
