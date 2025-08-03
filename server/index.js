@@ -6,10 +6,6 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { pool } from './db.js';
-import { authenticate, authorize } from './middleware/auth.js';
-import createUpload from './middleware/upload.js';
-
-// 🔥 Load environment variables FIRST
 
 // 🔥 Debug environment variables
 console.log('🔍 Environment check:');
