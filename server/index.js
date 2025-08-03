@@ -267,9 +267,211 @@ const createTables = async () => {
       )
     `);
 
+    // Create test professional with scheduling subscription
+    await createTestProfessional();
+    
     console.log('✅ All tables created successfully');
   } catch (error) {
     console.error('❌ Error creating tables:', error);
+  }
+};
+
+// Create test professional with active scheduling subscription
+const createTestProfessional = async () => {
+  try {
+    console.log('🔄 Creating test professional with scheduling...');
+    
+    // Check if test professional already exists
+    const existingProfessional = await pool.query(
+      `SELECT id FROM users WHERE cpf = $1`,
+      ['12345678901']
+    );
+    
+    let professionalId;
+    
+    if (existingProfessional.rows.length === 0) {
+      // Create test professional
+      const hashedPassword = await bcrypt.hash('123456', 10);
+      
+      const professionalResult = await pool.query(
+        `INSERT INTO users (
+          name, cpf, email, phone, password, roles, percentage, category_id,
+          address, city, state, subscription_status, subscription_expiry
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING id`,
+        [
+          'Dr. João Silva (Teste)',
+          '12345678901',
+          'joao.teste@quiroferreira.com',
+          '64981249199',
+          hashedPassword,
+          JSON.stringify(['professional']),
+          70, // 70% para o profissional
+          1,  // Categoria 1 (assumindo que existe)
+          'Rua das Flores, 123',
+          'Goiânia',
+          'GO',
+          'active',
+          '2025-12-31'
+        ]
+      );
+      
+      professionalId = professionalResult.rows[0].id;
+      console.log('✅ Test professional created with ID:', professionalId);
+    } else {
+      professionalId = existingProfessional.rows[0].id;
+      console.log('✅ Test professional already exists with ID:', professionalId);
+    }
+    
+    // Check if subscription already exists
+    const existingSubscription = await pool.query(
+      `SELECT id FROM professional_scheduling_subscriptions WHERE professional_id = $1`,
+      [professionalId]
+    );
+    
+    if (existingSubscription.rows.length === 0) {
+      // Create active scheduling subscription
+      await pool.query(
+        `INSERT INTO professional_scheduling_subscriptions (
+          professional_id, status, expires_at, mp_preference_id, mp_payment_id, external_reference
+        ) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          professionalId,
+          'active',
+          '2025-12-31 23:59:59',
+          'TEST_PREF_' + Date.now(),
+          'TEST_PAY_' + Date.now(),
+          'scheduling_test_' + Date.now()
+        ]
+      );
+      console.log('✅ Scheduling subscription created for professional');
+    }
+    
+    // Check if schedule settings exist
+    const existingSettings = await pool.query(
+      `SELECT id FROM professional_schedule_settings WHERE professional_id = $1`,
+      [professionalId]
+    );
+    
+    if (existingSettings.rows.length === 0) {
+      // Create default schedule settings
+      await pool.query(
+        `INSERT INTO professional_schedule_settings (
+          professional_id, work_days, work_start_time, work_end_time,
+          break_start_time, break_end_time, consultation_duration, has_scheduling_subscription
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          professionalId,
+          JSON.stringify([1, 2, 3, 4, 5]), // Segunda a sexta
+          '08:00:00',
+          '18:00:00',
+          '12:00:00',
+          '13:00:00',
+          60,
+          true
+        ]
+      );
+      console.log('✅ Schedule settings created for professional');
+    }
+    
+    // Check if default attendance location exists
+    const existingLocation = await pool.query(
+      `SELECT id FROM attendance_locations WHERE professional_id = $1`,
+      [professionalId]
+    );
+    
+    if (existingLocation.rows.length === 0) {
+      // Create default attendance location
+      await pool.query(
+        `INSERT INTO attendance_locations (
+          professional_id, name, address, address_number, neighborhood,
+          city, state, zip_code, phone, is_default
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          professionalId,
+          'Clínica Principal',
+          'Rua das Flores',
+          '123',
+          'Centro',
+          'Goiânia',
+          'GO',
+          '74000000',
+          '64981249199',
+          true
+        ]
+      );
+      console.log('✅ Default attendance location created');
+    }
+    
+    // Create some test private patients
+    const existingPatients = await pool.query(
+      `SELECT COUNT(*) FROM private_patients WHERE professional_id = $1`,
+      [professionalId]
+    );
+    
+    if (parseInt(existingPatients.rows[0].count) === 0) {
+      // Create test patients
+      const testPatients = [
+        {
+          name: 'Maria Silva Santos',
+          cpf: '11111111111',
+          email: 'maria.teste@email.com',
+          phone: '64999887766',
+          birth_date: '1985-05-15',
+          address: 'Rua das Palmeiras',
+          address_number: '456',
+          neighborhood: 'Setor Central',
+          city: 'Goiânia',
+          state: 'GO',
+          zip_code: '74000001'
+        },
+        {
+          name: 'José Carlos Oliveira',
+          cpf: '22222222222',
+          email: 'jose.teste@email.com',
+          phone: '64988776655',
+          birth_date: '1978-12-03',
+          address: 'Avenida Principal',
+          address_number: '789',
+          neighborhood: 'Setor Norte',
+          city: 'Goiânia',
+          state: 'GO',
+          zip_code: '74000002'
+        }
+      ];
+      
+      for (const patient of testPatients) {
+        await pool.query(
+          `INSERT INTO private_patients (
+            professional_id, name, cpf, email, phone, birth_date,
+            address, address_number, neighborhood, city, state, zip_code
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [
+            professionalId,
+            patient.name,
+            patient.cpf,
+            patient.email,
+            patient.phone,
+            patient.birth_date,
+            patient.address,
+            patient.address_number,
+            patient.neighborhood,
+            patient.city,
+            patient.state,
+            patient.zip_code
+          ]
+        );
+      }
+      console.log('✅ Test private patients created');
+    }
+    
+    console.log('🎉 Test professional with scheduling is ready!');
+    console.log('📋 Login credentials:');
+    console.log('   CPF: 123.456.789-01');
+    console.log('   Senha: 123456');
+    
+  } catch (error) {
+    console.error('❌ Error creating test professional:', error);
   }
 };
 
