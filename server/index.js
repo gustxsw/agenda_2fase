@@ -515,6 +515,186 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     const result = await preference.create({ body: preferenceData });
 
     console.log('✅ MercadoPago preference created:', result);
+    // 🧪 CREATE TEST PROFESSIONAL WITH SCHEDULING
+    console.log('🧪 Creating test professional with scheduling...');
+    
+    // Create test category
+    const categoryResult = await pool.query(
+      `INSERT INTO service_categories (name, description) 
+       VALUES ('Fisioterapia', 'Serviços de fisioterapia e reabilitação')
+       ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description
+       RETURNING id`
+    );
+    const categoryId = categoryResult.rows[0].id;
+    
+    // Create test professional
+    const hashedPassword = await bcrypt.hash('123456', 10);
+    const professionalResult = await pool.query(
+      `INSERT INTO users (name, cpf, password, roles, percentage, category_id, subscription_status, subscription_expiry)
+       VALUES ('Dr. João Silva (TESTE)', '12345678901', $1, $2, 70, $3, 'active', '2025-12-31')
+       ON CONFLICT (cpf) DO UPDATE SET 
+         name = EXCLUDED.name,
+         roles = EXCLUDED.roles,
+         percentage = EXCLUDED.percentage,
+         category_id = EXCLUDED.category_id,
+         subscription_status = EXCLUDED.subscription_status,
+         subscription_expiry = EXCLUDED.subscription_expiry
+       RETURNING id`,
+      [hashedPassword, JSON.stringify(['professional']), categoryId]
+    );
+    const professionalId = professionalResult.rows[0].id;
+    
+    // Create test service
+    const serviceResult = await pool.query(
+      `INSERT INTO services (name, description, base_price, category_id, is_base_service)
+       VALUES ('Consulta Fisioterapêutica', 'Avaliação e tratamento fisioterapêutico', 150.00, $1, true)
+       ON CONFLICT (name) DO UPDATE SET 
+         description = EXCLUDED.description,
+         base_price = EXCLUDED.base_price,
+         category_id = EXCLUDED.category_id
+       RETURNING id`,
+      [categoryId]
+    );
+    const serviceId = serviceResult.rows[0].id;
+    
+    // Create scheduling subscription for professional
+    const expiresAt = new Date('2025-12-31');
+    await pool.query(
+      `INSERT INTO professional_scheduling_subscriptions (professional_id, status, expires_at)
+       VALUES ($1, 'active', $2)
+       ON CONFLICT (professional_id) DO UPDATE SET 
+         status = 'active',
+         expires_at = $2`,
+      [professionalId, expiresAt]
+    );
+    
+    // Create schedule settings
+    await pool.query(
+      `INSERT INTO professional_schedule_settings 
+       (professional_id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration, has_scheduling_subscription)
+       VALUES ($1, $2, '08:00', '18:00', '12:00', '13:00', 60, true)
+       ON CONFLICT (professional_id) DO UPDATE SET 
+         work_days = EXCLUDED.work_days,
+         work_start_time = EXCLUDED.work_start_time,
+         work_end_time = EXCLUDED.work_end_time,
+         break_start_time = EXCLUDED.break_start_time,
+         break_end_time = EXCLUDED.break_end_time,
+         consultation_duration = EXCLUDED.consultation_duration,
+         has_scheduling_subscription = EXCLUDED.has_scheduling_subscription`,
+      [professionalId, JSON.stringify([1, 2, 3, 4, 5])] // Monday to Friday
+    );
+    
+    // Create attendance location
+    const locationResult = await pool.query(
+      `INSERT INTO attendance_locations 
+       (professional_id, name, address, address_number, neighborhood, city, state, phone, is_default)
+       VALUES ($1, 'Clínica Principal', 'Rua das Flores', '123', 'Centro', 'Goiânia', 'GO', '(62) 3333-4444', true)
+       ON CONFLICT (professional_id, name) DO UPDATE SET 
+         address = EXCLUDED.address,
+         is_default = EXCLUDED.is_default
+       RETURNING id`,
+      [professionalId]
+    );
+    const locationId = locationResult.rows[0].id;
+    
+    // Create private patients
+    const patient1Result = await pool.query(
+      `INSERT INTO private_patients 
+       (professional_id, name, cpf, email, phone, birth_date, address, city, state)
+       VALUES ($1, 'Maria Santos', '11111111111', 'maria@email.com', '62999887766', '1985-03-15', 'Rua A, 100', 'Goiânia', 'GO')
+       ON CONFLICT (professional_id, cpf) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      [professionalId]
+    );
+    const patient1Id = patient1Result.rows[0].id;
+    
+    const patient2Result = await pool.query(
+      `INSERT INTO private_patients 
+       (professional_id, name, cpf, email, phone, birth_date, address, city, state)
+       VALUES ($1, 'Carlos Oliveira', '22222222222', 'carlos@email.com', '62988776655', '1978-07-22', 'Rua B, 200', 'Goiânia', 'GO')
+       ON CONFLICT (professional_id, cpf) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`,
+      [professionalId]
+    );
+    const patient2Id = patient2Result.rows[0].id;
+    
+    // Create test appointments for this week
+    const today = new Date();
+    const appointments = [
+      {
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1), // Tomorrow
+        time: '09:00',
+        patient_id: patient1Id,
+        notes: 'Primeira consulta - avaliação inicial'
+      },
+      {
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2), // Day after tomorrow
+        time: '14:30',
+        patient_id: patient2Id,
+        notes: 'Retorno - continuidade do tratamento'
+      },
+      {
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3), // 3 days from now
+        time: '10:15',
+        patient_id: patient1Id,
+        notes: 'Segunda sessão de fisioterapia'
+      }
+    ];
+    
+    for (const appointment of appointments) {
+      await pool.query(
+        `INSERT INTO appointments 
+         (professional_id, private_patient_id, service_id, appointment_date, appointment_time, location_id, value, status, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, 150.00, 'scheduled', $7)
+         ON CONFLICT DO NOTHING`,
+        [professionalId, appointment.patient_id, serviceId, appointment.date.toISOString().split('T')[0], 
+         appointment.time, locationId, appointment.notes]
+      );
+    }
+    
+    // Create medical records for the patients
+    await pool.query(
+      `INSERT INTO medical_records 
+       (professional_id, private_patient_id, chief_complaint, history_present_illness, 
+        physical_examination, diagnosis, treatment_plan, vital_signs)
+       VALUES ($1, $2, 'Dor lombar há 2 semanas', 'Paciente relata dor na região lombar após esforço físico', 
+               'Tensão muscular em região paravertebral L3-L5', 'Lombalgia mecânica', 
+               'Fisioterapia 3x/semana, exercícios de fortalecimento', $3)
+       ON CONFLICT DO NOTHING`,
+      [professionalId, patient1Id, JSON.stringify({
+        blood_pressure: '120/80',
+        heart_rate: '72 bpm',
+        temperature: '36.5°C'
+      })]
+    );
+    
+    await pool.query(
+      `INSERT INTO medical_records 
+       (professional_id, private_patient_id, chief_complaint, history_present_illness, 
+        physical_examination, diagnosis, treatment_plan, vital_signs)
+       VALUES ($1, $2, 'Reabilitação pós-cirúrgica', 'Paciente em pós-operatório de cirurgia de joelho', 
+               'Edema leve em joelho direito, amplitude de movimento limitada', 'Pós-operatório de meniscectomia', 
+               'Protocolo de reabilitação pós-cirúrgica, 4 semanas', $3)
+       ON CONFLICT DO NOTHING`,
+      [professionalId, patient2Id, JSON.stringify({
+        blood_pressure: '130/85',
+        heart_rate: '68 bpm',
+        temperature: '36.2°C'
+      })]
+    );
+    
+    console.log('✅ Test professional with scheduling created successfully!');
+    console.log('📋 Login credentials:');
+    console.log('   CPF: 123.456.789-01');
+    console.log('   Password: 123456');
+    console.log('📅 Features available:');
+    console.log('   - Active scheduling subscription until 2025-12-31');
+    console.log('   - 2 private patients created');
+    console.log('   - 3 appointments scheduled for this week');
+    console.log('   - 2 medical records created');
+    console.log('   - Attendance location configured');
+    console.log('   - Schedule settings configured (Mon-Fri, 8AM-6PM)');
+    
 
     // Store the payment intent in database
     await pool.query(
