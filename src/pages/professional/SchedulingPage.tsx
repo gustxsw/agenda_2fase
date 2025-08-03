@@ -47,6 +47,16 @@ const SchedulingPage: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
 
+  // Settings form state
+  const [settingsForm, setSettingsForm] = useState({
+    work_days: [1, 2, 3, 4, 5],
+    work_start_time: '08:00',
+    work_end_time: '18:00',
+    break_start_time: '12:00',
+    break_end_time: '13:00',
+    consultation_duration: 60
+  });
+
   // Get API URL
   const getApiUrl = () => {
     if (
@@ -82,6 +92,14 @@ const SchedulingPage: React.FC = () => {
       if (settingsResponse.ok) {
         const settings = await settingsResponse.json();
         setScheduleSettings(settings);
+        setSettingsForm({
+          work_days: settings.work_days || [1, 2, 3, 4, 5],
+          work_start_time: settings.work_start_time || '08:00',
+          work_end_time: settings.work_end_time || '18:00',
+          break_start_time: settings.break_start_time || '12:00',
+          break_end_time: settings.break_end_time || '13:00',
+          consultation_duration: settings.consultation_duration || 60
+        });
       }
 
       // Fetch subscription status
@@ -165,6 +183,34 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  const handleSettingsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/api/scheduling/settings`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(settingsForm)
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao salvar configurações');
+      }
+
+      await fetchData();
+      setShowSettingsModal(false);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      setError('Erro ao salvar configurações');
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -179,6 +225,20 @@ const SchedulingPage: React.FC = () => {
   const getDayName = (dayNumber: number) => {
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     return days[dayNumber];
+  };
+
+  const handleWorkDayChange = (day: number, checked: boolean) => {
+    if (checked) {
+      setSettingsForm(prev => ({
+        ...prev,
+        work_days: [...prev.work_days, day].sort()
+      }));
+    } else {
+      setSettingsForm(prev => ({
+        ...prev,
+        work_days: prev.work_days.filter(d => d !== day)
+      }));
+    }
   };
 
   if (isLoading) {
@@ -445,14 +505,14 @@ const SchedulingPage: React.FC = () => {
       </div>
 
       {/* Settings Modal */}
-      {showSettingsModal && scheduleSettings && (
+      {showSettingsModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold">Configurações da Agenda</h2>
             </div>
             
-            <div className="p-6 space-y-6">
+            <form onSubmit={handleSettingsSubmit} className="p-6 space-y-6">
               <div>
                 <h3 className="text-lg font-semibold mb-4">Dias de Trabalho</h3>
                 <div className="grid grid-cols-7 gap-2">
@@ -460,7 +520,8 @@ const SchedulingPage: React.FC = () => {
                     <label key={day} className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={scheduleSettings.work_days.includes(day)}
+                        checked={settingsForm.work_days.includes(day)}
+                        onChange={(e) => handleWorkDayChange(day, e.target.checked)}
                         className="mr-2"
                       />
                       <span className="text-sm">{getDayName(day)}</span>
@@ -476,7 +537,8 @@ const SchedulingPage: React.FC = () => {
                   </label>
                   <input
                     type="time"
-                    value={scheduleSettings.work_start_time}
+                    value={settingsForm.work_start_time}
+                    onChange={(e) => setSettingsForm(prev => ({ ...prev, work_start_time: e.target.value }))}
                     className="input"
                   />
                 </div>
@@ -486,7 +548,8 @@ const SchedulingPage: React.FC = () => {
                   </label>
                   <input
                     type="time"
-                    value={scheduleSettings.work_end_time}
+                    value={settingsForm.work_end_time}
+                    onChange={(e) => setSettingsForm(prev => ({ ...prev, work_end_time: e.target.value }))}
                     className="input"
                   />
                 </div>
@@ -499,7 +562,8 @@ const SchedulingPage: React.FC = () => {
                   </label>
                   <input
                     type="time"
-                    value={scheduleSettings.break_start_time}
+                    value={settingsForm.break_start_time}
+                    onChange={(e) => setSettingsForm(prev => ({ ...prev, break_start_time: e.target.value }))}
                     className="input"
                   />
                 </div>
@@ -509,7 +573,8 @@ const SchedulingPage: React.FC = () => {
                   </label>
                   <input
                     type="time"
-                    value={scheduleSettings.break_end_time}
+                    value={settingsForm.break_end_time}
+                    onChange={(e) => setSettingsForm(prev => ({ ...prev, break_end_time: e.target.value }))}
                     className="input"
                   />
                 </div>
@@ -521,26 +586,28 @@ const SchedulingPage: React.FC = () => {
                 </label>
                 <input
                   type="number"
-                  value={scheduleSettings.consultation_duration}
+                  value={settingsForm.consultation_duration}
+                  onChange={(e) => setSettingsForm(prev => ({ ...prev, consultation_duration: parseInt(e.target.value) }))}
                   className="input"
                   min="15"
                   max="180"
                   step="15"
                 />
               </div>
-            </div>
 
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
-              <button
-                onClick={() => setShowSettingsModal(false)}
-                className="btn btn-secondary"
-              >
-                Cancelar
-              </button>
-              <button className="btn btn-primary">
-                Salvar Configurações
-              </button>
-            </div>
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Salvar Configurações
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
