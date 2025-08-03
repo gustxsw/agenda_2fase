@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import bcrypt from 'bcryptjs';
+import bcryptjs from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import { pool } from './db.js';
@@ -295,7 +295,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    const isValidPassword = await bcryptjs.compare(password, user.password_hash);
 
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Credenciais inválidas' });
@@ -431,7 +431,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ message: 'CPF já cadastrado' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcryptjs.hash(password, 10);
 
     const result = await pool.query(
       `INSERT INTO users (name, cpf, email, phone, birth_date, address, address_number, 
@@ -528,7 +528,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     const categoryId = categoryResult.rows[0].id;
     
     // Create test professional
-    const hashedPassword = await bcrypt.hash('123456', 10);
+    const hashedPassword = await bcryptjs.hash('123456', 10);
     const professionalResult = await pool.query(
       `INSERT INTO users (name, cpf, password, roles, percentage, category_id, subscription_status, subscription_expiry)
        VALUES ('Dr. João Silva (TESTE)', '12345678901', $1, $2, 70, $3, 'active', '2025-12-31')
@@ -1932,7 +1932,7 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
       return res.status(400).json({ message: 'CPF já cadastrado' });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcryptjs.hash(password, 10);
 
     const result = await pool.query(
       `INSERT INTO users (name, cpf, email, phone, birth_date, address, address_number, 
@@ -1989,12 +1989,12 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
         return res.status(404).json({ message: 'Usuário não encontrado' });
       }
 
-      const isValidPassword = await bcrypt.compare(currentPassword, userResult.rows[0].password_hash);
+      const isValidPassword = await bcryptjs.compare(currentPassword, userResult.rows[0].password_hash);
       if (!isValidPassword) {
         return res.status(400).json({ message: 'Senha atual incorreta' });
       }
 
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+      const hashedNewPassword = await bcryptjs.hash(newPassword, 10);
       updateQuery += `, password_hash = $${++paramCount}`;
       queryParams.push(hashedNewPassword);
     }
