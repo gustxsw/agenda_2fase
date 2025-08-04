@@ -355,19 +355,34 @@ const SchedulingPage: React.FC = () => {
 
       {/* Subscription status */}
       {subscriptionStatus && (
-        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+        <div className={`border-l-4 p-4 mb-6 ${
+          subscriptionStatus.is_admin_granted 
+            ? 'bg-blue-50 border-blue-400' 
+            : 'bg-green-50 border-green-400'
+        }`}>
           <div className="flex items-center">
-            <CalendarDays className="h-5 w-5 text-green-600 mr-2" />
+            <CalendarDays className={`h-5 w-5 mr-2 ${
+              subscriptionStatus.is_admin_granted ? 'text-blue-600' : 'text-green-600'
+            }`} />
             <div>
-              <p className="text-green-700 font-medium">
-                Assinatura Ativa
+              <p className={`font-medium ${
+                subscriptionStatus.is_admin_granted ? 'text-blue-700' : 'text-green-700'
+              }`}>
+                {subscriptionStatus.is_admin_granted ? 'Acesso Concedido pelo Convênio' : 'Assinatura Ativa'}
               </p>
-              <p className="text-green-600 text-sm">
+              <p className={`text-sm ${
+                subscriptionStatus.is_admin_granted ? 'text-blue-600' : 'text-green-600'
+              }`}>
                 Válida até {subscriptionStatus.expires_at ? 
                   format(parseISO(subscriptionStatus.expires_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : 
                   'N/A'
                 }
               </p>
+              {subscriptionStatus.is_admin_granted && (
+                <p className="text-xs text-blue-500 mt-1">
+                  🎁 Acesso gratuito concedido pela administração
+                </p>
+              )}
             </div>
           </div>
         </div>
