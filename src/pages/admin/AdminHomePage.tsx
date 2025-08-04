@@ -7,6 +7,7 @@ import {
   BarChart2,
   CalendarClock,
   DollarSign,
+  Gift,
 } from "lucide-react";
 
 type ConsultationCount = {

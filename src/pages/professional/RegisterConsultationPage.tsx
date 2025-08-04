@@ -178,35 +178,8 @@ const RegisterConsultationPage: React.FC = () => {
             }
           }
         } else {
-          // Check for admin-granted access
-          const adminAccessResponse = await fetch(`${apiUrl}/api/professional/admin-scheduling-access`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-          
-          if (adminAccessResponse.ok) {
-            const adminAccess = await adminAccessResponse.json();
-            console.log('🔍 Professional admin access status:', adminAccess);
-            
-            if (adminAccess.has_access) {
-              setHasSchedulingSubscription(true);
-              
-              // Fetch private patients
-              const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                },
-              });
-              
-              if (patientsResponse.ok) {
-                const patientsData = await patientsResponse.json();
-                setPrivatePatients(patientsData);
-              }
-            }
-          }
+          // MVP: Assume no subscription for simplicity
+          setHasSchedulingSubscription(false);
         }
       } catch (error) {
         console.error('Error fetching data:', error);

@@ -81,6 +81,17 @@ const ProfessionalHomePage: React.FC = () => {
         setPhotoUrl(userData.photo_url);
       }
       
+      // MVP: Mock subscription status for professionals
+      const mockSubscription = {
+        has_subscription: true,
+        status: 'active',
+        is_admin_granted: true,
+        expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+      };
+      
+      setSubscriptionStatus(mockSubscription);
+      setSubscriptionExpiry(mockSubscription.expires_at);
+      
       const revenueResponse = await fetch(
         `${apiUrl}/api/reports/professional-revenue?start_date=${dateRange.start}&end_date=${dateRange.end}`,
         {
