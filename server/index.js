@@ -7,10 +7,6 @@ import cookieParser from 'cookie-parser';
 import { pool } from './db.js';
 import { authenticate, authorize } from './middleware/auth.js';
 import createUpload from './middleware/upload.js';
-import { MercadoPagoConfig, Preference } from 'mercadopago';
-import { default as professionalSchedulingAccessRoutes } from './routes/professionalSchedulingAccess.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -27,10 +23,6 @@ app.use(cors({
     'https://www.cartaoquiroferreira.com.br',
     'https://cartaoquiroferreira.com.br'
   ],
-  credentials: true
-}));
-app.use(express.json());
-app.use(cookieParser());
 
 // Serve static files from dist directory
 app.use(express.static('dist'));
