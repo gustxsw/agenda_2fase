@@ -9,6 +9,7 @@ import { authenticate, authorize } from './middleware/auth.js';
 import createUpload from './middleware/upload.js';
 
 dotenv.config();
+const paymentRoutes = require('./routes/payment');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
