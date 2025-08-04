@@ -2472,7 +2472,7 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
   }
 });
 
-app.use('/api/admin', adminSchedulingAccessRoutes);
+app.use('/api/professional', professionalSchedulingAccessRoutes);
 
 // Catch-all route for SPA
 app.get('*', (req, res) => {

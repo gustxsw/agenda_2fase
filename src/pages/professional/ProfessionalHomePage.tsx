@@ -277,7 +277,11 @@ const ProfessionalHomePage: React.FC = () => {
       )}
 
       {uploadSuccess && (
-        <div className="bg-green-50 border-l-4 border-green-600 p-4 mb-6">
+        <div className={`border-l-4 p-4 mb-6 ${
+          subscriptionStatus.is_admin_granted 
+            ? 'bg-blue-50 border-blue-400' 
+            : 'bg-green-50 border-green-400'
+        }`}>
           <div className="flex items-center">
             <Camera className="h-5 w-5 text-green-600 mr-2" />
             <p className="text-green-700">{uploadSuccess}</p>
@@ -288,7 +292,9 @@ const ProfessionalHomePage: React.FC = () => {
       {error && (
         <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-6">
           <div className="flex items-center">
-            <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+            <Calendar className={`h-5 w-5 mr-2 ${
+              subscriptionStatus.is_admin_granted ? 'text-blue-600' : 'text-green-600'
+            }`} />
             <div>
               <p className="text-red-700 font-medium">Erro ao carregar dados</p>
               <p className="text-red-600 text-sm">{error}</p>
@@ -337,12 +343,24 @@ const ProfessionalHomePage: React.FC = () => {
                 <h3 className="text-sm font-medium text-gray-600">Contas a Pagar</h3>
                 <DollarSign className="h-5 w-5 text-red-600" />
               </div>
-              <p className="text-2xl font-bold text-gray-900">
-                {formatCurrency(revenueReport.summary.amount_to_pay || 0)}
+              <p className={`font-medium ${
+                subscriptionStatus.is_admin_granted ? 'text-blue-700' : 'text-green-700'
+              }`}>
+                {subscriptionStatus.is_admin_granted ? 'Acesso Concedido pelo Convênio' : 'Assinatura Ativa'}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
-                Valor a ser repassado ao convênio
+              <p className={`text-sm ${
+                subscriptionStatus.is_admin_granted ? 'text-blue-600' : 'text-green-600'
+              }`}>
+                {subscriptionStatus.is_admin_granted 
+                  ? `Válido até ${subscriptionExpiry ? formatDate(subscriptionExpiry) : 'N/A'}`
+                  : 'Sua assinatura será renovada automaticamente.'
+                }
               </p>
+              {subscriptionStatus.is_admin_granted && (
+                <p className="text-xs text-blue-500 mt-1">
+                  🎁 Acesso gratuito concedido pela administração
+                </p>
+              )}
             </div>
           </div>
 

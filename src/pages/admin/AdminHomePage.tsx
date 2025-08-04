@@ -257,6 +257,12 @@ const AdminHomePage: React.FC = () => {
       icon: <BarChart2 className="h-6 w-6 text-red-600" />,
       link: "/admin/reports",
     },
+    {
+      title: "Gerenciar Acesso à Agenda",
+      description: "Conceder acesso gratuito à agenda para profissionais",
+      icon: <Gift className="h-6 w-6 text-red-600" />,
+      link: "/admin/scheduling-access",
+    },
   ];
 
   return (

@@ -6,6 +6,27 @@ const router = express.Router();
 // Get professional's schedule settings
 router.get('/settings', authenticate, authorize(['professional']), async (req, res) => {
   try {
+    // Check if professional has scheduling access (paid or admin-granted)
+    const accessCheck = await pool.query(`
+      SELECT 
+        CASE 
+          WHEN pss.status = 'active' AND pss.expires_at > NOW() THEN true
+          WHEN asa.expires_at > NOW() THEN true
+          ELSE false
+        END as has_access,
+        CASE 
+          WHEN asa.expires_at > NOW() THEN true
+          ELSE false
+        END as is_admin_granted
+      FROM users u
+      LEFT JOIN professional_scheduling_subscriptions pss ON u.id = pss.professional_id
+      LEFT JOIN admin_scheduling_access asa ON u.id = asa.professional_id
+      WHERE u.id = $1
+    `, [req.user.id]);
+
+    const hasAccess = accessCheck.rows[0]?.has_access || false;
+    const isAdminGranted = accessCheck.rows[0]?.is_admin_granted || false;
+
     const result = await pool.query(
       `SELECT * FROM professional_schedule_settings WHERE professional_id = $1`,
       [req.user.id]
@@ -21,11 +42,17 @@ router.get('/settings', authenticate, authorize(['professional']), async (req, r
         break_start_time: '12:00',
         break_end_time: '13:00',
         consultation_duration: 60,
-        has_scheduling_subscription: false
+        has_scheduling_subscription: hasAccess,
+        is_admin_granted: isAdminGranted
       });
     }
 
-    res.json(result.rows[0]);
+    const settings = result.rows[0];
+    res.json({
+      ...settings,
+      has_scheduling_subscription: hasAccess,
+      is_admin_granted: isAdminGranted
+    });
   } catch (error) {
     console.error('Error fetching schedule settings:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
