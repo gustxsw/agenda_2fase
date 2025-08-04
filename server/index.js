@@ -540,7 +540,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
          subscription_status = EXCLUDED.subscription_status,
          subscription_expiry = EXCLUDED.subscription_expiry
        RETURNING id`,
-      [hashedPassword, ['professional'], categoryId]
+      [hashedPassword, JSON.stringify(['professional']), categoryId]
     );
     const professionalId = professionalResult.rows[0].id;
     
@@ -581,7 +581,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
          break_end_time = EXCLUDED.break_end_time,
          consultation_duration = EXCLUDED.consultation_duration,
          has_scheduling_subscription = EXCLUDED.has_scheduling_subscription`,
-      [professionalId, [1, 2, 3, 4, 5]] // Monday to Friday
+      [professionalId, JSON.stringify([1, 2, 3, 4, 5])] // Monday to Friday
     );
     
     // Create attendance location
@@ -732,7 +732,7 @@ app.post('/api/scheduling-payment/webhook', async (req, res) => {
 });
 
 // Get professional's scheduling subscription status
-app.get('/api/scheduling/subscription-status', authenticate, authorize(['professional']), async (req, res) => {
+app.get('/api/subscription-status', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const result = await pool.query(
       \`SELECT has_scheduling_access FROM users WHERE id = $1`,
@@ -2536,12 +2536,12 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
     const preference = new Preference(client);
 
     // Calculate total amount (R$ 50 for client + R$ 50 for each dependent)
-    const totalAmount = 50 + (dependent_ids ? dependent_ids.length * 50 : 0);
+    const totalAmount = 50 + (dependent_ids?.length || 0) * 50;
 
     const items = [
       {
-        title: 'Assinatura Convênio Quiro Ferreira - Titular',
-        description: 'Assinatura mensal do convênio para o titular',
+        title: 'Assinatura Mensal - Titular',
+        description: 'Acesso aos serviços do convênio para o titular',
         quantity: 1,
         unit_price: 50,
         currency_id: 'BRL',
@@ -2551,8 +2551,8 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
     // Add dependent items
     if (dependent_ids && dependent_ids.length > 0) {
       items.push({
-        title: `Assinatura Convênio Quiro Ferreira - ${dependent_ids.length} Dependente(s)`,
-        description: `Assinatura mensal do convênio para ${dependent_ids.length} dependente(s)`,
+        title: `Assinatura Mensal - ${dependent_ids.length} Dependente(s)`,
+        description: 'Acesso aos serviços do convênio para dependentes',
         quantity: dependent_ids.length,
         unit_price: 50,
         currency_id: 'BRL',
@@ -2592,72 +2592,6 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
 // Catch-all route for SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
-});
-
-// 🔧 ADMIN: Activate scheduling access for professional
-app.put('/api/admin/activate-scheduling/:professionalId', authenticate, authorize(['admin']), async (req, res) => {
-  try {
-    const { professionalId } = req.params;
-    
-    // Update user to have scheduling access
-    const result = await pool.query(
-      `UPDATE users 
-       SET has_scheduling_access = TRUE, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND 'professional' = ANY(roles)
-       RETURNING id, name, has_scheduling_access`,
-      [professionalId]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Profissional não encontrado' });
-    }
-    
-    // Create default schedule settings if they don't exist
-    await pool.query(
-      `INSERT INTO professional_schedule_settings (
-         professional_id, work_days, work_start_time, work_end_time, 
-         break_start_time, break_end_time, consultation_duration
-       ) VALUES (
-         $1, ARRAY[1,2,3,4,5], '08:00', '18:00', '12:00', '13:00', 60
-       ) ON CONFLICT (professional_id) DO NOTHING`,
-      [professionalId]
-    );
-    
-    res.json({
-      message: 'Acesso ao sistema de agendamentos ativado com sucesso',
-      professional: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error activating scheduling access:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
-  }
-});
-
-// 🔧 ADMIN: Deactivate scheduling access for professional
-app.put('/api/admin/deactivate-scheduling/:professionalId', authenticate, authorize(['admin']), async (req, res) => {
-  try {
-    const { professionalId } = req.params;
-    
-    const result = await pool.query(
-      `UPDATE users 
-       SET has_scheduling_access = FALSE, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1 AND 'professional' = ANY(roles)
-       RETURNING id, name, has_scheduling_access`,
-      [professionalId]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Profissional não encontrado' });
-    }
-    
-    res.json({
-      message: 'Acesso ao sistema de agendamentos desativado',
-      professional: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error deactivating scheduling access:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
-  }
 });
 
 // Start server
@@ -2711,9 +2645,9 @@ async function createTestProfessional() {
     // 3. Create professional user
     const userResult = await pool.query(
       `INSERT INTO users (name, cpf, email, phone, password_hash, roles, percentage, category_id, subscription_status, subscription_expiry, has_scheduling_access)
-       VALUES ('Dr. João Silva (TESTE)', '12345678901', 'joao@teste.com', '64981249199', $1, $2, 70, $3, 'active', '2025-12-31', TRUE)
+       VALUES ('Dr. João Silva (TESTE)', '12345678901', 'joao@teste.com', '64981249199', $1, ARRAY['professional'], 70, $2, 'active', '2025-12-31', TRUE)
        RETURNING id`,
-      [hashedPassword, ['professional'], categoryId]
+      [hashedPassword, categoryId]
     );
     const professionalId = userResult.rows[0].id;
     
@@ -2732,7 +2666,7 @@ async function createTestProfessional() {
        (professional_id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration, has_scheduling_subscription)
        VALUES ($1, $2, '08:00', '18:00', '12:00', '13:00', 60, true)
        ON CONFLICT (professional_id) DO UPDATE SET has_scheduling_subscription = true`,
-      [professionalId, [1, 2, 3, 4, 5]]
+      [professionalId, JSON.stringify([1, 2, 3, 4, 5])]
     );
     
     // 6. Create attendance location
