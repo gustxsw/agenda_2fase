@@ -275,6 +275,7 @@ const createTables = async () => {
   } catch (error) {
     console.error('❌ Error creating tables:', error);
   }
+};
 
 // Auth Routes
 app.post('/api/auth/login', async (req, res) => {
@@ -1919,6 +1920,76 @@ app.use((error, req, res, next) => {
   console.error('❌ Server error:', error);
   res.status(500).json({ message: 'Erro interno do servidor' });
 });
+
+// Create basic test data
+const createBasicTestData = async () => {
+  try {
+    console.log('🔄 Creating basic test data...');
+
+    // Check if admin user exists
+    const adminCheck = await pool.query('SELECT id FROM users WHERE cpf = $1', ['00000000000']);
+    
+    if (adminCheck.rows.length === 0) {
+      // Create admin user
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      await pool.query(`
+        INSERT INTO users (
+          name, cpf, email, password_hash, roles
+        ) VALUES ($1, $2, $3, $4, $5)
+      `, ['Admin', '00000000000', 'admin@example.com', hashedPassword, ['admin']]);
+      console.log('✅ Admin user created');
+    }
+
+    // Check if professional user exists
+    const profCheck = await pool.query('SELECT id FROM users WHERE cpf = $1', ['12345678901']);
+    
+    if (profCheck.rows.length === 0) {
+      // Create professional user with scheduling access
+      const hashedPassword = await bcrypt.hash('123456', 10);
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + 12); // 1 year from now
+      
+      await pool.query(`
+        INSERT INTO users (
+          name, cpf, email, password_hash, roles, has_scheduling_access, scheduling_expires_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, ['Dr. João Silva', '12345678901', 'joao@example.com', hashedPassword, ['professional'], true, expiresAt]);
+      console.log('✅ Professional user created with scheduling access');
+    }
+
+    // Create service categories
+    const categoryCheck = await pool.query('SELECT id FROM service_categories LIMIT 1');
+    if (categoryCheck.rows.length === 0) {
+      await pool.query(`
+        INSERT INTO service_categories (name, description) VALUES 
+        ('Quiropraxia', 'Tratamentos quiropráticos'),
+        ('Fisioterapia', 'Tratamentos fisioterápicos'),
+        ('Massoterapia', 'Massagens terapêuticas')
+      `);
+      console.log('✅ Service categories created');
+    }
+
+    // Create services
+    const serviceCheck = await pool.query('SELECT id FROM services LIMIT 1');
+    if (serviceCheck.rows.length === 0) {
+      const categoryResult = await pool.query('SELECT id FROM service_categories ORDER BY id LIMIT 3');
+      const categories = categoryResult.rows;
+      
+      await pool.query(`
+        INSERT INTO services (name, description, base_price, category_id, is_base_service) VALUES 
+        ('Consulta Quiroprática', 'Consulta inicial com avaliação completa', 150.00, $1, true),
+        ('Ajuste Quiroprático', 'Ajuste da coluna vertebral', 120.00, $1, false),
+        ('Fisioterapia Geral', 'Sessão de fisioterapia', 100.00, $2, true),
+        ('Massagem Relaxante', 'Massagem para relaxamento muscular', 80.00, $3, false)
+      `, [categories[0]?.id, categories[1]?.id, categories[2]?.id]);
+      console.log('✅ Services created');
+    }
+
+    console.log('✅ Basic test data created successfully');
+  } catch (error) {
+    console.error('❌ Error creating test data:', error);
+  }
+};
 
 // Initialize database and start server
 const startServer = async () => {
