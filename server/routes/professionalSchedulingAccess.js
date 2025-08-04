@@ -42,3 +42,6 @@ router.get('/admin-scheduling-access', authenticate, authorize(['professional'])
 });
 
 module.exports = router;
+
+// Also export as default for ES6 compatibility
+module.exports.default = router;

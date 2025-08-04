@@ -8,7 +8,7 @@ import { pool } from './db.js';
 import { authenticate, authorize } from './middleware/auth.js';
 import createUpload from './middleware/upload.js';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
-import professionalSchedulingAccessRoutes from './routes/professionalSchedulingAccess.js';
+import { default as professionalSchedulingAccessRoutes } from './routes/professionalSchedulingAccess.js';
 
 dotenv.config();
 
