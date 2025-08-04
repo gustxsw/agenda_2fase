@@ -8,6 +8,8 @@ import { pool } from './db.js';
 import { authenticate, authorize } from './middleware/auth.js';
 import createUpload from './middleware/upload.js';
 
+dotenv.config();
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -23,6 +25,11 @@ app.use(cors({
     'https://www.cartaoquiroferreira.com.br',
     'https://cartaoquiroferreira.com.br'
   ],
+  credentials: true
+}));
+
+app.use(express.json());
+app.use(cookieParser());
 
 // Serve static files from dist directory
 app.use(express.static('dist'));
@@ -2464,8 +2471,6 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
     res.status(500).json({ message: 'Erro ao criar assinatura' });
   }
 });
-
-app.use('/api/professional', professionalSchedulingAccessRoutes);
 
 // Catch-all route for SPA
 app.get('*', (req, res) => {
