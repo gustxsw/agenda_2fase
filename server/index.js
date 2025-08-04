@@ -471,14 +471,13 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
   try {
     console.log('🔄 Creating scheduling subscription for professional:', req.user.id);
 
-    // Check if professional already has active subscription
-    const existingSubscription = await pool.query(
-      \`SELECT * FROM professional_scheduling_subscriptions 
-       WHERE professional_id = $1 AND status = 'active\' AND expires_at > NOW()`,
+    // Check if professional already has scheduling access
+    const existingAccess = await pool.query(
+      \`SELECT has_scheduling_access FROM users WHERE id = $1`,
       [req.user.id]
     );
 
-    if (existingSubscription.rows.length > 0) {
+    if (existingAccess.rows.length > 0 && existingAccess.rows[0].has_scheduling_access) {
       return res.status(400).json({ 
         message: 'Você já possui uma assinatura ativa do sistema de agendamentos' 
       });
@@ -498,16 +497,16 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
       ],
       payer: {
         name: req.user.name,
-        email: req.user.email || `professional${req.user.id}@quiroferreira.com.br`,
+        email: req.user.email || \`professional${req.user.id}@quiroferreira.com.br`,
       },
       back_urls: {
-        success: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling?payment=success`,
-        failure: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling?payment=failure`,
-        pending: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling?payment=pending`,
+        success: \`${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling?payment=success`,
+        failure: \`${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling?payment=failure`,
+        pending: \`${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional/scheduling?payment=pending`,
       },
       auto_return: 'approved',
-      external_reference: `scheduling_${req.user.id}_${Date.now()}`,
-      notification_url: `${process.env.API_URL || 'http://localhost:3001'}/api/scheduling-payment/webhook`,
+      external_reference: \`scheduling_${req.user.id}_${Date.now()}`,
+      notification_url: \`${process.env.API_URL || 'http://localhost:3001'}/api/scheduling-payment/webhook`,
       statement_descriptor: 'QUIRO FERREIRA AGENDA',
     };
 
@@ -521,7 +520,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     
     // Create test category
     const categoryResult = await pool.query(
-      `INSERT INTO service_categories (name, description) 
+      \`INSERT INTO service_categories (name, description) 
        VALUES ('Fisioterapia', 'Serviços de fisioterapia e reabilitação')
        ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description
        RETURNING id`
@@ -531,7 +530,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     // Create test professional
     const hashedPassword = await bcrypt.hash('123456', 10);
     const professionalResult = await pool.query(
-      `INSERT INTO users (name, cpf, password_hash, roles, percentage, category_id, subscription_status, subscription_expiry)
+      \`INSERT INTO users (name, cpf, password_hash, roles, percentage, category_id, subscription_status, subscription_expiry)
        VALUES ('Dr. João Silva (TESTE)', '12345678901', $1, $2, 70, $3, 'active', '2025-12-31')
        ON CONFLICT (cpf) DO UPDATE SET 
          name = EXCLUDED.name,
@@ -547,7 +546,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     
     // Create test service
     const serviceResult = await pool.query(
-      `INSERT INTO services (name, description, base_price, category_id, is_base_service)
+      \`INSERT INTO services (name, description, base_price, category_id, is_base_service)
        VALUES ('Consulta Fisioterapêutica', 'Avaliação e tratamento fisioterapêutico', 150.00, $1, true)
        ON CONFLICT (name) DO UPDATE SET 
          description = EXCLUDED.description,
@@ -561,7 +560,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     // Create scheduling subscription for professional
     const expiresAt = new Date('2025-12-31');
     await pool.query(
-      `INSERT INTO professional_scheduling_subscriptions (professional_id, status, expires_at)
+      \`INSERT INTO professional_scheduling_subscriptions (professional_id, status, expires_at)
        VALUES ($1, 'active', $2)
        ON CONFLICT (professional_id) DO UPDATE SET 
          status = 'active',
@@ -571,7 +570,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     
     // Create schedule settings
     await pool.query(
-      `INSERT INTO professional_schedule_settings 
+      \`INSERT INTO professional_schedule_settings 
        (professional_id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration, has_scheduling_subscription)
        VALUES ($1, $2, '08:00', '18:00', '12:00', '13:00', 60, true)
        ON CONFLICT (professional_id) DO UPDATE SET 
@@ -587,7 +586,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     
     // Create attendance location
     const locationResult = await pool.query(
-      `INSERT INTO attendance_locations 
+      \`INSERT INTO attendance_locations 
        (professional_id, name, address, address_number, neighborhood, city, state, phone, is_default)
        VALUES ($1, 'Clínica Principal', 'Rua das Flores', '123', 'Centro', 'Goiânia', 'GO', '(62) 3333-4444', true)
        ON CONFLICT (professional_id, name) DO UPDATE SET 
@@ -600,7 +599,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     
     // Create private patients
     const patient1Result = await pool.query(
-      `INSERT INTO private_patients 
+      \`INSERT INTO private_patients 
        (professional_id, name, cpf, email, phone, birth_date, address, city, state)
        VALUES ($1, 'Maria Santos', '11111111111', 'maria@email.com', '62999887766', '1985-03-15', 'Rua A, 100', 'Goiânia', 'GO')
        ON CONFLICT (professional_id, cpf) DO UPDATE SET name = EXCLUDED.name
@@ -610,7 +609,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     const patient1Id = patient1Result.rows[0].id;
     
     const patient2Result = await pool.query(
-      `INSERT INTO private_patients 
+      \`INSERT INTO private_patients 
        (professional_id, name, cpf, email, phone, birth_date, address, city, state)
        VALUES ($1, 'Carlos Oliveira', '22222222222', 'carlos@email.com', '62988776655', '1978-07-22', 'Rua B, 200', 'Goiânia', 'GO')
        ON CONFLICT (professional_id, cpf) DO UPDATE SET name = EXCLUDED.name
@@ -644,7 +643,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     
     for (const appointment of appointments) {
       await pool.query(
-        `INSERT INTO appointments 
+        \`INSERT INTO appointments 
          (professional_id, private_patient_id, service_id, appointment_date, appointment_time, location_id, value, status, notes)
          VALUES ($1, $2, $3, $4, $5, $6, 150.00, 'scheduled', $7)
          ON CONFLICT DO NOTHING`,
@@ -655,7 +654,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     
     // Create medical records for the patients
     await pool.query(
-      `INSERT INTO medical_records 
+      \`INSERT INTO medical_records 
        (professional_id, private_patient_id, chief_complaint, history_present_illness, 
         physical_examination, diagnosis, treatment_plan, vital_signs)
        VALUES ($1, $2, 'Dor lombar há 2 semanas', 'Paciente relata dor na região lombar após esforço físico', 
@@ -670,7 +669,7 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     );
     
     await pool.query(
-      `INSERT INTO medical_records 
+      \`INSERT INTO medical_records 
        (professional_id, private_patient_id, chief_complaint, history_present_illness, 
         physical_examination, diagnosis, treatment_plan, vital_signs)
        VALUES ($1, $2, 'Reabilitação pós-cirúrgica', 'Paciente em pós-operatório de cirurgia de joelho', 
@@ -697,13 +696,6 @@ app.post('/api/create-scheduling-subscription', authenticate, authorize(['profes
     console.log('   - Schedule settings configured (Mon-Fri, 8AM-6PM)');
     
 
-    // Store the payment intent in database
-    await pool.query(
-      `INSERT INTO professional_scheduling_payments 
-       (professional_id, mp_preference_id, amount, status, external_reference)
-       VALUES ($1, $2, $3, 'pending', $4)`,
-      [req.user.id, result.id, 49.90, preferenceData.external_reference]
-    );
 
     res.json({
       preference_id: result.id,
@@ -731,7 +723,7 @@ app.post('/api/scheduling-payment/webhook', async (req, res) => {
       
       // Simulate payment approval for testing
       const paymentResult = await pool.query(
-        `SELECT * FROM professional_scheduling_payments WHERE mp_preference_id = $1`,
+        \`SELECT * FROM professional_scheduling_payments WHERE mp_preference_id = $1`,
         [paymentId]
       );
 
@@ -740,7 +732,7 @@ app.post('/api/scheduling-payment/webhook', async (req, res) => {
         
         // Update payment status
         await pool.query(
-          `UPDATE professional_scheduling_payments 
+          \`UPDATE professional_scheduling_payments 
            SET status = 'approved', mp_payment_id = $1, updated_at = CURRENT_TIMESTAMP
            WHERE id = $2`,
           [paymentId, payment.id]
@@ -751,7 +743,7 @@ app.post('/api/scheduling-payment/webhook', async (req, res) => {
         expiresAt.setMonth(expiresAt.getMonth() + 1); // 1 month from now
 
         await pool.query(
-          `INSERT INTO professional_scheduling_subscriptions 
+          \`INSERT INTO professional_scheduling_subscriptions 
            (professional_id, status, expires_at, payment_id)
            VALUES ($1, 'active', $2, $3)
            ON CONFLICT (professional_id) 
@@ -765,7 +757,7 @@ app.post('/api/scheduling-payment/webhook', async (req, res) => {
 
         // Update professional schedule settings to enable scheduling
         await pool.query(
-          `INSERT INTO professional_schedule_settings (professional_id, has_scheduling_subscription)
+          \`INSERT INTO professional_schedule_settings (professional_id, has_scheduling_subscription)
            VALUES ($1, true)
            ON CONFLICT (professional_id) 
            DO UPDATE SET has_scheduling_subscription = true`,
@@ -787,7 +779,7 @@ app.post('/api/scheduling-payment/webhook', async (req, res) => {
 app.get('/api/subscription-status', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT has_scheduling_access FROM users WHERE id = $1`,
+      \`SELECT has_scheduling_access FROM users WHERE id = $1`,
       [req.user.id]
     );
 
@@ -819,7 +811,7 @@ app.get('/api/subscription-status', authenticate, authorize(['professional']), a
 app.get('/api/scheduling/settings', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT * FROM professional_schedule_settings WHERE professional_id = $1`,
+      \`SELECT * FROM professional_schedule_settings WHERE professional_id = $1`,
       [req.user.id]
     );
 
@@ -857,7 +849,7 @@ app.put('/api/scheduling/settings', authenticate, authorize(['professional']), a
     } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO professional_schedule_settings 
+      \`INSERT INTO professional_schedule_settings 
        (professional_id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (professional_id) 
@@ -888,7 +880,7 @@ app.get('/api/appointments', authenticate, authorize(['professional']), async (r
     const { start_date, end_date } = req.query;
 
     const result = await pool.query(
-      `SELECT a.*, 
+      \`SELECT a.*, 
               COALESCE(pp.name, c.name, d.name) as patient_name,
               COALESCE(pp.cpf, c.cpf, d.cpf) as patient_cpf,
               s.name as service_name,
@@ -930,7 +922,7 @@ app.post('/api/appointments', authenticate, authorize(['professional']), async (
     } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO appointments 
+      \`INSERT INTO appointments 
        (professional_id, private_patient_id, client_id, dependent_id, service_id, 
         appointment_date, appointment_time, location_id, notes, value, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'scheduled')
@@ -952,7 +944,7 @@ app.post('/api/appointments', authenticate, authorize(['professional']), async (
 app.get('/api/attendance-locations', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT * FROM attendance_locations 
+      \`SELECT * FROM attendance_locations 
        WHERE professional_id = $1 
        ORDER BY is_default DESC, name`,
       [req.user.id]
@@ -984,13 +976,13 @@ app.post('/api/attendance-locations', authenticate, authorize(['professional']),
     // If this is set as default, remove default from others
     if (is_default) {
       await pool.query(
-        `UPDATE attendance_locations SET is_default = false WHERE professional_id = $1`,
+        \`UPDATE attendance_locations SET is_default = false WHERE professional_id = $1`,
         [req.user.id]
       );
     }
 
     const result = await pool.query(
-      `INSERT INTO attendance_locations 
+      \`INSERT INTO attendance_locations 
        (professional_id, name, address, address_number, address_complement, 
         neighborhood, city, state, zip_code, phone, is_default)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -1026,14 +1018,14 @@ app.put('/api/attendance-locations/:id', authenticate, authorize(['professional'
     // If this is set as default, remove default from others
     if (is_default) {
       await pool.query(
-        `UPDATE attendance_locations SET is_default = false 
+        \`UPDATE attendance_locations SET is_default = false 
          WHERE professional_id = $1 AND id != $2`,
         [req.user.id, id]
       );
     }
 
     const result = await pool.query(
-      `UPDATE attendance_locations 
+      \`UPDATE attendance_locations 
        SET name = $1, address = $2, address_number = $3, address_complement = $4,
            neighborhood = $5, city = $6, state = $7, zip_code = $8, phone = $9,
            is_default = $10, updated_at = CURRENT_TIMESTAMP
@@ -1061,7 +1053,7 @@ app.delete('/api/attendance-locations/:id', authenticate, authorize(['profession
 
     // Check if location has appointments
     const appointmentsCheck = await pool.query(
-      `SELECT COUNT(*) FROM appointments WHERE location_id = $1`,
+      \`SELECT COUNT(*) FROM appointments WHERE location_id = $1`,
       [id]
     );
 
@@ -1072,7 +1064,7 @@ app.delete('/api/attendance-locations/:id', authenticate, authorize(['profession
     }
 
     const result = await pool.query(
-      `DELETE FROM attendance_locations WHERE id = $1 AND professional_id = $2 RETURNING *`,
+      \`DELETE FROM attendance_locations WHERE id = $1 AND professional_id = $2 RETURNING *`,
       [id, req.user.id]
     );
 
@@ -1093,7 +1085,7 @@ app.delete('/api/attendance-locations/:id', authenticate, authorize(['profession
 app.get('/api/private-patients', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT * FROM private_patients 
+      \`SELECT * FROM private_patients 
        WHERE professional_id = $1 
        ORDER BY name`,
       [req.user.id]
@@ -1126,7 +1118,7 @@ app.post('/api/private-patients', authenticate, authorize(['professional']), asy
 
     // Check if CPF already exists for this professional
     const existingPatient = await pool.query(
-      `SELECT id FROM private_patients WHERE cpf = $1 AND professional_id = $2`,
+      \`SELECT id FROM private_patients WHERE cpf = $1 AND professional_id = $2`,
       [cpf.replace(/\D/g, ''), req.user.id]
     );
 
@@ -1135,7 +1127,7 @@ app.post('/api/private-patients', authenticate, authorize(['professional']), asy
     }
 
     const result = await pool.query(
-      `INSERT INTO private_patients 
+      \`INSERT INTO private_patients 
        (professional_id, name, cpf, email, phone, birth_date, address, 
         address_number, address_complement, neighborhood, city, state, zip_code)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -1170,7 +1162,7 @@ app.put('/api/private-patients/:id', authenticate, authorize(['professional']), 
     } = req.body;
 
     const result = await pool.query(
-      `UPDATE private_patients 
+      \`UPDATE private_patients 
        SET name = $1, email = $2, phone = $3, birth_date = $4, address = $5,
            address_number = $6, address_complement = $7, neighborhood = $8,
            city = $9, state = $10, zip_code = $11, updated_at = CURRENT_TIMESTAMP
@@ -1198,7 +1190,7 @@ app.delete('/api/private-patients/:id', authenticate, authorize(['professional']
 
     // Check if patient has appointments
     const appointmentsCheck = await pool.query(
-      `SELECT COUNT(*) FROM appointments WHERE private_patient_id = $1`,
+      \`SELECT COUNT(*) FROM appointments WHERE private_patient_id = $1`,
       [id]
     );
 
@@ -1209,7 +1201,7 @@ app.delete('/api/private-patients/:id', authenticate, authorize(['professional']
     }
 
     const result = await pool.query(
-      `DELETE FROM private_patients WHERE id = $1 AND professional_id = $2 RETURNING *`,
+      \`DELETE FROM private_patients WHERE id = $1 AND professional_id = $2 RETURNING *`,
       [id, req.user.id]
     );
 
@@ -1241,7 +1233,7 @@ app.get('/api/medical-records/patient/:patientId/:patientType', authenticate, au
     }
 
     const result = await pool.query(
-      `SELECT mr.*, 
+      \`SELECT mr.*, 
               COALESCE(pp.name, c.name, d.name) as patient_name
        FROM medical_records mr
        LEFT JOIN private_patients pp ON mr.private_patient_id = pp.id
@@ -1263,7 +1255,7 @@ app.get('/api/medical-records/patient/:patientId/:patientType', authenticate, au
 app.get('/api/medical-records', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT mr.*, 
+      \`SELECT mr.*, 
               COALESCE(pp.name, c.name, d.name) as patient_name
        FROM medical_records mr
        LEFT JOIN private_patients pp ON mr.private_patient_id = pp.id
@@ -1302,7 +1294,7 @@ app.post('/api/medical-records', authenticate, authorize(['professional']), asyn
     } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO medical_records 
+      \`INSERT INTO medical_records 
        (professional_id, private_patient_id, client_id, dependent_id, appointment_id,
         chief_complaint, history_present_illness, past_medical_history, medications,
         allergies, physical_examination, diagnosis, treatment_plan, notes, vital_signs)
@@ -1338,7 +1330,7 @@ app.put('/api/medical-records/:id', authenticate, authorize(['professional']), a
     } = req.body;
 
     const result = await pool.query(
-      `UPDATE medical_records 
+      \`UPDATE medical_records 
        SET chief_complaint = $1, history_present_illness = $2, past_medical_history = $3,
            medications = $4, allergies = $5, physical_examination = $6, diagnosis = $7,
            treatment_plan = $8, notes = $9, vital_signs = $10, updated_at = CURRENT_TIMESTAMP
@@ -1365,7 +1357,7 @@ app.delete('/api/medical-records/:id', authenticate, authorize(['professional'])
     const { id } = req.params;
 
     const result = await pool.query(
-      `DELETE FROM medical_records WHERE id = $1 AND professional_id = $2 RETURNING *`,
+      \`DELETE FROM medical_records WHERE id = $1 AND professional_id = $2 RETURNING *`,
       [id, req.user.id]
     );
 
@@ -1677,7 +1669,7 @@ const generateDocumentHTML = (type, data) => {
 app.get('/api/medical-documents', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT md.*, 
+      \`SELECT md.*, 
               COALESCE(pp.name, c.name, d.name) as patient_name
        FROM medical_documents md
        LEFT JOIN private_patients pp ON md.private_patient_id = pp.id
@@ -1712,10 +1704,10 @@ app.post('/api/medical-documents', authenticate, authorize(['professional']), as
     
     // For now, we'll store the HTML content directly as the document URL
     // In a real implementation, you would upload this to Cloudinary
-    const documentUrl = `data:text/html;base64,${Buffer.from(htmlContent).toString('base64')}`;
+    const documentUrl = \`data:text/html;base64,${Buffer.from(htmlContent).toString('base64')}`;
 
     const result = await pool.query(
-      `INSERT INTO medical_documents 
+      \`INSERT INTO medical_documents 
        (professional_id, private_patient_id, client_id, dependent_id, 
         document_type, title, document_url, template_data)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -1748,7 +1740,7 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
 
     // Get consultations for the period
     const consultationsResult = await pool.query(
-      `SELECT c.*, 
+      \`SELECT c.*, 
               COALESCE(pp.name, u.name, d.name) as client_name,
               s.name as service_name,
               CASE 
@@ -1822,7 +1814,7 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
 
     // Get consultations for the period
     const consultationsResult = await pool.query(
-      `SELECT c.*, 
+      \`SELECT c.*, 
               CASE 
                 WHEN c.private_patient_id IS NOT NULL THEN 'private'
                 ELSE 'convenio'
@@ -1929,7 +1921,7 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO users (name, cpf, email, phone, birth_date, address, address_number, 
+      \`INSERT INTO users (name, cpf, email, phone, birth_date, address, address_number, 
        address_complement, neighborhood, city, state, password_hash, roles, percentage, category_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING id, name, cpf, roles`,
@@ -1993,7 +1985,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
       queryParams.push(hashedNewPassword);
     }
 
-    updateQuery += ` WHERE id = $${++paramCount} RETURNING id, name, email, roles`;
+    updateQuery += \` WHERE id = $${++paramCount} RETURNING id, name, email, roles`;
     queryParams.push(id);
 
     const result = await pool.query(updateQuery, queryParams);
@@ -2016,7 +2008,7 @@ app.put('/api/users/:id/activate', authenticate, authorize(['admin']), async (re
     const { expiry_date } = req.body;
 
     const result = await pool.query(
-      `UPDATE users 
+      \`UPDATE users 
        SET subscription_status = 'active', subscription_expiry = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id = $2 AND 'client' = ANY(roles)
        RETURNING id, name, subscription_status, subscription_expiry`,
@@ -2120,7 +2112,7 @@ app.put('/api/services/:id', authenticate, authorize(['admin']), async (req, res
     const { name, description, base_price, category_id, is_base_service } = req.body;
 
     const result = await pool.query(
-      `UPDATE services 
+      \`UPDATE services 
        SET name = $1, description = $2, base_price = $3, category_id = $4, is_base_service = $5
        WHERE id = $6 
        RETURNING *`,
@@ -2184,7 +2176,7 @@ app.get('/api/dependents/lookup', authenticate, authorize(['professional']), asy
     const { cpf } = req.query;
 
     const result = await pool.query(
-      `SELECT d.*, u.name as client_name, u.subscription_status as client_subscription_status
+      \`SELECT d.*, u.name as client_name, u.subscription_status as client_subscription_status
        FROM dependents d
        JOIN users u ON d.client_id = u.id
        WHERE d.cpf = $1`,
@@ -2347,7 +2339,7 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
     } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO consultations 
+      \`INSERT INTO consultations 
        (client_id, dependent_id, private_patient_id, professional_id, service_id, location_id, value, date)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
@@ -2551,10 +2543,10 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
       ],
       payer: {
         name: req.user.name,
-        email: req.user.email || `professional${req.user.id}@quiroferreira.com.br`,
+        email: req.user.email || \`professional${req.user.id}@quiroferreira.com.br`,
       },
       back_urls: {
-        success: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional?payment=success`,
+        success: \`${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional?payment=success`,
         failure: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional?payment=failure`,
         pending: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/professional?payment=pending`,
       },
@@ -2684,6 +2676,7 @@ async function createTestProfessional() {
     );
     const categoryId = categoryResult.rows[0].id;
     
+    // 2. Create service
     const serviceResult = await pool.query(
       `INSERT INTO services (name, description, base_price, category_id, is_base_service)
        VALUES ('Consulta Fisioterapêutica', 'Consulta completa de fisioterapia', 150.00, $1, true)
