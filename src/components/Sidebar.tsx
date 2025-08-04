@@ -33,6 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onItemClick }) => {
         { to: '/admin', icon: <Home size={20} />, label: 'Início' },
         { to: '/admin/users', icon: <Users size={20} />, label: 'Usuários' },
         { to: '/admin/services', icon: <FileText size={20} />, label: 'Serviços' },
+        { to: '/admin/scheduling-access', icon: <CalendarDays size={20} />, label: 'Acesso à Agenda' },
         { to: '/admin/reports', icon: <BarChart2 size={20} />, label: 'Relatórios' },
       ];
     }

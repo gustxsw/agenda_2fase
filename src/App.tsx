@@ -23,6 +23,7 @@ import ProfessionalProfilePage from "./pages/professional/ProfessionalProfilePag
 import AdminHomePage from "./pages/admin/AdminHomePage";
 import ManageUsersPage from "./pages/admin/ManageUsersPage";
 import ManageServicesPage from "./pages/admin/ManageServicesPage";
+import ManageSchedulingAccessPage from "./pages/admin/ManageSchedulingAccessPage";
 import ReportsPage from "./pages/admin/ReportsPage";
 
 // Route guards
@@ -127,6 +128,7 @@ function App() {
         <Route path="/admin" element={<AdminHomePage />} />
         <Route path="/admin/users" element={<ManageUsersPage />} />
         <Route path="/admin/services" element={<ManageServicesPage />} />
+        <Route path="/admin/scheduling-access" element={<ManageSchedulingAccessPage />} />
         <Route path="/admin/reports" element={<ReportsPage />} />
       </Route>
 
