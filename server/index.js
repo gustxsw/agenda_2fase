@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { pool } from './db.js';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -18,6 +19,291 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Function to create all necessary tables
+const createTables = async () => {
+  try {
+    console.log('🔄 Creating database tables...');
+    
+    // Create users table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        cpf VARCHAR(11) UNIQUE NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(20),
+        birth_date DATE,
+        address TEXT,
+        address_number VARCHAR(20),
+        address_complement VARCHAR(100),
+        neighborhood VARCHAR(100),
+        city VARCHAR(100),
+        state VARCHAR(2),
+        password_hash VARCHAR(255) NOT NULL,
+        roles TEXT[] DEFAULT ARRAY['client'],
+        subscription_status VARCHAR(20) DEFAULT 'pending',
+        subscription_expiry TIMESTAMP,
+        has_scheduling_access BOOLEAN DEFAULT FALSE,
+        scheduling_expires_at TIMESTAMP,
+        photo_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create service_categories table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS service_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create services table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS services (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        base_price DECIMAL(10,2) NOT NULL,
+        category_id INTEGER REFERENCES service_categories(id),
+        is_base_service BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create dependents table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dependents (
+        id SERIAL PRIMARY KEY,
+        client_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        cpf VARCHAR(11) UNIQUE NOT NULL,
+        birth_date DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create consultations table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS consultations (
+        id SERIAL PRIMARY KEY,
+        client_id INTEGER REFERENCES users(id),
+        dependent_id INTEGER REFERENCES dependents(id),
+        private_patient_id INTEGER,
+        professional_id INTEGER REFERENCES users(id),
+        service_id INTEGER REFERENCES services(id),
+        location_id INTEGER,
+        value DECIMAL(10,2) NOT NULL,
+        date TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create private_patients table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS private_patients (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        cpf VARCHAR(11) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(20),
+        birth_date DATE,
+        address TEXT,
+        address_number VARCHAR(20),
+        address_complement VARCHAR(100),
+        neighborhood VARCHAR(100),
+        city VARCHAR(100),
+        state VARCHAR(2),
+        zip_code VARCHAR(8),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(professional_id, cpf)
+      )
+    `);
+
+    // Create attendance_locations table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS attendance_locations (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        address TEXT,
+        address_number VARCHAR(20),
+        address_complement VARCHAR(100),
+        neighborhood VARCHAR(100),
+        city VARCHAR(100),
+        state VARCHAR(2),
+        zip_code VARCHAR(8),
+        phone VARCHAR(20),
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create medical_records table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS medical_records (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER REFERENCES private_patients(id),
+        client_id INTEGER REFERENCES users(id),
+        dependent_id INTEGER REFERENCES dependents(id),
+        appointment_id INTEGER,
+        chief_complaint TEXT,
+        history_present_illness TEXT,
+        past_medical_history TEXT,
+        medications TEXT,
+        allergies TEXT,
+        physical_examination TEXT,
+        diagnosis TEXT,
+        treatment_plan TEXT,
+        notes TEXT,
+        vital_signs JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create medical_documents table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS medical_documents (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER REFERENCES private_patients(id),
+        client_id INTEGER REFERENCES users(id),
+        dependent_id INTEGER REFERENCES dependents(id),
+        document_type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        document_url TEXT NOT NULL,
+        template_data JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create appointments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS appointments (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER REFERENCES private_patients(id),
+        client_id INTEGER REFERENCES users(id),
+        dependent_id INTEGER REFERENCES dependents(id),
+        service_id INTEGER REFERENCES services(id),
+        appointment_date DATE NOT NULL,
+        appointment_time TIME NOT NULL,
+        location_id INTEGER REFERENCES attendance_locations(id),
+        notes TEXT,
+        value DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'scheduled',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create professional_schedule_settings table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS professional_schedule_settings (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+        work_days INTEGER[] DEFAULT ARRAY[1,2,3,4,5],
+        work_start_time TIME DEFAULT '08:00',
+        work_end_time TIME DEFAULT '18:00',
+        break_start_time TIME DEFAULT '12:00',
+        break_end_time TIME DEFAULT '13:00',
+        consultation_duration INTEGER DEFAULT 60,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create scheduling_payments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS scheduling_payments (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        mp_preference_id VARCHAR(255),
+        mp_payment_id VARCHAR(255),
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        external_reference VARCHAR(255),
+        payment_method VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create subscription_payments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS subscription_payments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        mp_preference_id VARCHAR(255),
+        mp_payment_id VARCHAR(255),
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        external_reference VARCHAR(255),
+        payment_method VARCHAR(50),
+        dependent_ids INTEGER[],
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create admin user if not exists
+    const adminExists = await pool.query(
+      'SELECT id FROM users WHERE cpf = $1',
+      ['00000000000']
+    );
+
+    if (adminExists.rows.length === 0) {
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      
+      await pool.query(
+        `INSERT INTO users (name, cpf, password_hash, roles, subscription_status) 
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['Administrador', '00000000000', hashedPassword, ['admin'], 'active']
+      );
+      console.log('✅ Admin user created');
+    }
+
+    // Create default category if not exists
+    const categoryExists = await pool.query('SELECT id FROM service_categories LIMIT 1');
+    if (categoryExists.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO service_categories (name, description) 
+         VALUES ($1, $2)`,
+        ['Fisioterapia', 'Serviços de fisioterapia e reabilitação']
+      );
+      console.log('✅ Default category created');
+    }
+
+    // Create default service if not exists
+    const serviceExists = await pool.query('SELECT id FROM services LIMIT 1');
+    if (serviceExists.rows.length === 0) {
+      const category = await pool.query('SELECT id FROM service_categories LIMIT 1');
+      if (category.rows.length > 0) {
+        await pool.query(
+          `INSERT INTO services (name, description, base_price, category_id, is_base_service) 
+           VALUES ($1, $2, $3, $4, $5)`,
+          ['Consulta Fisioterapia', 'Consulta de fisioterapia completa', 100.00, category.rows[0].id, true]
+        );
+        console.log('✅ Default service created');
+      }
+    }
+
+    console.log('✅ All tables created successfully!');
+  } catch (error) {
+    console.error('❌ Error creating tables:', error);
+    throw error;
+  }
+};
+
 // Middleware
 app.use(cors({
   origin: [
@@ -33,6 +319,11 @@ app.use(cookieParser());
 
 // Serve static files from dist directory
 app.use(express.static('dist'));
+
+// Initialize database tables
+createTables().catch(error => {
+  console.error('Failed to create tables:', error);
+});
 
 // Create database tables
 const createTables = async () => {
