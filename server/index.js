@@ -35,6 +35,8 @@ app.use(cookieParser());
 // Serve static files from dist directory
 app.use(express.static('dist'));
 
+app.use('/api/payment', paymentRoutes);
+
 // 🔥 CREATE ALL TABLES ON SERVER START
 const createTables = async () => {
   try {
