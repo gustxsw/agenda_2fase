@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserPlus, Edit, Trash2, User, Check, X, Search, Filter, UserCheck, Calendar, CalendarDays, Clock } from 'lucide-react';
+import { UserPlus, Edit, Trash2, User, Check, X, Search, Filter, UserCheck, Calendar } from 'lucide-react';
 
 type UserData = {
   id: number;
@@ -79,11 +79,6 @@ const ManageUsersPage: React.FC = () => {
   const [userToActivate, setUserToActivate] = useState<UserData | null>(null);
   const [expiryDate, setExpiryDate] = useState('');
 
-  // 🔥 NEW: Scheduling access state
-  const [showSchedulingModal, setShowSchedulingModal] = useState(false);
-  const [userForScheduling, setUserForScheduling] = useState<UserData | null>(null);
-  const [schedulingExpiryDate, setSchedulingExpiryDate] = useState('');
-  const [isUpdatingScheduling, setIsUpdatingScheduling] = useState<number | null>(null);
   // Get API URL with fallback
   const getApiUrl = () => {
     if (
@@ -266,127 +261,6 @@ const ManageUsersPage: React.FC = () => {
     setExpiryDate('');
   };
   
-  // 🔥 NEW: Function to open scheduling access modal
-  const openSchedulingModal = (user: UserData) => {
-    setUserForScheduling(user);
-    
-    // Set default expiry date to 1 month from now
-    const defaultExpiry = new Date();
-    defaultExpiry.setMonth(defaultExpiry.getMonth() + 1);
-    setSchedulingExpiryDate(defaultExpiry.toISOString().split('T')[0]);
-    
-    setShowSchedulingModal(true);
-  };
-
-  // 🔥 NEW: Function to grant scheduling access
-  const grantSchedulingAccess = async () => {
-    if (!userForScheduling || !schedulingExpiryDate) return;
-    
-    try {
-      setIsUpdatingScheduling(userForScheduling.id);
-      setError('');
-      setSuccess('');
-      
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-      
-      const response = await fetch(`${apiUrl}/api/admin/users/${userForScheduling.id}/scheduling-access`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          has_access: true,
-          expires_at: `${schedulingExpiryDate} 23:59:59`
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Falha ao conceder acesso à agenda');
-      }
-      
-      // Close modal and refresh data
-      setShowSchedulingModal(false);
-      setUserForScheduling(null);
-      setSchedulingExpiryDate('');
-      
-      // Refresh users list
-      await fetchData();
-      
-      setSuccess('Acesso à agenda concedido com sucesso!');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess('');
-      }, 3000);
-    } catch (error) {
-      console.error('Error granting scheduling access:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError('Ocorreu um erro ao conceder acesso à agenda');
-      }
-    } finally {
-      setIsUpdatingScheduling(null);
-    }
-  };
-
-  // 🔥 NEW: Function to revoke scheduling access
-  const revokeSchedulingAccess = async (userId: number) => {
-    try {
-      setIsUpdatingScheduling(userId);
-      setError('');
-      setSuccess('');
-      
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-      
-      const response = await fetch(`${apiUrl}/api/admin/users/${userId}/scheduling-access`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          has_access: false,
-          expires_at: null
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Falha ao revogar acesso à agenda');
-      }
-      
-      // Refresh users list
-      await fetchData();
-      
-      setSuccess('Acesso à agenda removido com sucesso!');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess('');
-      }, 3000);
-    } catch (error) {
-      console.error('Error revoking scheduling access:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError('Ocorreu um erro ao revogar acesso à agenda');
-      }
-    } finally {
-      setIsUpdatingScheduling(null);
-    }
-  };
-
-  // 🔥 NEW: Function to cancel scheduling modal
-  const cancelSchedulingModal = () => {
-    setShowSchedulingModal(false);
-    setUserForScheduling(null);
-    setSchedulingExpiryDate('');
-  };
   const openCreateModal = () => {
     setModalMode('create');
     setName('');
@@ -845,7 +719,6 @@ const ManageUsersPage: React.FC = () => {
                   <th>Status Assinatura</th>
                   <th>Categoria</th>
                   <th>Porcentagem</th>
-                  <th>Acesso Agenda</th>
                   <th>Data de Cadastro</th>
                   <th>Ações</th>
                 </tr>
@@ -897,30 +770,6 @@ const ManageUsersPage: React.FC = () => {
                     <td>
                       {user.roles?.includes('professional') ? `${user.percentage}%` : '-'}
                     </td>
-                    <td>
-                      {user.roles?.includes('professional') ? (
-                        <div className="flex items-center space-x-2">
-                          {user.has_scheduling_access ? (
-                            <div className="flex items-center">
-                              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                                Ativo
-                              </span>
-                              {user.scheduling_expires_at && (
-                                <span className="ml-1 text-xs text-gray-500">
-                                  até {new Date(user.scheduling_expires_at).toLocaleDateString('pt-BR')}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
-                              Inativo
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-gray-500">-</span>
-                      )}
-                    </td>
                     <td>{formatDate(user.created_at)}</td>
                     <td>
                       <div className="flex space-x-2">
@@ -936,35 +785,6 @@ const ManageUsersPage: React.FC = () => {
                           >
                             <UserCheck className="h-5 w-5" />
                           </button>
-                        )}
-                        
-                        {/* 🔥 NEW: Scheduling access buttons for professionals */}
-                        {user.roles?.includes('professional') && (
-                          <>
-                            {!user.has_scheduling_access ? (
-                              <button
-                                onClick={() => openSchedulingModal(user)}
-                                className={`p-1 text-blue-600 hover:text-blue-800 ${
-                                  isUpdatingScheduling === user.id ? 'opacity-50 cursor-not-allowed' : ''
-                                }`}
-                                title="Conceder Acesso à Agenda"
-                                disabled={isUpdatingScheduling === user.id}
-                              >
-                                <CalendarDays className="h-5 w-5" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => revokeSchedulingAccess(user.id)}
-                                className={`p-1 text-orange-600 hover:text-orange-800 ${
-                                  isUpdatingScheduling === user.id ? 'opacity-50 cursor-not-allowed' : ''
-                                }`}
-                                title="Revogar Acesso à Agenda"
-                                disabled={isUpdatingScheduling === user.id}
-                              >
-                                <Clock className="h-5 w-5" />
-                              </button>
-                            )}
-                          </>
                         )}
                         
                         <button
@@ -1069,94 +889,6 @@ const ManageUsersPage: React.FC = () => {
         </div>
       )}
       
-      {/* 🔥 NEW: Scheduling access modal */}
-      {showSchedulingModal && userForScheduling && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold flex items-center">
-                <CalendarDays className="h-6 w-6 text-blue-600 mr-2" />
-                Conceder Acesso à Agenda
-              </h2>
-              <button
-                onClick={cancelSchedulingModal}
-                className="text-gray-500 hover:text-gray-700"
-                disabled={isUpdatingScheduling === userForScheduling.id}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <p className="text-gray-700 mb-2">
-                <span className="font-medium">Profissional:</span> {userForScheduling.name}
-              </p>
-              <p className="text-gray-700 mb-4">
-                <span className="font-medium">Categoria:</span> {
-                  categories.find(c => c.id === userForScheduling.category_id)?.name || 'Não definida'
-                }
-              </p>
-            </div>
-
-            <div className="mb-6">
-              <label htmlFor="schedulingExpiryDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Data de Expiração do Acesso *
-              </label>
-              <input
-                id="schedulingExpiryDate"
-                type="date"
-                value={schedulingExpiryDate}
-                onChange={(e) => setSchedulingExpiryDate(e.target.value)}
-                className="input"
-                min={new Date().toISOString().split('T')[0]}
-                disabled={isUpdatingScheduling === userForScheduling.id}
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                O acesso à agenda ficará ativo até a data selecionada
-              </p>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <h3 className="font-medium text-blue-900 mb-2">🎯 Campanha de Marketing</h3>
-              <p className="text-sm text-blue-700">
-                Este acesso está sendo concedido como parte de uma campanha promocional. 
-                O profissional terá acesso completo ao sistema de agendamentos até a data especificada.
-              </p>
-            </div>
-            
-            <div className="flex justify-end">
-              <button
-                onClick={cancelSchedulingModal}
-                className="btn btn-secondary mr-2"
-                disabled={isUpdatingScheduling === userForScheduling.id}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={grantSchedulingAccess}
-                className={`btn btn-primary flex items-center ${
-                  isUpdatingScheduling === userForScheduling.id ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
-                disabled={isUpdatingScheduling === userForScheduling.id || !schedulingExpiryDate}
-              >
-                {isUpdatingScheduling === userForScheduling.id ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Concedendo...
-                  </>
-                ) : (
-                  <>
-                    <CalendarDays className="h-5 w-5 mr-2" />
-                    Conceder Acesso
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* User form modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

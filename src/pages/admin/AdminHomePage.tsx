@@ -7,7 +7,6 @@ import {
   BarChart2,
   CalendarClock,
   DollarSign,
-  CalendarDays,
 } from "lucide-react";
 
 type ConsultationCount = {
@@ -60,8 +59,6 @@ const AdminHomePage: React.FC = () => {
     null
   );
 
-  // 🔥 NEW: Professionals with scheduling access count
-  const [professionalsWithScheduling, setProfessionalsWithScheduling] = useState(0);
   // Get API URL with fallback
   const getApiUrl = () => {
     if (
@@ -186,21 +183,6 @@ const AdminHomePage: React.FC = () => {
           total: usersData.length,
         });
       } catch (error) {
-        // 🔥 NEW: Count professionals with scheduling access
-        const professionalsWithSchedulingResponse = await fetch(`${apiUrl}/api/admin/professionals-scheduling`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (professionalsWithSchedulingResponse.ok) {
-          const professionalsSchedulingData = await professionalsWithSchedulingResponse.json();
-          const activeSchedulingCount = professionalsSchedulingData.filter(
-            (p: any) => p.is_active
-          ).length;
-          setProfessionalsWithScheduling(activeSchedulingCount);
-        }
         console.error("Error fetching admin data:", error);
         setError("Não foi possível carregar os dados do painel");
       } finally {
@@ -254,13 +236,6 @@ const AdminHomePage: React.FC = () => {
       description: "Valor a receber dos profissionais este mês",
       isMonetary: true,
     },
-    {
-      title: "Agendas Ativas",
-      value: professionalsWithScheduling,
-      icon: <CalendarDays className="h-8 w-8 text-red-600" />,
-      link: "/admin/users",
-      description: "Profissionais com acesso à agenda",
-    },
   ];
 
   const quickLinks = [
@@ -281,12 +256,6 @@ const AdminHomePage: React.FC = () => {
       description: "Acessar relatórios de faturamento e estatísticas",
       icon: <BarChart2 className="h-6 w-6 text-red-600" />,
       link: "/admin/reports",
-    },
-    {
-      title: "Gerenciar Agendas",
-      description: "Conceder ou revogar acesso à agenda dos profissionais",
-      icon: <CalendarDays className="h-6 w-6 text-red-600" />,
-      link: "/admin/users",
     },
   ];
 
