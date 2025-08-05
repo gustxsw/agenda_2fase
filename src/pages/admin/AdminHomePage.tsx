@@ -252,6 +252,12 @@ const AdminHomePage: React.FC = () => {
       link: "/admin/services",
     },
     {
+      title: "Acesso à Agenda",
+      description: "Conceder acesso gratuito à agenda para profissionais",
+      icon: <CalendarClock className="h-6 w-6 text-red-600" />,
+      link: "/admin/scheduling-access",
+    },
+    {
       title: "Ver Relatórios",
       description: "Acessar relatórios de faturamento e estatísticas",
       icon: <BarChart2 className="h-6 w-6 text-red-600" />,

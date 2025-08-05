@@ -10,6 +10,7 @@ import createUpload from './middleware/upload.js';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 
 dotenv.config();
+const adminSchedulingAccessRoutes = require('./routes/adminSchedulingAccess');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
