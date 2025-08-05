@@ -277,6 +277,8 @@ const createTables = async () => {
 // Initialize database tables
 createTables();
 
+app.use('/api/admin/scheduling-access', adminSchedulingAccessRoutes);
+
 // 🔥 AUTH ROUTES
 app.post('/api/auth/login', async (req, res) => {
   try {
