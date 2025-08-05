@@ -177,9 +177,6 @@ const RegisterConsultationPage: React.FC = () => {
               setPrivatePatients(patientsData);
             }
           }
-        } else {
-          // MVP: Assume no subscription for simplicity
-          setHasSchedulingSubscription(false);
         }
       } catch (error) {
         console.error('Error fetching data:', error);

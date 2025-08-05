@@ -31,8 +31,7 @@ export const authenticate = async (req, res, next) => {
       name: user.name,
       cpf: user.cpf,
       roles: user.roles || [],
-      currentRole: decoded.currentRole || (user.roles && user.roles[0]),
-      category_id: user.category_id
+      currentRole: decoded.currentRole || (user.roles && user.roles[0])
     };
 
     next();

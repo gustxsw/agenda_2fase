@@ -33,7 +33,6 @@ type SubscriptionStatus = {
   has_subscription: boolean;
   status: string;
   expires_at: string | null;
-  is_admin_granted?: boolean;
 };
 
 const SchedulingPage: React.FC = () => {
@@ -73,47 +72,46 @@ const SchedulingPage: React.FC = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (subscriptionStatus?.has_subscription && subscriptionStatus?.status === 'active') {
+      fetchAppointments();
+    }
+  }, [currentDate, viewMode, subscriptionStatus]);
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
-      // MVP: Simulate subscription check
-      // In production, this would check both paid subscription and admin-granted access
-      const mockSubscription = {
-        has_subscription: true,
-        status: 'active',
-        expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // 90 days from now
-        is_admin_granted: true // MVP: Assume admin granted access
-      };
-
-      setSubscriptionStatus(mockSubscription);
-
-      // Mock schedule settings
-      const mockSettings = {
-        professional_id: user?.id || 0,
-        work_days: [1, 2, 3, 4, 5],
-        work_start_time: '08:00',
-        work_end_time: '18:00',
-        break_start_time: '12:00',
-        break_end_time: '13:00',
-        consultation_duration: 60,
-        has_scheduling_subscription: true
-      };
-
-      setScheduleSettings(mockSettings);
-      setSettingsForm({
-        work_days: mockSettings.work_days,
-        work_start_time: mockSettings.work_start_time,
-        work_end_time: mockSettings.work_end_time,
-        break_start_time: mockSettings.break_start_time,
-        break_end_time: mockSettings.break_end_time,
-        consultation_duration: mockSettings.consultation_duration
+      // Fetch schedule settings
+      const settingsResponse = await fetch(`${apiUrl}/api/scheduling/settings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      // Mock appointments
-      setAppointments([]);
+      if (settingsResponse.ok) {
+        const settings = await settingsResponse.json();
+        setScheduleSettings(settings);
+        setSettingsForm({
+          work_days: settings.work_days || [1, 2, 3, 4, 5],
+          work_start_time: settings.work_start_time || '08:00',
+          work_end_time: settings.work_end_time || '18:00',
+          break_start_time: settings.break_start_time || '12:00',
+          break_end_time: settings.break_end_time || '13:00',
+          consultation_duration: settings.consultation_duration || 60
+        });
+      }
+
+      // Fetch subscription status
+      const subscriptionResponse = await fetch(`${apiUrl}/api/scheduling-payment/subscription-status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (subscriptionResponse.ok) {
+        const subscription = await subscriptionResponse.json();
+        console.log('🔍 Subscription status received:', subscription);
+        setSubscriptionStatus(subscription);
+      }
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -123,24 +121,65 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  const fetchAppointments = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      let startDate, endDate;
+      
+      if (viewMode === 'day') {
+        startDate = format(currentDate, 'yyyy-MM-dd');
+        endDate = format(currentDate, 'yyyy-MM-dd');
+      } else if (viewMode === 'week') {
+        startDate = format(startOfWeek(currentDate, { weekStartsOn: 0 }), 'yyyy-MM-dd');
+        endDate = format(endOfWeek(currentDate, { weekStartsOn: 0 }), 'yyyy-MM-dd');
+      } else {
+        startDate = format(startOfMonth(currentDate), 'yyyy-MM-dd');
+        endDate = format(endOfMonth(currentDate), 'yyyy-MM-dd');
+      }
+
+      const response = await fetch(
+        `${apiUrl}/api/appointments?start_date=${startDate}&end_date=${endDate}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setAppointments(data);
+      }
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+    }
+  };
+
   const handleSubscriptionPayment = async () => {
     try {
       setIsPaymentLoading(true);
-      setError('');
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
 
-      // MVP: Simulate payment process
-      setTimeout(() => {
-        setSubscriptionStatus({
-          has_subscription: true,
-          status: 'active',
-          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          is_admin_granted: false
-        });
-        setIsPaymentLoading(false);
-      }, 2000);
+      const response = await fetch(`${apiUrl}/api/create-scheduling-subscription`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao criar pagamento');
+      }
+
+      const data = await response.json();
+      window.open(data.init_point, '_blank');
     } catch (error) {
       console.error('Payment error:', error);
-      setError('Erro ao processar pagamento');
+      setError(error instanceof Error ? error.message : 'Erro ao processar pagamento');
+    } finally {
       setIsPaymentLoading(false);
     }
   };
@@ -149,17 +188,35 @@ const SchedulingPage: React.FC = () => {
     e.preventDefault();
     
     try {
-      // MVP: Just update local state
-      setScheduleSettings(prev => prev ? {
-        ...prev,
-        ...settingsForm
-      } : null);
-      
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/api/scheduling/settings`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(settingsForm)
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao salvar configurações');
+      }
+
+      await fetchData();
       setShowSettingsModal(false);
     } catch (error) {
       console.error('Error saving settings:', error);
       setError('Erro ao salvar configurações');
     }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
   };
 
   const formatTime = (time: string) => {
@@ -196,6 +253,7 @@ const SchedulingPage: React.FC = () => {
 
   // Show subscription required screen
   if (!subscriptionStatus || !subscriptionStatus.has_subscription || subscriptionStatus.status !== 'active') {
+    console.log('🔍 Showing subscription screen. Status:', subscriptionStatus);
     return (
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
@@ -297,34 +355,19 @@ const SchedulingPage: React.FC = () => {
 
       {/* Subscription status */}
       {subscriptionStatus && (
-        <div className={`border-l-4 p-4 mb-6 ${
-          subscriptionStatus.is_admin_granted 
-            ? 'bg-blue-50 border-blue-400' 
-            : 'bg-green-50 border-green-400'
-        }`}>
+        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
           <div className="flex items-center">
-            <CalendarDays className={`h-5 w-5 mr-2 ${
-              subscriptionStatus.is_admin_granted ? 'text-blue-600' : 'text-green-600'
-            }`} />
+            <CalendarDays className="h-5 w-5 text-green-600 mr-2" />
             <div>
-              <p className={`font-medium ${
-                subscriptionStatus.is_admin_granted ? 'text-blue-700' : 'text-green-700'
-              }`}>
-                {subscriptionStatus.is_admin_granted ? 'Acesso Concedido pelo Convênio' : 'Assinatura Ativa'}
+              <p className="text-green-700 font-medium">
+                Assinatura Ativa
               </p>
-              <p className={`text-sm ${
-                subscriptionStatus.is_admin_granted ? 'text-blue-600' : 'text-green-600'
-              }`}>
+              <p className="text-green-600 text-sm">
                 Válida até {subscriptionStatus.expires_at ? 
                   format(parseISO(subscriptionStatus.expires_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : 
                   'N/A'
                 }
               </p>
-              {subscriptionStatus.is_admin_granted && (
-                <p className="text-xs text-blue-500 mt-1">
-                  🎁 Acesso gratuito concedido pela administração
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -386,15 +429,81 @@ const SchedulingPage: React.FC = () => {
 
       {/* Calendar view */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="text-center py-12">
-          <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            Sistema de Agenda Ativo
-          </h3>
-          <p className="text-gray-600">
-            Sua agenda está configurada e pronta para uso. Os agendamentos aparecerão aqui.
-          </p>
-        </div>
+        {appointments.length === 0 ? (
+          <div className="text-center py-12">
+            <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Nenhum agendamento encontrado
+            </h3>
+            <p className="text-gray-600">
+              Não há agendamentos para o período selecionado.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {appointments.map((appointment) => (
+              <div
+                key={appointment.id}
+                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center text-gray-600">
+                      <Calendar className="h-4 w-4 mr-1" />
+                      {format(parseISO(appointment.appointment_date), "dd/MM/yyyy")}
+                    </div>
+                    <div className="flex items-center text-gray-600">
+                      <Clock className="h-4 w-4 mr-1" />
+                      {formatTime(appointment.appointment_time)}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button className="p-2 text-green-600 hover:bg-green-50 rounded-lg">
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="mt-3">
+                  <div className="flex items-center mb-2">
+                    <User className="h-4 w-4 text-gray-500 mr-2" />
+                    <span className="font-medium">{appointment.patient_name}</span>
+                  </div>
+                  
+                  {appointment.service_name && (
+                    <p className="text-sm text-gray-600 mb-1">
+                      Serviço: {appointment.service_name}
+                    </p>
+                  )}
+                  
+                  {appointment.location_name && (
+                    <div className="flex items-center text-sm text-gray-600 mb-1">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      {appointment.location_name}
+                    </div>
+                  )}
+                  
+                  <p className="text-sm font-medium text-green-600">
+                    {formatCurrency(appointment.value)}
+                  </p>
+                  
+                  {appointment.notes && (
+                    <p className="text-sm text-gray-500 mt-2">
+                      {appointment.notes}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Settings Modal */}
