@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Calendar, Clock, Settings, CalendarDays, Plus, Edit, Trash2, Eye, User, MapPin, X, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, Settings, CalendarDays, Plus, Edit, Trash2, Eye, User, MapPin, X, Check, ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays, isSameDay, parseISO, addWeeks, subWeeks, addMonths, subMonths, startOfDay, endOfDay, eachDayOfInterval, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -41,6 +41,7 @@ type Service = {
   id: number;
   name: string;
   base_price: number;
+  category_name: string;
 };
 
 type AttendanceLocation = {
@@ -66,6 +67,7 @@ const SchedulingPage: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [locations, setLocations] = useState<AttendanceLocation[]>([]);
   const [privatePatients, setPrivatePatients] = useState<PrivatePatient[]>([]);
+  const [attendanceLocations, setAttendanceLocations] = useState<AttendanceLocation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -74,6 +76,7 @@ const SchedulingPage: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [appointmentModalMode, setAppointmentModalMode] = useState<'create' | 'edit'>('create');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -97,6 +100,19 @@ const SchedulingPage: React.FC = () => {
     client_id: null as number | null,
     dependent_id: null as number | null,
     service_id: '',
+    location_id: '',
+    notes: '',
+    value: ''
+  });
+
+  // Create appointment form state
+  const [createForm, setCreateForm] = useState({
+    patient_type: 'private' as 'private' | 'convenio',
+    private_patient_id: '',
+    cpf: '',
+    service_id: '',
+    appointment_date: '',
+    appointment_time: '',
     location_id: '',
     notes: '',
     value: ''
@@ -131,6 +147,11 @@ const SchedulingPage: React.FC = () => {
       fetchAppointments();
     }
   }, [currentDate, viewMode, scheduleSettings]);
+
+  useEffect(() => {
+    fetchAppointments();
+    fetchFormData();
+  }, [currentDate]);
 
   const fetchInitialData = async () => {
     try {
@@ -241,6 +262,48 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  const fetchFormData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      // Fetch services
+      const servicesResponse = await fetch(`${apiUrl}/api/services`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (servicesResponse.ok) {
+        const servicesData = await servicesResponse.json();
+        setServices(servicesData);
+      }
+
+      // Fetch private patients
+      const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (patientsResponse.ok) {
+        const patientsData = await patientsResponse.json();
+        setPrivatePatients(patientsData);
+      }
+
+      // Fetch attendance locations
+      const locationsResponse = await fetch(`${apiUrl}/api/attendance-locations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (locationsResponse.ok) {
+        const locationsData = await locationsResponse.json();
+        setAttendanceLocations(locationsData);
+        
+        // Set default location
+        const defaultLocation = locationsData.find((loc: AttendanceLocation) => loc.is_default);
+        if (defaultLocation) {
+          setCreateForm(prev => ({ ...prev, location_id: defaultLocation.id.toString() }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching form data:', error);
+    }
+  };
+
   const fetchAvailableSlots = async (date: string) => {
     try {
       const token = localStorage.getItem('token');
@@ -331,6 +394,41 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  const searchClientByCpf = async () => {
+    if (!createForm.cpf) return;
+    
+    setError('');
+    setIsSearching(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+      const cleanCpf = createForm.cpf.replace(/\D/g, '');
+      
+      // Search for client
+      const response = await fetch(`${apiUrl}/api/clients/lookup?cpf=${cleanCpf}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const clientData = await response.json();
+        setClientSearchResult(clientData);
+        
+        if (clientData.subscription_status !== 'active') {
+          setError('Cliente não possui assinatura ativa');
+        }
+      } else {
+        setError('Cliente não encontrado');
+        setClientSearchResult(null);
+      }
+    } catch (error) {
+      setError('Erro ao buscar cliente');
+      setClientSearchResult(null);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const openAppointmentModal = (mode: 'create' | 'edit', date?: string, time?: string, appointment?: Appointment) => {
     setAppointmentModalMode(mode);
     
@@ -364,9 +462,34 @@ const SchedulingPage: React.FC = () => {
     setShowAppointmentModal(true);
   };
 
+  const openCreateModal = (date?: string, time?: string) => {
+    setCreateForm({
+      patient_type: 'private',
+      private_patient_id: '',
+      cpf: '',
+      service_id: '',
+      appointment_date: date || '',
+      appointment_time: time || '',
+      location_id: attendanceLocations.find(l => l.is_default)?.id.toString() || '',
+      notes: '',
+      value: ''
+    });
+    setClientSearchResult(null);
+    setShowCreateModal(true);
+    setError('');
+    setSuccess('');
+  };
+
   const closeAppointmentModal = () => {
     setShowAppointmentModal(false);
     setSelectedAppointment(null);
+    setError('');
+    setSuccess('');
+  };
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setClientSearchResult(null);
     setError('');
     setSuccess('');
   };
@@ -411,6 +534,86 @@ const SchedulingPage: React.FC = () => {
       
       setTimeout(() => {
         closeAppointmentModal();
+      }, 1500);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Erro ao criar agendamento');
+    }
+  };
+
+  const handleCreateFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setCreateForm(prev => ({ ...prev, [name]: value }));
+    
+    // Auto-fill value when service is selected
+    if (name === 'service_id' && value) {
+      const selectedService = services.find(s => s.id === parseInt(value));
+      if (selectedService) {
+        setCreateForm(prev => ({ ...prev, value: selectedService.base_price.toString() }));
+      }
+    }
+  };
+
+  const formatCpf = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    const limitedValue = numericValue.slice(0, 11);
+    setCreateForm(prev => ({ ...prev, cpf: limitedValue }));
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    // Validation
+    if (createForm.patient_type === 'private' && !createForm.private_patient_id) {
+      setError('Selecione um paciente particular');
+      return;
+    }
+    
+    if (createForm.patient_type === 'convenio' && (!clientSearchResult || clientSearchResult.subscription_status !== 'active')) {
+      setError('Cliente não encontrado ou sem assinatura ativa');
+      return;
+    }
+
+    if (!createForm.service_id || !createForm.appointment_date || !createForm.appointment_time || !createForm.value) {
+      setError('Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const appointmentData = {
+        private_patient_id: createForm.patient_type === 'private' ? parseInt(createForm.private_patient_id) : null,
+        client_id: createForm.patient_type === 'convenio' ? clientSearchResult?.id : null,
+        service_id: parseInt(createForm.service_id),
+        appointment_date: createForm.appointment_date,
+        appointment_time: createForm.appointment_time,
+        location_id: createForm.location_id ? parseInt(createForm.location_id) : null,
+        notes: createForm.notes,
+        value: parseFloat(createForm.value)
+      };
+
+      const response = await fetch(`${apiUrl}/api/scheduling/appointments`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(appointmentData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao criar agendamento');
+      }
+
+      setSuccess('Agendamento criado com sucesso!');
+      await fetchAppointments();
+      
+      setTimeout(() => {
+        closeCreateModal();
       }, 1500);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Erro ao criar agendamento');
@@ -475,6 +678,16 @@ const SchedulingPage: React.FC = () => {
       setAppointmentToDelete(null);
       setShowDeleteConfirm(false);
     }
+  };
+
+  const openDetailModal = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setShowDetailModal(true);
+  };
+
+  const closeDetailModal = () => {
+    setSelectedAppointment(null);
+    setShowDetailModal(false);
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -627,6 +840,41 @@ const SchedulingPage: React.FC = () => {
         return 'Cancelado';
       default:
         return status;
+    }
+  };
+
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case 'scheduled':
+        return {
+          bgColor: 'bg-blue-100',
+          textColor: 'text-blue-800',
+          icon: '📅'
+        };
+      case 'confirmed':
+        return {
+          bgColor: 'bg-green-100',
+          textColor: 'text-green-800',
+          icon: '✅'
+        };
+      case 'completed':
+        return {
+          bgColor: 'bg-purple-100',
+          textColor: 'text-purple-800',
+          icon: '✔️'
+        };
+      case 'cancelled':
+        return {
+          bgColor: 'bg-red-100',
+          textColor: 'text-red-800',
+          icon: '❌'
+        };
+      default:
+        return {
+          bgColor: 'bg-gray-100',
+          textColor: 'text-gray-800',
+          icon: '❓'
+        };
     }
   };
 
@@ -853,20 +1101,36 @@ const SchedulingPage: React.FC = () => {
 
                 {isWorkingDay && isCurrentMonth && (
                   <div className="space-y-1">
-                    {dayAppointments.slice(0, 2).map((appointment) => (
-                      <div
-                        key={appointment.id}
-                        className="bg-red-100 text-red-800 p-1 rounded text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedAppointment(appointment);
-                          setShowViewModal(true);
-                        }}
-                      >
-                        <div className="font-medium">{appointment.appointment_time.slice(0, 5)}</div>
-                        <div className="truncate">{appointment.patient_name}</div>
-                      </div>
-                    ))}
+                    {dayAppointments.slice(0, 2).map((appointment) => {
+                      const statusInfo = getStatusInfo(appointment.status);
+                      return (
+                        <button
+                          key={appointment.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDetailModal(appointment);
+                          }}
+                          className={`w-full text-left p-2 rounded text-xs hover:opacity-80 transition-opacity mb-1 ${statusInfo.bgColor} ${statusInfo.textColor}`}
+                        >
+                          <div className="flex items-center">
+                            <span className="mr-1">{statusInfo.icon}</span>
+                            <span className="font-medium">{appointment.appointment_time}</span>
+                          </div>
+                          <div className="truncate">{appointment.patient_name}</div>
+                        </button>
+                      );
+                    })}
+                    
+                    {/* Quick add button for each day */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCreateModal(format(day, 'yyyy-MM-dd'), '09:00');
+                      }}
+                      className="w-full p-1 text-xs text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors mt-1"
+                    >
+                      <Plus className="h-3 w-3 mx-auto" />
+                    </button>
                     
                     {dayAppointments.length > 2 && (
                       <div className="text-xs text-gray-500 text-center">
@@ -913,12 +1177,6 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
-  const formatCpf = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
-    const limitedValue = numericValue.slice(0, 11);
-    setAppointmentForm(prev => ({ ...prev, client_cpf: limitedValue }));
-  };
-
   const formattedCpf = appointmentForm.client_cpf
     ? appointmentForm.client_cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
     : '';
@@ -936,11 +1194,18 @@ const SchedulingPage: React.FC = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Agenda Profissional</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Agenda</h1>
           <p className="text-gray-600">Gerencie seus agendamentos e horários</p>
         </div>
         
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => openCreateModal()}
+            className="btn btn-primary flex items-center"
+          >
+            <Plus className="h-5 w-5 mr-2" />
+            Novo Agendamento
+          </button>
           <button
             onClick={() => setShowSettingsModal(true)}
             className="btn btn-outline flex items-center"
@@ -1006,9 +1271,16 @@ const SchedulingPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
           <button
-            onClick={() => navigateDate('prev')}
+            onClick={() => openCreateModal()}
+            className="btn btn-primary flex items-center"
+          >
+            <Plus className="h-5 w-5 mr-2" />
+            Novo Agendamento
+          </button>
+          <button
+            onClick={() => setCurrentDate(subMonths(currentDate, 1))}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -1021,7 +1293,7 @@ const SchedulingPage: React.FC = () => {
           </h2>
           
           <button
-            onClick={() => navigateDate('next')}
+            onClick={() => setCurrentDate(addMonths(currentDate, 1))}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ChevronRight className="h-5 w-5" />
@@ -1147,6 +1419,261 @@ const SchedulingPage: React.FC = () => {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Salvar Configurações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Appointment Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold">Novo Agendamento</h2>
+              <button
+                onClick={closeCreateModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mx-6 mt-4 bg-red-50 text-red-600 p-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mx-6 mt-4 bg-green-50 text-green-600 p-3 rounded-lg">
+                {success}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateSubmit} className="p-6">
+              <div className="space-y-6">
+                {/* Patient Type Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Tipo de Paciente
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreateForm(prev => ({ ...prev, patient_type: 'private', cpf: '' }));
+                        setClientSearchResult(null);
+                      }}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        createForm.patient_type === 'private'
+                          ? 'border-red-600 bg-red-50 text-red-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <User className="h-6 w-6 mx-auto mb-2" />
+                      <div className="text-sm font-medium">Particular</div>
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreateForm(prev => ({ ...prev, patient_type: 'convenio', private_patient_id: '' }));
+                        setClientSearchResult(null);
+                      }}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        createForm.patient_type === 'convenio'
+                          ? 'border-red-600 bg-red-50 text-red-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <Users className="h-6 w-6 mx-auto mb-2" />
+                      <div className="text-sm font-medium">Convênio</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Patient Selection */}
+                {createForm.patient_type === 'private' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Paciente Particular *
+                    </label>
+                    <select
+                      name="private_patient_id"
+                      value={createForm.private_patient_id}
+                      onChange={handleCreateFormChange}
+                      className="input"
+                      required
+                    >
+                      <option value="">Selecione um paciente</option>
+                      {privatePatients.map((patient) => (
+                        <option key={patient.id} value={patient.id}>
+                          {patient.name} - CPF: {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      CPF do Cliente *
+                    </label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={createForm.cpf ? createForm.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : ''}
+                        onChange={(e) => formatCpf(e.target.value)}
+                        className="input flex-1"
+                        placeholder="000.000.000-00"
+                      />
+                      <button
+                        type="button"
+                        onClick={searchClientByCpf}
+                        className={`btn btn-primary ${isSearching ? 'opacity-70' : ''}`}
+                        disabled={isSearching || !createForm.cpf}
+                      >
+                        {isSearching ? 'Buscando...' : 'Buscar'}
+                      </button>
+                    </div>
+                    
+                    {clientSearchResult && (
+                      <div className={`mt-2 p-3 rounded-lg ${
+                        clientSearchResult.subscription_status === 'active' 
+                          ? 'bg-green-50 text-green-700' 
+                          : 'bg-red-50 text-red-700'
+                      }`}>
+                        <p><strong>Cliente:</strong> {clientSearchResult.name}</p>
+                        <p><strong>Status:</strong> {clientSearchResult.subscription_status}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Service Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Serviço *
+                  </label>
+                  <select
+                    name="service_id"
+                    value={createForm.service_id}
+                    onChange={handleCreateFormChange}
+                    className="input"
+                    required
+                  >
+                    <option value="">Selecione um serviço</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.base_price)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date and Time */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Data *
+                    </label>
+                    <input
+                      type="date"
+                      name="appointment_date"
+                      value={createForm.appointment_date}
+                      onChange={handleCreateFormChange}
+                      className="input"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hora *
+                    </label>
+                    <input
+                      type="time"
+                      name="appointment_time"
+                      value={createForm.appointment_time}
+                      onChange={handleCreateFormChange}
+                      className="input"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Location and Value */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Local de Atendimento
+                    </label>
+                    <select
+                      name="location_id"
+                      value={createForm.location_id}
+                      onChange={handleCreateFormChange}
+                      className="input"
+                    >
+                      <option value="">Selecione um local</option>
+                      {attendanceLocations.map((location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.name} {location.is_default && '(Padrão)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Valor (R$) *
+                    </label>
+                    <input
+                      type="number"
+                      name="value"
+                      value={createForm.value}
+                      onChange={handleCreateFormChange}
+                      className="input"
+                      min="0"
+                      step="0.01"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Observações
+                  </label>
+                  <textarea
+                    name="notes"
+                    value={createForm.notes}
+                    onChange={handleCreateFormChange}
+                    className="input min-h-[80px]"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-8 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  className="btn btn-secondary"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary flex items-center"
+                  disabled={
+                    (createForm.patient_type === 'private' && !createForm.private_patient_id) ||
+                    (createForm.patient_type === 'convenio' && (!clientSearchResult || clientSearchResult.subscription_status !== 'active'))
+                  }
+                >
+                  <Save className="h-5 w-5 mr-2" />
+                  Criar Agendamento
                 </button>
               </div>
             </form>
@@ -1527,6 +2054,84 @@ const SchedulingPage: React.FC = () => {
                 >
                   <Edit className="h-4 w-4 mr-2" />
                   Editar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Appointment Detail Modal */}
+      {showDetailModal && selectedAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold">Detalhes do Agendamento</h2>
+              <button
+                onClick={closeDetailModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Data</h3>
+                  <p className="text-gray-700">
+                    {format(parseISO(selectedAppointment.appointment_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Horário</h3>
+                  <p className="text-gray-700">{formatTime(selectedAppointment.appointment_time)}</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-900">Paciente</h3>
+                <p className="text-gray-700">{selectedAppointment.patient_name}</p>
+                <p className="text-sm text-gray-500">
+                  CPF: {selectedAppointment.patient_cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-900">Serviço</h3>
+                <p className="text-gray-700">{selectedAppointment.service_name}</p>
+              </div>
+
+              {selectedAppointment.location_name && (
+                <div>
+                  <h3 className="font-semibold text-gray-900">Local</h3>
+                  <p className="text-gray-700">{selectedAppointment.location_name}</p>
+                  {selectedAppointment.location_address && (
+                    <p className="text-sm text-gray-500">{selectedAppointment.location_address}</p>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <h3 className="font-semibold text-gray-900">Valor</h3>
+                <p className="text-gray-700 font-medium text-lg">
+                  {formatCurrency(selectedAppointment.value)}
+                </p>
+              </div>
+
+              {selectedAppointment.notes && (
+                <div>
+                  <h3 className="font-semibold text-gray-900">Observações</h3>
+                  <p className="text-gray-700">{selectedAppointment.notes}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <button
+                  onClick={closeDetailModal}
+                  className="btn btn-secondary"
+                >
+                  Fechar
                 </button>
               </div>
             </div>
