@@ -1176,7 +1176,10 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
       service_id,
       location_id,
       value,
-      date
+      date,
+      appointment_date,
+      appointment_time,
+      create_appointment
     } = req.body;
 
     if (!service_id || !value || !date) {
@@ -1188,7 +1191,14 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
       return res.status(400).json({ message: 'É necessário especificar um cliente, dependente ou paciente particular' });
     }
 
-    const result = await pool.query(
+    // Start transaction
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Create consultation
+      const consultationResult = await client.query(
       `INSERT INTO consultations 
        (professional_id, client_id, dependent_id, private_patient_id, service_id, location_id, value, date)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -1196,7 +1206,36 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
       [req.user.id, client_id, dependent_id, private_patient_id, service_id, location_id, value, date]
     );
 
-    res.status(201).json(result.rows[0]);
+      const consultation = consultationResult.rows[0];
+      
+      // Create appointment if requested
+      if (create_appointment && appointment_date && appointment_time) {
+        // Get consultation duration from settings
+        const settingsResult = await client.query(
+          `SELECT consultation_duration FROM professional_schedule_settings WHERE professional_id = $1`,
+          [professional_id]
+        );
+        
+        const consultationDuration = settingsResult.rows[0]?.consultation_duration || 60;
+        
+        await client.query(
+          `INSERT INTO appointments 
+           (professional_id, private_patient_id, client_id, dependent_id, service_id,
+            appointment_date, appointment_time, location_id, value, status, consultation_duration, consultation_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11)`,
+          [professional_id, private_patient_id, client_id, dependent_id, service_id, 
+           appointment_date, appointment_time, location_id, value, consultationDuration, consultation.id]
+        );
+      }
+      
+      await client.query('COMMIT');
+      res.status(201).json(consultation);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('Error creating consultation:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
@@ -2542,6 +2581,94 @@ app.get('/api/appointments', authenticate, authorize(['professional']), async (r
   }
 });
 
+// Get available time slots for a specific date
+app.get('/api/scheduling/available-slots', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ message: 'Data é obrigatória' });
+    }
+
+    // Get professional's schedule settings
+    const settingsResult = await pool.query(
+      `SELECT * FROM professional_schedule_settings WHERE professional_id = $1`,
+      [req.user.id]
+    );
+
+    const settings = settingsResult.rows[0] || {
+      work_days: [1, 2, 3, 4, 5],
+      work_start_time: '08:00',
+      work_end_time: '18:00',
+      break_start_time: '12:00',
+      break_end_time: '13:00',
+      consultation_duration: 60
+    };
+
+    // Check if the date is a working day
+    const dayOfWeek = new Date(date).getDay();
+    if (!settings.work_days.includes(dayOfWeek)) {
+      return res.json({ available_slots: [], message: 'Dia não é dia de trabalho' });
+    }
+
+    // Get existing appointments for this date
+    const appointmentsResult = await pool.query(
+      `SELECT appointment_time, consultation_duration FROM appointments 
+       WHERE professional_id = $1 AND appointment_date = $2 AND status != 'cancelled'`,
+      [req.user.id, date]
+    );
+
+    const bookedSlots = appointmentsResult.rows.map(apt => ({
+      time: apt.appointment_time,
+      duration: apt.consultation_duration || settings.consultation_duration
+    }));
+
+    // Generate available slots
+    const slots = [];
+    const startTime = settings.work_start_time;
+    const endTime = settings.work_end_time;
+    const breakStart = settings.break_start_time;
+    const breakEnd = settings.break_end_time;
+    const duration = settings.consultation_duration;
+
+    let currentTime = new Date(`2000-01-01T${startTime}`);
+    const endDateTime = new Date(`2000-01-01T${endTime}`);
+    const breakStartTime = new Date(`2000-01-01T${breakStart}`);
+    const breakEndTime = new Date(`2000-01-01T${breakEnd}`);
+
+    while (currentTime < endDateTime) {
+      const timeString = currentTime.toTimeString().slice(0, 5);
+      const slotEndTime = new Date(currentTime.getTime() + duration * 60000);
+
+      // Check if slot conflicts with break time
+      const isInBreak = currentTime >= breakStartTime && currentTime < breakEndTime;
+      
+      // Check if slot conflicts with existing appointments
+      const isBooked = bookedSlots.some(booked => {
+        const bookedStart = new Date(`2000-01-01T${booked.time}`);
+        const bookedEnd = new Date(bookedStart.getTime() + booked.duration * 60000);
+        return (currentTime >= bookedStart && currentTime < bookedEnd) ||
+               (slotEndTime > bookedStart && slotEndTime <= bookedEnd);
+      });
+
+      if (!isInBreak && !isBooked && slotEndTime <= endDateTime) {
+        slots.push({
+          time: timeString,
+          available: true,
+          duration: duration
+        });
+      }
+
+      currentTime = new Date(currentTime.getTime() + duration * 60000);
+    }
+
+    res.json({ available_slots: slots });
+  } catch (error) {
+    console.error('Error fetching available slots:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
 app.post('/api/appointments', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const {
@@ -2556,14 +2683,22 @@ app.post('/api/appointments', authenticate, authorize(['professional']), async (
       value
     } = req.body;
 
+    // Get consultation duration from settings
+    const settingsResult = await pool.query(
+      `SELECT consultation_duration FROM professional_schedule_settings WHERE professional_id = $1`,
+      [req.user.id]
+    );
+    
+    const consultationDuration = settingsResult.rows[0]?.consultation_duration || 60;
+
     const result = await pool.query(
       `INSERT INTO appointments 
-       (professional_id, private_patient_id, client_id, dependent_id, service_id, 
-        appointment_date, appointment_time, location_id, notes, value, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'scheduled')
+       (professional_id, private_patient_id, client_id, dependent_id, service_id,
+        appointment_date, appointment_time, location_id, notes, value, status, consultation_duration)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'scheduled', $11)
        RETURNING *`,
       [req.user.id, private_patient_id, client_id, dependent_id, service_id, 
-       appointment_date, appointment_time, location_id, notes, value]
+       appointment_date, appointment_time, location_id, notes, value, consultationDuration]
     );
 
     res.status(201).json(result.rows[0]);

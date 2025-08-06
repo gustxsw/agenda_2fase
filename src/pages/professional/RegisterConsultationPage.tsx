@@ -513,6 +513,7 @@ const RegisterConsultationPage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
       
+      // Create both consultation record and appointment
       const response = await fetch(`${apiUrl}/api/consultations`, {
         method: 'POST',
         headers: {
@@ -528,6 +529,10 @@ const RegisterConsultationPage: React.FC = () => {
           location_id: locationId ? parseInt(locationId) : null,
           value: Number(value),
           date: dateTime.toISOString(),
+          // Add appointment data
+          appointment_date: date,
+          appointment_time: time,
+          create_appointment: true
         }),
       });
       
@@ -552,7 +557,7 @@ const RegisterConsultationPage: React.FC = () => {
       setDate('');
       setTime('');
       
-      setSuccess('Consulta registrada com sucesso!');
+      setSuccess('Consulta registrada e agendamento criado com sucesso!');
       
       // Redirect after a delay
       setTimeout(() => {
