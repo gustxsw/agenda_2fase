@@ -76,12 +76,13 @@ const ProfessionalsPage: React.FC = () => {
         setProfessionals(data);
         
         // Extract unique cities for filter
-        const cities = [...new Set(
-          data
-            .map((prof: Professional) => prof.city)
-            .filter((city: string) => city && city.trim() !== "")
-        )].sort();
-        setAvailableCities(cities);
+        const uniqueCities = data
+          .map((prof: Professional) => prof.city)
+          .filter((city: string) => city && city.trim() !== "")
+          .filter((city: string, index: number, array: string[]) => array.indexOf(city) === index)
+          .sort();
+        
+        setAvailableCities(uniqueCities);
       } catch (error) {
         console.error("Error fetching professionals:", error);
         setError("Não foi possível carregar a lista de profissionais");
@@ -284,12 +285,11 @@ const ProfessionalsPage: React.FC = () => {
                           alt={`Foto de ${professional.name}`}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
                           onError={(e) => {
-                            // Fallback to default icon if image fails to load
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
-                            const fallbackDiv = target.parentElement?.nextElementSibling as HTMLElement;
-                            if (fallbackDiv) {
-                              fallbackDiv.classList.remove('hidden');
+                            const parent = target.parentElement;
+                            if (parent && parent.nextElementSibling) {
+                              (parent.nextElementSibling as HTMLElement).classList.remove('hidden');
                             }
                           }}
                         />
