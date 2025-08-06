@@ -1201,8 +1201,8 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
       // Create consultation
       const consultationResult = await client.query(
         `INSERT INTO consultations 
-         (professional_id, client_id, dependent_id, private_patient_id, service_id, value, date, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
+         (professional_id, client_id, dependent_id, private_patient_id, service_id, value, date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
         [req.user.id, client_id, dependent_id, private_patient_id, service_id, location_id, value, date]
       );
