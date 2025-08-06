@@ -174,6 +174,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await response.json();
       console.log('✅ Role switched:', data);
       
+      // Ensure roles is always an array
+      if (data.user.roles && !Array.isArray(data.user.roles)) {
+        try {
+          data.user.roles = JSON.parse(data.user.roles);
+        } catch (e) {
+          data.user.roles = [data.user.roles];
+        }
+      }
+      
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       
