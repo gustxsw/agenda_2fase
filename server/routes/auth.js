@@ -13,10 +13,29 @@ const parseRoles = (roles) => {
     try {
       return JSON.parse(roles);
     } catch (e) {
-      return [roles];
+      // If it's not valid JSON, treat as single role
+      return roles.includes(',') ? roles.split(',').map(r => r.trim()) : [roles];
     }
   }
   return [roles];
+};
+
+// Helper function to safely stringify roles for database
+const stringifyRoles = (roles) => {
+  if (!roles) return JSON.stringify([]);
+  if (Array.isArray(roles)) return JSON.stringify(roles);
+  if (typeof roles === 'string') {
+    try {
+      // Test if it's already valid JSON
+      JSON.parse(roles);
+      return roles;
+    } catch (e) {
+      // Convert string to array and stringify
+      const rolesArray = roles.includes(',') ? roles.split(',').map(r => r.trim()) : [roles];
+      return JSON.stringify(rolesArray);
+    }
+  }
+  return JSON.stringify([roles]);
 };
 
 // Login endpoint
@@ -259,7 +278,7 @@ router.post('/register', async (req, res) => {
        RETURNING id, name, cpf, email, roles`,
       [name, cleanCpf, email, phone, birth_date, address, address_number,
        address_complement, neighborhood, city, state, passwordHash, 
-       JSON.stringify(['client']), 'pending']
+       stringifyRoles(['client']), 'pending']
     );
 
     const newUser = result.rows[0];

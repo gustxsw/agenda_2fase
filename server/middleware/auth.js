@@ -1,6 +1,21 @@
 import jwt from 'jsonwebtoken';
 import { pool } from '../db.js';
 
+// Helper function to safely parse roles
+const parseRoles = (roles) => {
+  if (!roles) return [];
+  if (Array.isArray(roles)) return roles;
+  if (typeof roles === 'string') {
+    try {
+      return JSON.parse(roles);
+    } catch (e) {
+      // If it's not valid JSON, treat as single role
+      return roles.includes(',') ? roles.split(',').map(r => r.trim()) : [roles];
+    }
+  }
+  return [roles];
+};
+
 export const authenticate = async (req, res, next) => {
   try {
     // Get token from cookie or Authorization header
@@ -25,12 +40,12 @@ export const authenticate = async (req, res, next) => {
 
     const user = result.rows[0];
 
-    // Add user to request object with current role from token
+    // Add user to request object with current role from token and parsed roles
     req.user = {
       id: user.id,
       name: user.name,
       cpf: user.cpf,
-      roles: user.roles || [],
+      roles: parseRoles(user.roles),
       currentRole: decoded.currentRole || (user.roles && user.roles[0])
     };
 
