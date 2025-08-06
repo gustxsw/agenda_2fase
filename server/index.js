@@ -54,12 +54,227 @@ app.use('/api/clients', clientsRoutes);
 app.use('/api/professionals', professionalsRoutes);
 app.use('/api/consultations', consultationsRoutes);
 app.use('/api/reports', reportsRoutes);
-app.use('/api/services', servicesRoutes);
-app.use('/api/service-categories', serviceCategoriesRoutes);
-app.use('/api/private-patients', privatePatientsRoutes);
-app.use('/api/attendance-locations', attendanceLocationsRoutes);
-app.use('/api/scheduling', schedulingRoutes);
-app.use('/api/dependents', dependentsRoutes);
+
+// Services routes - directly in index.js
+app.get('/api/services', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT s.*, sc.name as category_name 
+       FROM services s
+       LEFT JOIN service_categories sc ON s.category_id = sc.id
+       ORDER BY sc.name, s.name`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching services:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Service categories routes - directly in index.js
+app.get('/api/service-categories', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM service_categories ORDER BY name'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching service categories:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Private patients routes - directly in index.js
+app.get('/api/private-patients', async (req, res) => {
+  try {
+    // Simple auth check
+    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Não autorizado' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    
+    const result = await pool.query(
+      `SELECT * FROM private_patients 
+       WHERE professional_id = $1 
+       ORDER BY name`,
+      [decoded.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching private patients:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Attendance locations routes - directly in index.js
+app.get('/api/attendance-locations', async (req, res) => {
+  try {
+    // Simple auth check
+    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Não autorizado' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    
+    const result = await pool.query(
+      `SELECT * FROM attendance_locations 
+       WHERE professional_id = $1 
+       ORDER BY is_default DESC, name`,
+      [decoded.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching attendance locations:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Appointments routes - directly in index.js
+app.get('/api/appointments', async (req, res) => {
+  try {
+    // Simple auth check
+    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Não autorizado' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const { start_date, end_date } = req.query;
+
+    const result = await pool.query(
+      `SELECT a.*, 
+              COALESCE(pp.name, c.name, d.name) as patient_name,
+              COALESCE(pp.cpf, c.cpf, d.cpf) as patient_cpf,
+              s.name as service_name,
+              al.name as location_name,
+              al.address as location_address
+       FROM appointments a
+       LEFT JOIN private_patients pp ON a.private_patient_id = pp.id
+       LEFT JOIN users c ON a.client_id = c.id
+       LEFT JOIN dependents d ON a.dependent_id = d.id
+       LEFT JOIN services s ON a.service_id = s.id
+       LEFT JOIN attendance_locations al ON a.location_id = al.id
+       WHERE a.professional_id = $1
+       AND a.appointment_date >= $2
+       AND a.appointment_date <= $3
+       ORDER BY a.appointment_date, a.appointment_time`,
+      [decoded.id, start_date, end_date]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching appointments:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Create appointment - directly in index.js
+app.post('/api/appointments', async (req, res) => {
+  try {
+    // Simple auth check
+    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Não autorizado' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    
+    const {
+      private_patient_id,
+      client_id,
+      dependent_id,
+      service_id,
+      appointment_date,
+      appointment_time,
+      location_id,
+      notes,
+      value
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO appointments 
+       (professional_id, private_patient_id, client_id, dependent_id, service_id, 
+        appointment_date, appointment_time, location_id, notes, value, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'scheduled')
+       RETURNING *`,
+      [decoded.id, private_patient_id, client_id, dependent_id, service_id, 
+       appointment_date, appointment_time, location_id, notes, value]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating appointment:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Update appointment status - directly in index.js
+app.put('/api/appointments/:id', async (req, res) => {
+  try {
+    // Simple auth check
+    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'Não autorizado' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const result = await pool.query(
+      `UPDATE appointments 
+       SET status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2 AND professional_id = $3
+       RETURNING *`,
+      [status, id, decoded.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Agendamento não encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating appointment:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Dependents lookup - directly in index.js
+app.get('/api/dependents/lookup', async (req, res) => {
+  try {
+    const { cpf } = req.query;
+    
+    if (!cpf) {
+      return res.status(400).json({ message: 'CPF é obrigatório' });
+    }
+
+    const cleanCpf = cpf.toString().replace(/\D/g, '');
+
+    const result = await pool.query(
+      `SELECT d.*, c.name as client_name, c.subscription_status as client_subscription_status
+       FROM dependents d
+       JOIN users c ON d.client_id = c.id
+       WHERE d.cpf = $1`,
+      [cleanCpf]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Dependente não encontrado' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error looking up dependent:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Import jwt for auth checks
+import jwt from 'jsonwebtoken';
 
 // Serve static files from React build
 app.use(express.static(distPath));
