@@ -44,6 +44,13 @@ import dependentRoutes from './routes/dependents.js';
 import reportRoutes from './routes/reports.js';
 import professionalRoutes from './routes/professionals.js';
 import uploadRoutes from './routes/upload.js';
+import paymentRoutes from './routes/payment.js';
+import schedulingRoutes from './routes/scheduling.js';
+import schedulingPaymentRoutes from './routes/schedulingPayment.js';
+import privatePatientRoutes from './routes/privatePatients.js';
+import medicalRecordsRoutes from './routes/medicalRecords.js';
+import attendanceLocationRoutes from './routes/attendanceLocations.js';
+import adminSchedulingAccessRoutes from './routes/adminSchedulingAccess.js';
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -56,6 +63,19 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/professionals', professionalRoutes);
 app.use('/api/clients', consultationRoutes);
 app.use('/api/upload-image', uploadRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/create-subscription', paymentRoutes);
+app.use('/api/professional/create-payment', paymentRoutes);
+app.use('/api/scheduling', schedulingRoutes);
+app.use('/api/scheduling-payment', schedulingPaymentRoutes);
+app.use('/api/create-scheduling-subscription', schedulingPaymentRoutes);
+app.use('/api/private-patients', privatePatientRoutes);
+app.use('/api/medical-records', medicalRecordsRoutes);
+app.use('/api/attendance-locations', attendanceLocationRoutes);
+app.use('/api/admin', adminSchedulingAccessRoutes);
+app.use('/api/admin/professionals-scheduling-access', adminSchedulingAccessRoutes);
+app.use('/api/admin/grant-scheduling-access', adminSchedulingAccessRoutes);
+app.use('/api/admin/revoke-scheduling-access', adminSchedulingAccessRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
