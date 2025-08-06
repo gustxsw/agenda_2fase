@@ -76,9 +76,10 @@ const ProfessionalsPage: React.FC = () => {
         setProfessionals(data);
         
         // Extract unique cities for filter
-        const cities = [...new Set(data
-          .map((prof: Professional) => prof.city)
-          .filter((city: string) => city && city.trim() !== "")
+        const cities = [...new Set(
+          data
+            .map((prof: Professional) => prof.city)
+            .filter((city: string) => city && city.trim() !== "")
         )].sort();
         setAvailableCities(cities);
       } catch (error) {
