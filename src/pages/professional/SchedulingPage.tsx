@@ -216,17 +216,26 @@ const SchedulingPage: React.FC = () => {
       console.log('🔍 Date range:', { startDate, endDate });
 
       const response = await fetch(
-        `${apiUrl}/api/scheduling/appointments?start_date=${startDate}&end_date=${endDate}`,
+        `${apiUrl}/api/appointments?start_date=${startDate}&end_date=${endDate}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Appointments received:', data);
-        setAppointments(data);
+      if (!response.ok) {
+        throw new Error('Falha ao carregar agendamentos');
       }
+
+      const data = await response.json();
+      console.log('✅ Appointments received:', data);
+      
+      // Filter only scheduled appointments (not completed or cancelled)
+      const scheduledAppointments = data.filter((apt: any) => 
+        apt.status === 'scheduled' || apt.status === 'confirmed'
+      );
+      
+      console.log('✅ Scheduled appointments:', scheduledAppointments);
+      setAppointments(scheduledAppointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);
     }
