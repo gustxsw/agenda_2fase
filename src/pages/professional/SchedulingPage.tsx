@@ -1356,7 +1356,8 @@ const SchedulingPage: React.FC = () => {
                   <h3 className="font-semibold text-gray-900">Horário</h3>
                   <p className="text-gray-700">
                     {formatTime(selectedAppointment.appointment_time)} 
-                    ({selectedAppointment.consultation_duration || 60} min)
+                    Para criar novos agendamentos, use o menu "Registrar Consulta". 
+                    Total de agendamentos: {appointments.length}
                   </p>
                 </div>
               </div>

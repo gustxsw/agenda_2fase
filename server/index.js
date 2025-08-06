@@ -2516,11 +2516,20 @@ app.get('/api/appointments', authenticate, authorize(['professional']), async (r
        WHERE a.professional_id = $1
        AND a.appointment_date >= $2
        AND a.appointment_date <= $3
+       AND a.status != 'cancelled'
        ORDER BY a.appointment_date, a.appointment_time`,
       [req.user.id, start_date, end_date]
     );
 
-    res.json(result.rows);
+    console.log('✅ Found appointments:', result.rows.length);
+    console.log('✅ Appointments details:', result.rows.map(a => ({
+      id: a.id,
+      date: a.appointment_date,
+      time: a.appointment_time,
+      patient: a.patient_name,
+      service: a.service_name,
+      type: a.patient_type
+    })));
   } catch (error) {
     console.error('Error fetching appointments:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
