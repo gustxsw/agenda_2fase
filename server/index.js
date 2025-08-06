@@ -1193,10 +1193,11 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
       return res.status(400).json({ message: 'É necessário especificar um cliente, dependente ou paciente particular' });
     }
 
-    // Start transaction
     const client = await pool.connect();
     
     try {
+      await client.query('BEGIN');
+      
       await client.query('BEGIN');
       
       // Create consultation
@@ -1220,7 +1221,7 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
         
         const consultationDuration = settingsResult.rows[0]?.consultation_duration || 60;
         
-        await client.query(
+        const appointmentResult = await client.query(
           `INSERT INTO appointments 
            (professional_id, private_patient_id, client_id, dependent_id, service_id,
             appointment_date, appointment_time, location_id, value, status, consultation_duration, consultation_id)
@@ -2352,8 +2353,7 @@ app.post('/api/upload-image', authenticate, authorize(['professional']), async (
           return res.status(404).json({ message: 'Usuário não encontrado' });
         }
 
-        console.log('✅ Database updated with photo URL:', req.file.path);
-
+      await client.query('COMMIT');
         res.json({
           message: 'Imagem enviada com sucesso',
           imageUrl: req.file.path
@@ -2653,9 +2653,10 @@ app.get('/api/scheduling/available-slots', authenticate, authorize(['professiona
                (slotEndTime > bookedStart && slotEndTime <= bookedEnd);
       });
 
-      if (!isInBreak && !isBooked && slotEndTime <= endDateTime) {
-        slots.push({
+      await client.query('ROLLBACK');
           time: timeString,
+    } finally {
+      client.release();
           available: true,
           duration: duration
         });
