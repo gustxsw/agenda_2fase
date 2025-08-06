@@ -527,17 +527,23 @@ const SchedulingPage: React.FC = () => {
     );
   };
 
+  // Filter appointments to show only active ones
+  const filteredAppointments = appointments.filter(apt => 
+    ['scheduled', 'confirmed', 'completed', 'cancelled'].includes(apt.status)
+  );
+
   // Check if a time slot is occupied
   const isSlotOccupied = (date: Date, time: string) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     console.log('🔍 Checking slot:', { dateStr, time });
-    console.log('🔍 Available appointments:', appointments.map(a => ({ 
+    console.log('🔍 Available appointments:', filteredAppointments.map(a => ({ 
       date: a.appointment_date, 
       time: a.appointment_time,
-      patient: a.patient_name 
+      patient: a.patient_name,
+      status: a.status
     })));
     
-    return appointments.some(apt => 
+    return filteredAppointments.some(apt => 
       apt.appointment_date === dateStr && 
       apt.appointment_time === time
     );
@@ -546,10 +552,82 @@ const SchedulingPage: React.FC = () => {
   // Get appointment for a specific slot
   const getSlotAppointment = (date: Date, time: string) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return appointments.find(apt => 
+    return filteredAppointments.find(apt => 
       apt.appointment_date === dateStr && 
       apt.appointment_time === time
     );
+  };
+
+  // Get status color classes
+  const getStatusColors = (status: string) => {
+    switch (status) {
+      case 'scheduled':
+        return {
+          border: 'border-blue-200',
+          bg: 'bg-blue-50',
+          hover: 'hover:bg-blue-100',
+          text: 'text-blue-700',
+          textSecondary: 'text-blue-600',
+          badge: 'bg-blue-100 text-blue-800',
+          icon: '📅'
+        };
+      case 'confirmed':
+        return {
+          border: 'border-green-200',
+          bg: 'bg-green-50',
+          hover: 'hover:bg-green-100',
+          text: 'text-green-700',
+          textSecondary: 'text-green-600',
+          badge: 'bg-green-100 text-green-800',
+          icon: '✅'
+        };
+      case 'completed':
+        return {
+          border: 'border-purple-200',
+          bg: 'bg-purple-50',
+          hover: 'hover:bg-purple-100',
+          text: 'text-purple-700',
+          textSecondary: 'text-purple-600',
+          badge: 'bg-purple-100 text-purple-800',
+          icon: '✔️'
+        };
+      case 'cancelled':
+        return {
+          border: 'border-red-200',
+          bg: 'bg-red-50',
+          hover: 'hover:bg-red-100',
+          text: 'text-red-700',
+          textSecondary: 'text-red-600',
+          badge: 'bg-red-100 text-red-800',
+          icon: '❌'
+        };
+      default:
+        return {
+          border: 'border-gray-200',
+          bg: 'bg-gray-50',
+          hover: 'hover:bg-gray-100',
+          text: 'text-gray-700',
+          textSecondary: 'text-gray-600',
+          badge: 'bg-gray-100 text-gray-800',
+          icon: '❓'
+        };
+    }
+  };
+
+  // Get status display name
+  const getStatusDisplayName = (status: string) => {
+    switch (status) {
+      case 'scheduled':
+        return 'Agendado';
+      case 'confirmed':
+        return 'Confirmado';
+      case 'completed':
+        return 'Realizado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return status;
+    }
   };
 
   const renderDayView = () => {
@@ -1344,7 +1422,12 @@ const SchedulingPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-2xl">
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-xl font-bold">Detalhes do Agendamento</h2>
+              <div className="flex items-center">
+                <h2 className="text-xl font-bold mr-3">Detalhes do Agendamento</h2>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColors(selectedAppointment.status).badge}`}>
+                  {getStatusColors(selectedAppointment.status).icon} {getStatusDisplayName(selectedAppointment.status)}
+                </span>
+              </div>
               <button
                 onClick={() => setShowViewModal(false)}
                 className="text-gray-500 hover:text-gray-700"
@@ -1354,6 +1437,26 @@ const SchedulingPage: React.FC = () => {
             </div>
 
             <div className="p-6 space-y-4">
+              {/* Status visual indicator */}
+              <div className={`p-4 rounded-lg ${getStatusColors(selectedAppointment.status).bg} ${getStatusColors(selectedAppointment.status).border} border-2`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <span className="text-2xl mr-3">{getStatusColors(selectedAppointment.status).icon}</span>
+                    <div>
+                      <h3 className={`font-semibold ${getStatusColors(selectedAppointment.status).text}`}>
+                        {getStatusDisplayName(selectedAppointment.status)}
+                      </h3>
+                      <p className={`text-sm ${getStatusColors(selectedAppointment.status).textSecondary}`}>
+                        {selectedAppointment.status === 'scheduled' && 'Agendamento confirmado'}
+                        {selectedAppointment.status === 'confirmed' && 'Paciente confirmou presença'}
+                        {selectedAppointment.status === 'completed' && 'Consulta foi realizada'}
+                        {selectedAppointment.status === 'cancelled' && 'Agendamento foi cancelado'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="font-semibold text-gray-900">Data</h3>
