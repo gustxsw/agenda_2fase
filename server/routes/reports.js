@@ -32,3 +32,6 @@
          AND c.date >= $1 AND c.date <= $2
          GROUP BY p.id, p.name, p.percentage
          ORDER BY total_revenue DESC`,
+  }
+}
+)
