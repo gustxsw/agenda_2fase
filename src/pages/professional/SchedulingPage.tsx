@@ -212,6 +212,9 @@ const SchedulingPage: React.FC = () => {
         endDate = format(endOfMonth(currentDate), 'yyyy-MM-dd');
       }
 
+      console.log('🔍 Fetching appointments from:', `${apiUrl}/api/appointments`);
+      console.log('🔍 Date range:', { startDate, endDate });
+
       const response = await fetch(
         `${apiUrl}/api/scheduling/appointments?start_date=${startDate}&end_date=${endDate}`,
         {
@@ -221,6 +224,7 @@ const SchedulingPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Appointments received:', data);
         setAppointments(data);
       }
     } catch (error) {
@@ -510,6 +514,31 @@ const SchedulingPage: React.FC = () => {
   const getAppointmentForSlot = (date: string, time: string) => {
     return appointments.find(apt => 
       apt.appointment_date === date && 
+      apt.appointment_time === time
+    );
+  };
+
+  // Check if a time slot is occupied
+  const isSlotOccupied = (date: Date, time: string) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    console.log('🔍 Checking slot:', { dateStr, time });
+    console.log('🔍 Available appointments:', appointments.map(a => ({ 
+      date: a.appointment_date, 
+      time: a.appointment_time,
+      patient: a.patient_name 
+    })));
+    
+    return appointments.some(apt => 
+      apt.appointment_date === dateStr && 
+      apt.appointment_time === time
+    );
+  };
+
+  // Get appointment for a specific slot
+  const getSlotAppointment = (date: Date, time: string) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return appointments.find(apt => 
+      apt.appointment_date === dateStr && 
       apt.appointment_time === time
     );
   };
