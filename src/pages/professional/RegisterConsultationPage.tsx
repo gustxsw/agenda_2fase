@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Search, Calendar, User, Users, AlertTriangle, MapPin } from 'lucide-react';
+import { Search, Calendar, User, Users, AlertTriangle, MapPin, UserPlus, X, Check } from 'lucide-react';
 
 type Service = {
   id: number;
@@ -52,6 +52,9 @@ const RegisterConsultationPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
+  // Patient type selection
+  const [patientType, setPatientType] = useState<'convenio' | 'particular'>('convenio');
+  
   // Form state
   const [cpf, setCpf] = useState('');
   const [clientId, setClientId] = useState<number | null>(null);
@@ -77,8 +80,26 @@ const RegisterConsultationPage: React.FC = () => {
   const [selectedPrivatePatient, setSelectedPrivatePatient] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isCreatingPatient, setIsCreatingPatient] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // Private patient form state
+  const [showCreatePatientModal, setShowCreatePatientModal] = useState(false);
+  const [newPatientData, setNewPatientData] = useState({
+    name: '',
+    cpf: '',
+    email: '',
+    phone: '',
+    birth_date: '',
+    address: '',
+    address_number: '',
+    address_complement: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    zip_code: ''
+  });
 
   // Get API URL with fallback
   const getApiUrl = () => {
@@ -149,10 +170,6 @@ const RegisterConsultationPage: React.FC = () => {
             setLocationId(defaultLocation.id.toString());
           }
         }
-        
-        // Check if professional has scheduling subscription
-        // 🔥 LIBERADO: Todos os profissionais têm acesso à agenda
-        setHasSchedulingSubscription(true);
         
         // Fetch private patients
         const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
@@ -301,6 +318,127 @@ const RegisterConsultationPage: React.FC = () => {
     setFoundDependent(null);
   };
   
+  // Create new private patient
+  const createPrivatePatient = async () => {
+    setError('');
+    setSuccess('');
+    
+    // Validate required fields
+    if (!newPatientData.name || !newPatientData.cpf) {
+      setError('Nome e CPF são obrigatórios');
+      return;
+    }
+    
+    // Validate CPF format
+    const cleanCpf = newPatientData.cpf.replace(/\D/g, '');
+    if (!/^\d{11}$/.test(cleanCpf)) {
+      setError('CPF deve conter 11 dígitos numéricos');
+      return;
+    }
+    
+    try {
+      setIsCreatingPatient(true);
+      
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+      
+      const response = await fetch(`${apiUrl}/api/private-patients`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...newPatientData,
+          cpf: cleanCpf
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao criar paciente');
+      }
+      
+      const createdPatient = await response.json();
+      
+      // Add to private patients list
+      setPrivatePatients(prev => [...prev, createdPatient]);
+      
+      // Select the newly created patient
+      setSelectedPrivatePatient(createdPatient.id.toString());
+      
+      // Close modal and reset form
+      setShowCreatePatientModal(false);
+      setNewPatientData({
+        name: '',
+        cpf: '',
+        email: '',
+        phone: '',
+        birth_date: '',
+        address: '',
+        address_number: '',
+        address_complement: '',
+        neighborhood: '',
+        city: '',
+        state: '',
+        zip_code: ''
+      });
+      
+      setSuccess(`Paciente ${createdPatient.name} criado e selecionado com sucesso!`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Erro ao criar paciente');
+    } finally {
+      setIsCreatingPatient(false);
+    }
+  };
+  
+  const openCreatePatientModal = () => {
+    setShowCreatePatientModal(true);
+    setError('');
+    setSuccess('');
+  };
+  
+  const closeCreatePatientModal = () => {
+    setShowCreatePatientModal(false);
+    setNewPatientData({
+      name: '',
+      cpf: '',
+      email: '',
+      phone: '',
+      birth_date: '',
+      address: '',
+      address_number: '',
+      address_complement: '',
+      neighborhood: '',
+      city: '',
+      state: '',
+      zip_code: ''
+    });
+  };
+  
+  const handleNewPatientInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setNewPatientData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const formatNewPatientCpf = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    const limitedValue = numericValue.slice(0, 11);
+    setNewPatientData(prev => ({ ...prev, cpf: limitedValue }));
+  };
+  
+  const formatNewPatientPhone = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    const limitedValue = numericValue.slice(0, 11);
+    setNewPatientData(prev => ({ ...prev, phone: limitedValue }));
+  };
+  
+  const formatNewPatientZipCode = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    const limitedValue = numericValue.slice(0, 8);
+    setNewPatientData(prev => ({ ...prev, zip_code: limitedValue }));
+  };
+  
   // Update value when service changes
   const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = Number(e.target.value);
@@ -334,14 +472,20 @@ const RegisterConsultationPage: React.FC = () => {
     setSuccess('');
     
     // Validate form
-    if (!clientId && !selectedDependentId) {
+    if (patientType === 'convenio' && !clientId && !selectedDependentId) {
       setError('É necessário selecionar um cliente ou dependente');
       return;
     }
     
     // 🔥 Double check subscription status before submitting
-    if (subscriptionStatus !== 'active') {
+    if (patientType === 'convenio' && subscriptionStatus !== 'active') {
       setError('Não é possível registrar consulta para cliente sem assinatura ativa');
+      return;
+    }
+    
+    // Validate patient selection for particular patients
+    if (patientType === 'particular' && !selectedPrivatePatient) {
+      setError('É necessário selecionar um paciente particular');
       return;
     }
     
@@ -376,9 +520,9 @@ const RegisterConsultationPage: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          client_id: hasSchedulingSubscription ? null : (selectedDependentId ? null : clientId),
-          dependent_id: selectedDependentId,
-          private_patient_id: hasSchedulingSubscription ? (selectedPrivatePatient ? parseInt(selectedPrivatePatient) : null) : null,
+          client_id: patientType === 'convenio' ? (selectedDependentId ? null : clientId) : null,
+          dependent_id: patientType === 'convenio' ? selectedDependentId : null,
+          private_patient_id: patientType === 'particular' ? parseInt(selectedPrivatePatient) : null,
           professional_id: user?.id,
           service_id: serviceId,
           location_id: locationId ? parseInt(locationId) : null,
@@ -400,6 +544,7 @@ const RegisterConsultationPage: React.FC = () => {
       setFoundDependent(null);
       setDependents([]);
       setSelectedPrivatePatient('');
+      setPatientType('convenio');
       setCategoryId('');
       setServiceId(null);
       setLocationId('');
@@ -477,44 +622,72 @@ const RegisterConsultationPage: React.FC = () => {
         )}
         
         <form onSubmit={handleSubmit}>
-          {/* Show different forms based on subscription status */}
-          {hasSchedulingSubscription ? (
-            // Form for professionals with scheduling subscription
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-3 flex items-center">
-                <User className="h-5 w-5 mr-2 text-red-600" />
-                Selecionar Paciente Particular
-              </h2>
+          {/* Patient Type Selection */}
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-3">Tipo de Atendimento</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setPatientType('convenio');
+                  // Reset forms
+                  setCpf('');
+                  setClientId(null);
+                  setClientName('');
+                  setSubscriptionStatus('');
+                  setSelectedDependentId(null);
+                  setFoundDependent(null);
+                  setDependents([]);
+                  setSelectedPrivatePatient('');
+                  setError('');
+                  setSuccess('');
+                }}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  patientType === 'convenio'
+                    ? 'border-red-600 bg-red-50 text-red-700'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="text-center">
+                  <Users className="h-8 w-8 mx-auto mb-2" />
+                  <h3 className="font-semibold">Cliente do Convênio</h3>
+                  <p className="text-sm mt-1">Buscar por CPF no sistema</p>
+                </div>
+              </button>
               
-              <div>
-                <label htmlFor="privatePatient" className="block text-sm font-medium text-gray-700 mb-1">
-                  Paciente *
-                </label>
-                <select
-                  id="privatePatient"
-                  value={selectedPrivatePatient}
-                  onChange={(e) => setSelectedPrivatePatient(e.target.value)}
-                  className="input"
-                  disabled={isLoading}
-                  required
-                >
-                  <option value="">Selecione um paciente</option>
-                  {privatePatients.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.name} - CPF: {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
-                    </option>
-                  ))}
-                </select>
-                
-                {privatePatients.length === 0 && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Você precisa cadastrar pacientes particulares primeiro.
-                  </p>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPatientType('particular');
+                  // Reset forms
+                  setCpf('');
+                  setClientId(null);
+                  setClientName('');
+                  setSubscriptionStatus('');
+                  setSelectedDependentId(null);
+                  setFoundDependent(null);
+                  setDependents([]);
+                  setError('');
+                  setSuccess('');
+                }}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  patientType === 'particular'
+                    ? 'border-red-600 bg-red-50 text-red-700'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="text-center">
+                  <User className="h-8 w-8 mx-auto mb-2" />
+                  <h3 className="font-semibold">Paciente Particular</h3>
+                  <p className="text-sm mt-1">Selecionar ou cadastrar</p>
+                </div>
+              </button>
             </div>
-          ) : (
-            // Original form for professionals without subscription
+          </div>
+          
+          {/* Patient Selection based on type */}
+          {patientType === 'convenio' ? (
             <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3 flex items-center">
               <Search className="h-5 w-5 mr-2 text-red-600" />
@@ -629,11 +802,56 @@ const RegisterConsultationPage: React.FC = () => {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold flex items-center">
+                  <User className="h-5 w-5 mr-2 text-red-600" />
+                  Selecionar Paciente Particular
+                </h2>
+                
+                <button
+                  type="button"
+                  onClick={openCreatePatientModal}
+                  className="btn btn-outline flex items-center"
+                >
+                  <UserPlus className="h-5 w-5 mr-2" />
+                  Novo Paciente
+                </button>
+              </div>
+              
+              <div>
+                <label htmlFor="privatePatient" className="block text-sm font-medium text-gray-700 mb-1">
+                  Paciente *
+                </label>
+                <select
+                  id="privatePatient"
+                  value={selectedPrivatePatient}
+                  onChange={(e) => setSelectedPrivatePatient(e.target.value)}
+                  className="input"
+                  disabled={isLoading}
+                  required
+                >
+                  <option value="">Selecione um paciente</option>
+                  {privatePatients.map((patient) => (
+                    <option key={patient.id} value={patient.id}>
+                      {patient.name} - CPF: {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                    </option>
+                  ))}
+                </select>
+                
+                {privatePatients.length === 0 && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    Nenhum paciente particular cadastrado. Clique em "Novo Paciente" para adicionar.
+                  </p>
+                )}
+              </div>
+            </div>
           )}
           
           {/* Only show consultation details if subscription is active */}
-          {(hasSchedulingSubscription && selectedPrivatePatient) || (!hasSchedulingSubscription && subscriptionStatus === 'active') ? (
+          {(patientType === 'particular' && selectedPrivatePatient) || (patientType === 'convenio' && subscriptionStatus === 'active') ? (
             <div className="mb-6">
               <h2 className="text-lg font-semibold mb-3 flex items-center">
                 <Calendar className="h-5 w-5 mr-2 text-red-600" />
@@ -772,16 +990,16 @@ const RegisterConsultationPage: React.FC = () => {
               type="submit"
               className={`btn btn-primary ${
                 isLoading || 
-                (hasSchedulingSubscription && !selectedPrivatePatient) ||
-                (!hasSchedulingSubscription && subscriptionStatus !== 'active')
+                (patientType === 'particular' && !selectedPrivatePatient) ||
+                (patientType === 'convenio' && subscriptionStatus !== 'active')
                   ? 'opacity-70 cursor-not-allowed' 
                   : ''
               }`}
               disabled={
                 isLoading || 
-                (hasSchedulingSubscription && !selectedPrivatePatient) ||
-                (!hasSchedulingSubscription && subscriptionStatus !== 'active') ||
-                (!hasSchedulingSubscription && !clientId && !selectedDependentId) || 
+                (patientType === 'particular' && !selectedPrivatePatient) ||
+                (patientType === 'convenio' && subscriptionStatus !== 'active') ||
+                (patientType === 'convenio' && !clientId && !selectedDependentId) || 
                 !serviceId || 
                 !value || 
                 !date || 
@@ -793,6 +1011,251 @@ const RegisterConsultationPage: React.FC = () => {
           </div>
         </form>
       </div>
+      
+      {/* Create Private Patient Modal */}
+      {showCreatePatientModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold">Cadastrar Novo Paciente Particular</h2>
+              <button
+                onClick={closeCreatePatientModal}
+                className="text-gray-500 hover:text-gray-700"
+                disabled={isCreatingPatient}
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mx-6 mt-4 bg-red-50 text-red-600 p-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nome Completo *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={newPatientData.name}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    CPF *
+                  </label>
+                  <input
+                    type="text"
+                    value={newPatientData.cpf ? newPatientData.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : ''}
+                    onChange={(e) => formatNewPatientCpf(e.target.value)}
+                    className="input"
+                    placeholder="000.000.000-00"
+                    disabled={isCreatingPatient}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={newPatientData.email}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Telefone
+                  </label>
+                  <input
+                    type="text"
+                    value={newPatientData.phone ? newPatientData.phone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : ''}
+                    onChange={(e) => formatNewPatientPhone(e.target.value)}
+                    className="input"
+                    placeholder="(00) 00000-0000"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data de Nascimento
+                  </label>
+                  <input
+                    type="date"
+                    name="birth_date"
+                    value={newPatientData.birth_date}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    CEP
+                  </label>
+                  <input
+                    type="text"
+                    value={newPatientData.zip_code ? newPatientData.zip_code.replace(/(\d{5})(\d{3})/, '$1-$2') : ''}
+                    onChange={(e) => formatNewPatientZipCode(e.target.value)}
+                    className="input"
+                    placeholder="00000-000"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Endereço
+                  </label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={newPatientData.address}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Número
+                  </label>
+                  <input
+                    type="text"
+                    name="address_number"
+                    value={newPatientData.address_number}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Complemento
+                  </label>
+                  <input
+                    type="text"
+                    name="address_complement"
+                    value={newPatientData.address_complement}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Bairro
+                  </label>
+                  <input
+                    type="text"
+                    name="neighborhood"
+                    value={newPatientData.neighborhood}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cidade
+                  </label>
+                  <input
+                    type="text"
+                    name="city"
+                    value={newPatientData.city}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estado
+                  </label>
+                  <select
+                    name="state"
+                    value={newPatientData.state}
+                    onChange={handleNewPatientInputChange}
+                    className="input"
+                    disabled={isCreatingPatient}
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="AC">Acre</option>
+                    <option value="AL">Alagoas</option>
+                    <option value="AP">Amapá</option>
+                    <option value="AM">Amazonas</option>
+                    <option value="BA">Bahia</option>
+                    <option value="CE">Ceará</option>
+                    <option value="DF">Distrito Federal</option>
+                    <option value="ES">Espírito Santo</option>
+                    <option value="GO">Goiás</option>
+                    <option value="MA">Maranhão</option>
+                    <option value="MT">Mato Grosso</option>
+                    <option value="MS">Mato Grosso do Sul</option>
+                    <option value="MG">Minas Gerais</option>
+                    <option value="PA">Pará</option>
+                    <option value="PB">Paraíba</option>
+                    <option value="PR">Paraná</option>
+                    <option value="PE">Pernambuco</option>
+                    <option value="PI">Piauí</option>
+                    <option value="RJ">Rio de Janeiro</option>
+                    <option value="RN">Rio Grande do Norte</option>
+                    <option value="RS">Rio Grande do Sul</option>
+                    <option value="RO">Rondônia</option>
+                    <option value="RR">Roraima</option>
+                    <option value="SC">Santa Catarina</option>
+                    <option value="SP">São Paulo</option>
+                    <option value="SE">Sergipe</option>
+                    <option value="TO">Tocantins</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={closeCreatePatientModal}
+                  className="btn btn-secondary"
+                  disabled={isCreatingPatient}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={createPrivatePatient}
+                  className={`btn btn-primary ${isCreatingPatient ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  disabled={isCreatingPatient}
+                >
+                  {isCreatingPatient ? 'Criando...' : 'Criar Paciente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
