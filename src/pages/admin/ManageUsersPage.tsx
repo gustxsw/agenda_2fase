@@ -735,7 +735,7 @@ const ManageUsersPage: React.FC = () => {
                     <td>{user.phone || '-'}</td>
                     <td>
                       <div className="flex flex-wrap gap-1">
-                        {Array.isArray(user.roles) && user.roles.map((role) => (
+                        {user.roles?.map((role) => (
                           <span
                             key={role}
                             className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -752,7 +752,7 @@ const ManageUsersPage: React.FC = () => {
                       </div>
                     </td>
                     <td>
-                      {Array.isArray(user.roles) && user.roles.includes('client') ? (
+                      {user.roles?.includes('client') ? (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           getSubscriptionStatusDisplay(user.subscription_status).className
                         }`}>
@@ -763,18 +763,18 @@ const ManageUsersPage: React.FC = () => {
                       )}
                     </td>
                     <td>
-                      {Array.isArray(user.roles) && user.roles.includes('professional') && user.category_id
+                      {user.roles?.includes('professional') && user.category_id
                         ? categories.find(c => c.id === user.category_id)?.name || '-'
                         : '-'}
                     </td>
                     <td>
-                      {Array.isArray(user.roles) && user.roles.includes('professional') ? `${user.percentage}%` : '-'}
+                      {user.roles?.includes('professional') ? `${user.percentage}%` : '-'}
                     </td>
                     <td>{formatDate(user.created_at)}</td>
                     <td>
                       <div className="flex space-x-2">
                         {/* 🔥 NEW: Activate button for clients with pending status */}
-                        {Array.isArray(user.roles) && user.roles.includes('client') && user.subscription_status === 'pending' && (
+                        {user.roles?.includes('client') && user.subscription_status === 'pending' && (
                           <button
                             onClick={() => openActivationModal(user)}
                             className={`p-1 text-green-600 hover:text-green-800 ${

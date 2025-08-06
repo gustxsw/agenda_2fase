@@ -9,15 +9,6 @@ import jwt from "jsonwebtoken";
 import { pool } from "./db.js";
 import createUpload from "./middleware/upload.js";
 
-// Import routes
-import authRoutes from './routes/auth.js';
-import usersRoutes from './routes/users.js';
-import professionalsRoutes from './routes/professionals.js';
-import clientsRoutes from './routes/clients.js';
-import consultationRoutes from './routes/consultations.js';
-import dependentRoutes from './routes/dependents.js';
-import serviceRoutes from './routes/services.js';
-
 // Create all necessary tables
 const createTables = async () => {
   try {
@@ -381,13 +372,6 @@ app.get("/api/health", (req, res) => {
     environment: process.env.NODE_ENV || "development",
   });
 });
-
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/professionals', professionalsRoutes);
-app.use('/api/clients', clientsRoutes);
-app.use('/api/consultations', consultationRoutes);
 
 // ==================== AUTH ROUTES ====================
 
