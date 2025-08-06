@@ -165,6 +165,8 @@ const initializeDatabase = async () => {
         value DECIMAL(10,2) NOT NULL,
         status VARCHAR(20) DEFAULT 'scheduled',
         notes TEXT,
+        consultation_duration INTEGER DEFAULT 60,
+        consultation_id INTEGER REFERENCES consultations(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
