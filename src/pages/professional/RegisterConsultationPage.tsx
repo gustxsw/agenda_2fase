@@ -536,9 +536,16 @@ const RegisterConsultationPage: React.FC = () => {
         }),
       });
       
+      console.log('📡 Consultation creation response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Falha ao registrar consulta');
+        const errorData = await response.json();
+        console.error('❌ Consultation creation failed:', errorData);
+        throw new Error(errorData.message || 'Falha ao registrar consulta');
       }
+      
+      const responseData = await response.json();
+      console.log('✅ Consultation and appointment created:', responseData);
       
       // Reset form
       setCpf('');
@@ -557,7 +564,7 @@ const RegisterConsultationPage: React.FC = () => {
       setDate('');
       setTime('');
       
-      setSuccess('Consulta registrada e agendamento criado com sucesso!');
+      setSuccess(`Consulta registrada e agendamento criado com sucesso! ${responseData.appointment ? 'Agendamento ID: ' + responseData.appointment.id : ''}`);
       
       // Redirect after a delay
       setTimeout(() => {
