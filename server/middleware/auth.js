@@ -1,6 +1,20 @@
 import jwt from 'jsonwebtoken';
 import { pool } from '../db.js';
 
+// Helper function to safely parse roles
+const parseRoles = (roles) => {
+  if (!roles) return [];
+  if (Array.isArray(roles)) return roles;
+  if (typeof roles === 'string') {
+    try {
+      return JSON.parse(roles);
+    } catch (e) {
+      return [roles];
+    }
+  }
+  return [roles];
+};
+
 export const authenticate = async (req, res, next) => {
   try {
     // Get token from cookie or Authorization header
@@ -25,14 +39,16 @@ export const authenticate = async (req, res, next) => {
 
     const user = result.rows[0];
 
-    // Add user to request object with current role from token
+    // Parse roles safely and add user to request object
+    const userRoles = parseRoles(user.roles);
+    
     req.user = {
       id: user.id,
       name: user.name,
       cpf: user.cpf,
       email: user.email,
-      roles: Array.isArray(user.roles) ? user.roles : (user.roles ? JSON.parse(user.roles) : []),
-      currentRole: decoded.currentRole || (user.roles && user.roles[0])
+      roles: userRoles,
+      currentRole: decoded.currentRole || userRoles[0]
     };
 
     next();
@@ -48,8 +64,8 @@ export const authorize = (roles) => {
       return res.status(403).json({ message: 'Acesso não autorizado - role não definida' });
     }
 
-    // Ensure roles is an array
-    const userRoles = Array.isArray(req.user.roles) ? req.user.roles : [];
+    // Get user roles safely
+    const userRoles = parseRoles(req.user.roles);
     
     if (!userRoles.includes(req.user.currentRole) || !roles.includes(req.user.currentRole)) {
       return res.status(403).json({ message: 'Acesso não autorizado para esta role' });
