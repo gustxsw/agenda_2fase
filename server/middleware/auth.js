@@ -15,7 +15,7 @@ export const authenticate = async (req, res, next) => {
 
     // Get user from database - FIXED: use roles array instead of role column
     const result = await pool.query(
-      'SELECT id, name, cpf, roles FROM users WHERE id = $1',
+      'SELECT id, name, cpf, email, roles FROM users WHERE id = $1',
       [decoded.id]
     );
 
@@ -30,7 +30,8 @@ export const authenticate = async (req, res, next) => {
       id: user.id,
       name: user.name,
       cpf: user.cpf,
-      roles: user.roles || [],
+      email: user.email,
+      roles: Array.isArray(user.roles) ? user.roles : (user.roles ? JSON.parse(user.roles) : []),
       currentRole: decoded.currentRole || (user.roles && user.roles[0])
     };
 
@@ -47,7 +48,10 @@ export const authorize = (roles) => {
       return res.status(403).json({ message: 'Acesso não autorizado - role não definida' });
     }
 
-    if (!roles.includes(req.user.currentRole)) {
+    // Ensure roles is an array
+    const userRoles = Array.isArray(req.user.roles) ? req.user.roles : [];
+    
+    if (!userRoles.includes(req.user.currentRole) || !roles.includes(req.user.currentRole)) {
       return res.status(403).json({ message: 'Acesso não autorizado para esta role' });
     }
 

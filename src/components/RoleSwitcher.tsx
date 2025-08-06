@@ -10,7 +10,14 @@ const RoleSwitcher: React.FC = () => {
   if (!user || !user.currentRole) return null;
 
   // If user has only one role, don't show the switcher
-  const userRoles = JSON.parse(localStorage.getItem('user') || '{}').roles || [];
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  let userRoles = storedUser.roles || [];
+  
+  // Ensure userRoles is always an array
+  if (!Array.isArray(userRoles)) {
+    userRoles = typeof userRoles === 'string' ? JSON.parse(userRoles) : [userRoles];
+  }
+  
   if (userRoles.length <= 1) return null;
 
   const handleRoleSwitch = async (role: string) => {

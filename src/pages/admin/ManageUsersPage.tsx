@@ -110,7 +110,10 @@ const ManageUsersPage: React.FC = () => {
     // Role filter
     if (filters.role) {
       result = result.filter(user => 
-        user.roles && user.roles.includes(filters.role)
+        {
+          const roles = Array.isArray(user.roles) ? user.roles : (user.roles ? JSON.parse(user.roles) : []);
+          return roles.includes(filters.role);
+        }
       );
     }
 
@@ -735,7 +738,9 @@ const ManageUsersPage: React.FC = () => {
                     <td>{user.phone || '-'}</td>
                     <td>
                       <div className="flex flex-wrap gap-1">
-                        {user.roles?.map((role) => (
+                        {(() => {
+                          const roles = Array.isArray(user.roles) ? user.roles : (user.roles ? JSON.parse(user.roles) : []);
+                          return roles.map((role: string) => (
                           <span
                             key={role}
                             className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -748,33 +753,45 @@ const ManageUsersPage: React.FC = () => {
                           >
                             {getRoleName(role)}
                           </span>
-                        ))}
+                          ));
+                        })()}
                       </div>
                     </td>
                     <td>
-                      {user.roles?.includes('client') ? (
+                      {(() => {
+                        const roles = Array.isArray(user.roles) ? user.roles : (user.roles ? JSON.parse(user.roles) : []);
+                        return roles.includes('client') ? (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           getSubscriptionStatusDisplay(user.subscription_status).className
                         }`}>
                           {getSubscriptionStatusDisplay(user.subscription_status).text}
                         </span>
-                      ) : (
+                        ) : (
                         <span className="text-gray-500">-</span>
-                      )}
+                        );
+                      })()}
                     </td>
                     <td>
-                      {user.roles?.includes('professional') && user.category_id
+                      {(() => {
+                        const roles = Array.isArray(user.roles) ? user.roles : (user.roles ? JSON.parse(user.roles) : []);
+                        return roles.includes('professional') && user.category_id
                         ? categories.find(c => c.id === user.category_id)?.name || '-'
-                        : '-'}
+                        : '-';
+                      })()}
                     </td>
                     <td>
-                      {user.roles?.includes('professional') ? `${user.percentage}%` : '-'}
+                      {(() => {
+                        const roles = Array.isArray(user.roles) ? user.roles : (user.roles ? JSON.parse(user.roles) : []);
+                        return roles.includes('professional') ? `${user.percentage}%` : '-';
+                      })()}
                     </td>
                     <td>{formatDate(user.created_at)}</td>
                     <td>
                       <div className="flex space-x-2">
                         {/* 🔥 NEW: Activate button for clients with pending status */}
-                        {user.roles?.includes('client') && user.subscription_status === 'pending' && (
+                        {(() => {
+                          const roles = Array.isArray(user.roles) ? user.roles : (user.roles ? JSON.parse(user.roles) : []);
+                          return roles.includes('client') && user.subscription_status === 'pending' && (
                           <button
                             onClick={() => openActivationModal(user)}
                             className={`p-1 text-green-600 hover:text-green-800 ${
@@ -785,7 +802,8 @@ const ManageUsersPage: React.FC = () => {
                           >
                             <UserCheck className="h-5 w-5" />
                           </button>
-                        )}
+                          );
+                        })()}
                         
                         <button
                           onClick={() => openEditModal(user)}

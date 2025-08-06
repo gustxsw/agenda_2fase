@@ -42,6 +42,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (token && userData) {
           const parsedUser = JSON.parse(userData);
+          
+          // Ensure roles is always an array
+          if (parsedUser.roles && !Array.isArray(parsedUser.roles)) {
+            parsedUser.roles = typeof parsedUser.roles === 'string' 
+              ? JSON.parse(parsedUser.roles) 
+              : [parsedUser.roles];
+          }
+          
           console.log('🔄 Restored user from localStorage:', parsedUser);
           setUser(parsedUser);
         }
@@ -84,6 +92,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('✅ Login successful:', data);
       
       const userData = data.user;
+      
+      // Ensure roles is always an array
+      if (userData.roles && !Array.isArray(userData.roles)) {
+        userData.roles = typeof userData.roles === 'string' 
+          ? JSON.parse(userData.roles) 
+          : [userData.roles];
+      }
+      
       const needsRoleSelection = userData.roles && userData.roles.length > 1;
       
       console.log('🎯 User roles:', userData.roles);
@@ -121,6 +137,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const data = await response.json();
       console.log('✅ Role selected:', data);
+      
+      // Ensure roles is always an array before storing
+      if (data.user.roles && !Array.isArray(data.user.roles)) {
+        data.user.roles = typeof data.user.roles === 'string' 
+          ? JSON.parse(data.user.roles) 
+          : [data.user.roles];
+      }
       
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
@@ -173,6 +196,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const data = await response.json();
       console.log('✅ Role switched:', data);
+      
+      // Ensure roles is always an array before storing
+      if (data.user.roles && !Array.isArray(data.user.roles)) {
+        data.user.roles = typeof data.user.roles === 'string' 
+          ? JSON.parse(data.user.roles) 
+          : [data.user.roles];
+      }
       
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
