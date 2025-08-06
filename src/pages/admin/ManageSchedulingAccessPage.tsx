@@ -83,8 +83,8 @@ const ManageSchedulingAccessPage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
-      // Fetch all professionals with their access status
-      const response = await fetch(`${apiUrl}/api/users`, {
+      // Fetch professionals with their scheduling access status
+      const response = await fetch(`${apiUrl}/api/admin/professionals-scheduling-access`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -92,24 +92,8 @@ const ManageSchedulingAccessPage: React.FC = () => {
         throw new Error('Falha ao carregar profissionais');
       }
 
-      const usersData = await response.json();
-      
-      // Filter only professionals and add mock access data for MVP
-      const professionalsData = usersData
-        .filter((user: any) => user.roles && user.roles.includes('professional'))
-        .map((prof: any) => ({
-          id: prof.id,
-          name: prof.name,
-          email: prof.email || '',
-          phone: prof.phone || '',
-          category_name: prof.category_name || 'Não definida',
-          has_scheduling_access: false, // MVP: Start with no access
-          access_expires_at: null,
-          access_granted_by: null,
-          access_granted_at: null
-        }));
-
-      setProfessionals(professionalsData);
+      const data = await response.json();
+      setProfessionals(data);
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Não foi possível carregar os dados');
@@ -162,22 +146,28 @@ const ManageSchedulingAccessPage: React.FC = () => {
     if (!selectedProfessional || !expiryDate) return;
 
     try {
-      // MVP: Simulate granting access by updating local state
-      const updatedProfessionals = professionals.map(prof => {
-        if (prof.id === selectedProfessional.id) {
-          return {
-            ...prof,
-            has_scheduling_access: true,
-            access_expires_at: expiryDate,
-            access_granted_by: 'Admin',
-            access_granted_at: new Date().toISOString()
-          };
-        }
-        return prof;
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/api/admin/grant-scheduling-access`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          professional_id: selectedProfessional.id,
+          expires_at: expiryDate,
+          reason: reason || null
+        })
       });
 
-      setProfessionals(updatedProfessionals);
-      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao conceder acesso');
+      }
+
+      await fetchData();
       setSuccess(
         modalMode === 'grant' 
           ? 'Acesso à agenda concedido com sucesso!' 
@@ -188,7 +178,7 @@ const ManageSchedulingAccessPage: React.FC = () => {
         closeModal();
       }, 1500);
     } catch (error) {
-      setError('Erro ao processar solicitação');
+      setError(error instanceof Error ? error.message : 'Erro ao processar solicitação');
     }
   };
 
@@ -206,24 +196,29 @@ const ManageSchedulingAccessPage: React.FC = () => {
     if (!professionalToRevoke) return;
 
     try {
-      // MVP: Simulate revoking access by updating local state
-      const updatedProfessionals = professionals.map(prof => {
-        if (prof.id === professionalToRevoke.id) {
-          return {
-            ...prof,
-            has_scheduling_access: false,
-            access_expires_at: null,
-            access_granted_by: null,
-            access_granted_at: null
-          };
-        }
-        return prof;
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/api/admin/revoke-scheduling-access`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          professional_id: professionalToRevoke.id
+        })
       });
 
-      setProfessionals(updatedProfessionals);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao revogar acesso');
+      }
+
+      await fetchData();
       setSuccess('Acesso à agenda revogado com sucesso!');
     } catch (error) {
-      setError('Erro ao revogar acesso');
+      setError(error instanceof Error ? error.message : 'Erro ao revogar acesso');
     } finally {
       setProfessionalToRevoke(null);
       setShowRevokeConfirm(false);
