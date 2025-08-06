@@ -17,14 +17,6 @@ const RoleSelectionPage: React.FC = () => {
     if (tempUser) {
       try {
         const userData = JSON.parse(tempUser);
-        
-        // Ensure roles is always an array
-        if (userData.roles && !Array.isArray(userData.roles)) {
-          userData.roles = typeof userData.roles === 'string' 
-            ? JSON.parse(userData.roles) 
-            : [userData.roles];
-        }
-        
         console.log('🎯 Usuário recuperado do localStorage:', userData);
         setUser(userData);
       } catch (error) {

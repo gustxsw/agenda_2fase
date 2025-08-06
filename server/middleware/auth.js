@@ -1,20 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { pool } from '../db.js';
 
-// Helper function to safely parse roles
-const parseRoles = (roles) => {
-  if (!roles) return [];
-  if (Array.isArray(roles)) return roles;
-  if (typeof roles === 'string') {
-    try {
-      return JSON.parse(roles);
-    } catch (e) {
-      return [roles];
-    }
-  }
-  return [roles];
-};
-
 export const authenticate = async (req, res, next) => {
   try {
     // Get token from cookie or Authorization header
@@ -29,7 +15,7 @@ export const authenticate = async (req, res, next) => {
 
     // Get user from database - FIXED: use roles array instead of role column
     const result = await pool.query(
-      'SELECT id, name, cpf, email, roles FROM users WHERE id = $1',
+      'SELECT id, name, cpf, roles FROM users WHERE id = $1',
       [decoded.id]
     );
 
@@ -39,16 +25,13 @@ export const authenticate = async (req, res, next) => {
 
     const user = result.rows[0];
 
-    // Parse roles safely and add user to request object
-    const userRoles = parseRoles(user.roles);
-    
+    // Add user to request object with current role from token
     req.user = {
       id: user.id,
       name: user.name,
       cpf: user.cpf,
-      email: user.email,
-      roles: userRoles,
-      currentRole: decoded.currentRole || userRoles[0]
+      roles: user.roles || [],
+      currentRole: decoded.currentRole || (user.roles && user.roles[0])
     };
 
     next();
@@ -64,10 +47,7 @@ export const authorize = (roles) => {
       return res.status(403).json({ message: 'Acesso não autorizado - role não definida' });
     }
 
-    // Get user roles safely
-    const userRoles = parseRoles(req.user.roles);
-    
-    if (!userRoles.includes(req.user.currentRole) || !roles.includes(req.user.currentRole)) {
+    if (!roles.includes(req.user.currentRole)) {
       return res.status(403).json({ message: 'Acesso não autorizado para esta role' });
     }
 
