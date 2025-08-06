@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Clock, User, Users, MapPin, DollarSign, Search, X, Check, AlertTriangle, Eye } from 'lucide-react';
+import { Calendar, Plus, Clock, User, Users, MapPin, DollarSign, Search, X, Check, AlertTriangle, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 
 type Appointment = {
   id: number;
@@ -54,6 +54,8 @@ type PrivatePatient = {
   cpf: string;
 };
 
+type ViewMode = 'month' | 'week' | 'day';
+
 const SchedulingPage: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -66,6 +68,7 @@ const SchedulingPage: React.FC = () => {
   // Calendar state
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
   
   // Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -106,7 +109,7 @@ const SchedulingPage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [currentDate]);
+  }, [currentDate, viewMode]);
 
   const fetchData = async () => {
     try {
@@ -114,9 +117,24 @@ const SchedulingPage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
-      // Get date range for current month
-      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      // Get date range based on view mode
+      let startDate, endDate;
+      
+      if (viewMode === 'month') {
+        startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+        endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      } else if (viewMode === 'week') {
+        const dayOfWeek = currentDate.getDay();
+        startDate = new Date(currentDate);
+        startDate.setDate(currentDate.getDate() - dayOfWeek);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6);
+      } else { // day
+        startDate = new Date(currentDate);
+        endDate = new Date(currentDate);
+      }
+
+      console.log('🔄 Fetching appointments from:', startDate.toISOString().split('T')[0], 'to', endDate.toISOString().split('T')[0]);
 
       // Fetch appointments
       const appointmentsResponse = await fetch(
@@ -128,7 +146,10 @@ const SchedulingPage: React.FC = () => {
 
       if (appointmentsResponse.ok) {
         const appointmentsData = await appointmentsResponse.json();
+        console.log('✅ Appointments loaded:', appointmentsData);
         setAppointments(appointmentsData);
+      } else {
+        console.error('❌ Failed to load appointments');
       }
 
       // Fetch services
@@ -138,6 +159,7 @@ const SchedulingPage: React.FC = () => {
 
       if (servicesResponse.ok) {
         const servicesData = await servicesResponse.json();
+        console.log('✅ Services loaded:', servicesData);
         setServices(servicesData);
       }
 
@@ -148,13 +170,8 @@ const SchedulingPage: React.FC = () => {
 
       if (locationsResponse.ok) {
         const locationsData = await locationsResponse.json();
+        console.log('✅ Locations loaded:', locationsData);
         setLocations(locationsData);
-        
-        // Set default location
-        const defaultLocation = locationsData.find((loc: AttendanceLocation) => loc.is_default);
-        if (defaultLocation && !formData.location_id) {
-          setFormData(prev => ({ ...prev, location_id: defaultLocation.id.toString() }));
-        }
       }
 
       // Fetch private patients
@@ -164,6 +181,7 @@ const SchedulingPage: React.FC = () => {
 
       if (patientsResponse.ok) {
         const patientsData = await patientsResponse.json();
+        console.log('✅ Private patients loaded:', patientsData);
         setPrivatePatients(patientsData);
       }
 
@@ -176,6 +194,8 @@ const SchedulingPage: React.FC = () => {
   };
 
   const openCreateModal = (date?: string) => {
+    const defaultLocation = locations.find(l => l.is_default);
+    
     setFormData({
       patient_type: 'particular',
       private_patient_id: '',
@@ -184,7 +204,7 @@ const SchedulingPage: React.FC = () => {
       service_id: '',
       appointment_date: date || '',
       appointment_time: '',
-      location_id: locations.find(l => l.is_default)?.id.toString() || '',
+      location_id: defaultLocation?.id.toString() || '',
       value: '',
       notes: '',
       cpf_search: ''
@@ -239,6 +259,8 @@ const SchedulingPage: React.FC = () => {
       const apiUrl = getApiUrl();
       const cleanCpf = formData.cpf_search.replace(/\D/g, '');
 
+      console.log('🔍 Searching for CPF:', cleanCpf);
+
       // Search for dependent first
       const dependentResponse = await fetch(`${apiUrl}/api/dependents/lookup?cpf=${cleanCpf}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -246,6 +268,7 @@ const SchedulingPage: React.FC = () => {
 
       if (dependentResponse.ok) {
         const dependentData = await dependentResponse.json();
+        console.log('✅ Dependent found:', dependentData);
         
         if (dependentData.client_subscription_status !== 'active') {
           setError('Este dependente não pode ser atendido pois o titular não possui assinatura ativa.');
@@ -269,6 +292,7 @@ const SchedulingPage: React.FC = () => {
 
       if (clientResponse.ok) {
         const clientData = await clientResponse.json();
+        console.log('✅ Client found:', clientData);
         
         if (clientData.subscription_status !== 'active') {
           setError('Este cliente não pode ser atendido pois não possui assinatura ativa.');
@@ -294,8 +318,12 @@ const SchedulingPage: React.FC = () => {
         }
       } else {
         setError('Cliente ou dependente não encontrado');
+        setFoundClient(null);
+        setFoundDependent(null);
+        setDependents([]);
       }
     } catch (error) {
+      console.error('Error searching:', error);
       setError('Erro ao buscar cliente');
     } finally {
       setIsSearching(false);
@@ -306,6 +334,32 @@ const SchedulingPage: React.FC = () => {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    // Validation
+    if (formData.patient_type === 'particular' && !formData.private_patient_id) {
+      setError('Selecione um paciente particular');
+      return;
+    }
+
+    if (formData.patient_type === 'convenio' && !formData.client_id && !formData.dependent_id) {
+      setError('Busque e selecione um cliente ou dependente');
+      return;
+    }
+
+    if (!formData.service_id) {
+      setError('Selecione um serviço');
+      return;
+    }
+
+    if (!formData.appointment_date || !formData.appointment_time) {
+      setError('Data e hora são obrigatórios');
+      return;
+    }
+
+    if (!formData.value || parseFloat(formData.value) <= 0) {
+      setError('Valor deve ser maior que zero');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -323,6 +377,8 @@ const SchedulingPage: React.FC = () => {
         notes: formData.notes
       };
 
+      console.log('🔄 Creating appointment:', appointmentData);
+
       const response = await fetch(`${apiUrl}/api/scheduling/appointments`, {
         method: 'POST',
         headers: {
@@ -337,6 +393,9 @@ const SchedulingPage: React.FC = () => {
         throw new Error(errorData.message || 'Erro ao criar agendamento');
       }
 
+      const result = await response.json();
+      console.log('✅ Appointment created:', result);
+
       setSuccess('Agendamento criado com sucesso!');
       await fetchData();
       
@@ -344,6 +403,7 @@ const SchedulingPage: React.FC = () => {
         closeModals();
       }, 1500);
     } catch (error) {
+      console.error('Error creating appointment:', error);
       setError(error instanceof Error ? error.message : 'Erro ao criar agendamento');
     }
   };
@@ -425,8 +485,27 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
-  // Generate calendar days
-  const generateCalendarDays = () => {
+  // Navigation functions
+  const navigateDate = (direction: 'prev' | 'next') => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      if (viewMode === 'month') {
+        newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+      } else if (viewMode === 'week') {
+        newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+      } else { // day
+        newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+      }
+      return newDate;
+    });
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  // Generate calendar days for month view
+  const generateMonthDays = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1);
@@ -455,24 +534,62 @@ const SchedulingPage: React.FC = () => {
     return days;
   };
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
-      if (direction === 'prev') {
-        newDate.setMonth(newDate.getMonth() - 1);
-      } else {
-        newDate.setMonth(newDate.getMonth() + 1);
-      }
-      return newDate;
-    });
+  // Generate week days for week view
+  const generateWeekDays = () => {
+    const days = [];
+    const startOfWeek = new Date(currentDate);
+    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+    
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(startOfWeek);
+      day.setDate(startOfWeek.getDate() + i);
+      const dateStr = day.toISOString().split('T')[0];
+      const dayAppointments = appointments.filter(apt => apt.appointment_date === dateStr);
+      
+      days.push({
+        date: day,
+        dateStr,
+        isToday: dateStr === new Date().toISOString().split('T')[0],
+        appointments: dayAppointments
+      });
+    }
+    
+    return days;
   };
 
-  const monthNames = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ];
+  // Generate day view
+  const generateDayView = () => {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const dayAppointments = appointments.filter(apt => apt.appointment_date === dateStr);
+    
+    // Sort appointments by time
+    dayAppointments.sort((a, b) => a.appointment_time.localeCompare(b.appointment_time));
+    
+    return dayAppointments;
+  };
+
+  const getViewTitle = () => {
+    const monthNames = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+
+    if (viewMode === 'month') {
+      return `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    } else if (viewMode === 'week') {
+      const startOfWeek = new Date(currentDate);
+      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      
+      return `${startOfWeek.getDate()} - ${endOfWeek.getDate()} de ${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    } else {
+      return `${currentDate.getDate()} de ${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    }
+  };
 
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const weekDaysFull = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
   return (
     <div>
@@ -489,6 +606,54 @@ const SchedulingPage: React.FC = () => {
           <Plus className="h-5 w-5 mr-2" />
           Novo Agendamento
         </button>
+      </div>
+
+      {/* View Mode Selector */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">Visualização:</span>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('month')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'month' 
+                    ? 'bg-red-600 text-white' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Mês
+              </button>
+              <button
+                onClick={() => setViewMode('week')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'week' 
+                    ? 'bg-red-600 text-white' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Semana
+              </button>
+              <button
+                onClick={() => setViewMode('day')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'day' 
+                    ? 'bg-red-600 text-white' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Dia
+              </button>
+            </div>
+          </div>
+
+          <button
+            onClick={goToToday}
+            className="btn btn-secondary text-sm"
+          >
+            Hoje
+          </button>
+        </div>
       </div>
 
       {/* Status Legend */}
@@ -528,101 +693,267 @@ const SchedulingPage: React.FC = () => {
         {/* Calendar Header */}
         <div className="flex justify-between items-center mb-6">
           <button
-            onClick={() => navigateMonth('prev')}
+            onClick={() => navigateDate('prev')}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            ←
+            <ChevronLeft className="h-5 w-5" />
           </button>
           
           <h2 className="text-xl font-semibold">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+            {getViewTitle()}
           </h2>
           
           <button
-            onClick={() => navigateMonth('next')}
+            onClick={() => navigateDate('next')}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            →
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Week Days Header */}
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {weekDays.map(day => (
-            <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
-              {day}
-            </div>
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Carregando agenda...</p>
+          </div>
+        ) : (
+          <>
+            {/* Month View */}
+            {viewMode === 'month' && (
+              <>
+                {/* Week Days Header */}
+                <div className="grid grid-cols-7 gap-1 mb-2">
+                  {weekDays.map(day => (
+                    <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
+                      {day}
+                    </div>
+                  ))}
+                </div>
 
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {generateCalendarDays().map((day, index) => (
-            <div
-              key={index}
-              className={`min-h-[120px] p-2 border border-gray-100 relative ${
-                day.isCurrentMonth ? 'bg-white' : 'bg-gray-50'
-              } ${day.isToday ? 'ring-2 ring-red-200' : ''}`}
-            >
-              {/* Date number */}
-              <div className="flex justify-between items-start mb-2">
-                <span className={`text-sm font-medium ${
-                  day.isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
-                } ${day.isToday ? 'text-red-600' : ''}`}>
-                  {day.date.getDate()}
-                </span>
-                
-                {/* Add appointment button */}
-                {day.isCurrentMonth && (
-                  <button
-                    onClick={() => openCreateModal(day.dateStr)}
-                    className="w-6 h-6 bg-red-100 hover:bg-red-200 text-red-600 rounded-full flex items-center justify-center text-xs transition-colors"
-                    title="Novo agendamento"
-                  >
-                    +
-                  </button>
-                )}
-              </div>
-
-              {/* Appointments */}
-              <div className="space-y-1">
-                {day.appointments.slice(0, 3).map((appointment) => {
-                  const statusInfo = getStatusInfo(appointment.status);
-                  const patientInfo = getPatientTypeInfo(appointment);
-                  
-                  return (
-                    <button
-                      key={appointment.id}
-                      onClick={() => openViewModal(appointment)}
-                      className={`w-full text-left p-1 rounded text-xs ${statusInfo.bgColor} ${statusInfo.borderColor} border hover:opacity-80 transition-opacity`}
+                {/* Calendar Grid */}
+                <div className="grid grid-cols-7 gap-1">
+                  {generateMonthDays().map((day, index) => (
+                    <div
+                      key={index}
+                      className={`min-h-[120px] p-2 border border-gray-100 relative ${
+                        day.isCurrentMonth ? 'bg-white' : 'bg-gray-50'
+                      } ${day.isToday ? 'ring-2 ring-red-200' : ''}`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className={`font-medium ${statusInfo.textColor}`}>
-                          {formatTime(appointment.appointment_time)}
+                      {/* Date number */}
+                      <div className="flex justify-between items-start mb-2">
+                        <span className={`text-sm font-medium ${
+                          day.isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                        } ${day.isToday ? 'text-red-600' : ''}`}>
+                          {day.date.getDate()}
                         </span>
-                        <span className="text-xs">
-                          {statusInfo.emoji}
-                        </span>
+                        
+                        {/* Add appointment button */}
+                        {day.isCurrentMonth && (
+                          <button
+                            onClick={() => openCreateModal(day.dateStr)}
+                            className="w-6 h-6 bg-red-100 hover:bg-red-200 text-red-600 rounded-full flex items-center justify-center text-xs transition-colors"
+                            title="Novo agendamento"
+                          >
+                            +
+                          </button>
+                        )}
                       </div>
-                      <div className="flex items-center mt-1">
-                        <span className="text-xs mr-1">{patientInfo.icon}</span>
-                        <span className={`text-xs truncate ${statusInfo.textColor}`}>
-                          {appointment.patient_name}
-                        </span>
+
+                      {/* Appointments */}
+                      <div className="space-y-1">
+                        {day.appointments.slice(0, 3).map((appointment) => {
+                          const statusInfo = getStatusInfo(appointment.status);
+                          const patientInfo = getPatientTypeInfo(appointment);
+                          
+                          return (
+                            <button
+                              key={appointment.id}
+                              onClick={() => openViewModal(appointment)}
+                              className={`w-full text-left p-1 rounded text-xs ${statusInfo.bgColor} ${statusInfo.borderColor} border hover:opacity-80 transition-opacity`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className={`font-medium ${statusInfo.textColor}`}>
+                                  {formatTime(appointment.appointment_time)}
+                                </span>
+                                <span className="text-xs">
+                                  {statusInfo.emoji}
+                                </span>
+                              </div>
+                              <div className="flex items-center mt-1">
+                                <span className="text-xs mr-1">{patientInfo.icon}</span>
+                                <span className={`text-xs truncate ${statusInfo.textColor}`}>
+                                  {appointment.patient_name}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                        
+                        {day.appointments.length > 3 && (
+                          <div className="text-xs text-gray-500 text-center">
+                            +{day.appointments.length - 3} mais
+                          </div>
+                        )}
                       </div>
-                    </button>
-                  );
-                })}
-                
-                {day.appointments.length > 3 && (
-                  <div className="text-xs text-gray-500 text-center">
-                    +{day.appointments.length - 3} mais
-                  </div>
-                )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Week View */}
+            {viewMode === 'week' && (
+              <>
+                <div className="grid grid-cols-7 gap-4">
+                  {generateWeekDays().map((day, index) => (
+                    <div key={index} className="min-h-[400px]">
+                      {/* Day header */}
+                      <div className={`text-center p-3 rounded-t-lg ${
+                        day.isToday ? 'bg-red-100 text-red-700' : 'bg-gray-50 text-gray-700'
+                      }`}>
+                        <div className="text-sm font-medium">{weekDays[index]}</div>
+                        <div className={`text-lg font-bold ${day.isToday ? 'text-red-600' : ''}`}>
+                          {day.date.getDate()}
+                        </div>
+                      </div>
+
+                      {/* Day content */}
+                      <div className="border border-t-0 border-gray-200 rounded-b-lg p-2 min-h-[350px] bg-white">
+                        <button
+                          onClick={() => openCreateModal(day.dateStr)}
+                          className="w-full mb-2 p-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-red-300 hover:text-red-600 transition-colors"
+                        >
+                          <Plus className="h-4 w-4 mx-auto" />
+                        </button>
+
+                        <div className="space-y-2">
+                          {day.appointments.map((appointment) => {
+                            const statusInfo = getStatusInfo(appointment.status);
+                            const patientInfo = getPatientTypeInfo(appointment);
+                            
+                            return (
+                              <button
+                                key={appointment.id}
+                                onClick={() => openViewModal(appointment)}
+                                className={`w-full text-left p-2 rounded-lg ${statusInfo.bgColor} ${statusInfo.borderColor} border hover:opacity-80 transition-opacity`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={`text-sm font-medium ${statusInfo.textColor}`}>
+                                    {formatTime(appointment.appointment_time)}
+                                  </span>
+                                  <span className="text-xs">
+                                    {statusInfo.emoji}
+                                  </span>
+                                </div>
+                                <div className="flex items-center">
+                                  <span className="text-xs mr-1">{patientInfo.icon}</span>
+                                  <span className={`text-xs ${statusInfo.textColor}`}>
+                                    {appointment.patient_name}
+                                  </span>
+                                </div>
+                                <div className={`text-xs ${statusInfo.textColor} mt-1`}>
+                                  {appointment.service_name}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Day View */}
+            {viewMode === 'day' && (
+              <div className="max-w-2xl mx-auto">
+                <div className="text-center mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {weekDaysFull[currentDate.getDay()]}, {currentDate.getDate()}
+                  </h3>
+                  <button
+                    onClick={() => openCreateModal(currentDate.toISOString().split('T')[0])}
+                    className="btn btn-outline mt-2 flex items-center mx-auto"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Novo Agendamento
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {generateDayView().length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50 rounded-lg">
+                      <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        Nenhum agendamento para hoje
+                      </h3>
+                      <p className="text-gray-600 mb-4">
+                        Você não possui agendamentos para este dia.
+                      </p>
+                      <button
+                        onClick={() => openCreateModal(currentDate.toISOString().split('T')[0])}
+                        className="btn btn-primary inline-flex items-center"
+                      >
+                        <Plus className="h-5 w-5 mr-2" />
+                        Criar Agendamento
+                      </button>
+                    </div>
+                  ) : (
+                    generateDayView().map((appointment) => {
+                      const statusInfo = getStatusInfo(appointment.status);
+                      const patientInfo = getPatientTypeInfo(appointment);
+                      
+                      return (
+                        <button
+                          key={appointment.id}
+                          onClick={() => openViewModal(appointment)}
+                          className={`w-full text-left p-4 rounded-lg ${statusInfo.bgColor} ${statusInfo.borderColor} border-2 hover:opacity-80 transition-opacity`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center">
+                              <Clock className="h-5 w-5 mr-2 text-gray-500" />
+                              <span className={`text-lg font-medium ${statusInfo.textColor}`}>
+                                {formatTime(appointment.appointment_time)}
+                              </span>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center ${statusInfo.bgColor} ${statusInfo.textColor}`}>
+                              <span className="mr-1">{statusInfo.emoji}</span>
+                              {statusInfo.label}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <div className="flex items-center mb-1">
+                                <span className="mr-2">{patientInfo.icon}</span>
+                                <span className={`font-medium ${statusInfo.textColor}`}>
+                                  {appointment.patient_name}
+                                </span>
+                              </div>
+                              <span className={`text-sm ${patientInfo.color}`}>
+                                {patientInfo.label}
+                              </span>
+                            </div>
+                            
+                            <div className="text-right">
+                              <div className={`font-medium ${statusInfo.textColor}`}>
+                                {appointment.service_name}
+                              </div>
+                              <div className={`text-sm ${statusInfo.textColor}`}>
+                                {formatCurrency(appointment.value)}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Create Appointment Modal */}
@@ -631,6 +962,11 @@ const SchedulingPage: React.FC = () => {
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold">Novo Agendamento</h2>
+              {selectedDate && (
+                <p className="text-sm text-gray-600 mt-1">
+                  Data selecionada: {new Date(selectedDate).toLocaleDateString('pt-BR')}
+                </p>
+              )}
             </div>
 
             {error && (
@@ -709,6 +1045,11 @@ const SchedulingPage: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    {privatePatients.length === 0 && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        Nenhum paciente particular cadastrado. Vá em "Pacientes Particulares" para adicionar.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div>
@@ -738,6 +1079,9 @@ const SchedulingPage: React.FC = () => {
                       <div className="mt-3 p-3 bg-green-50 rounded-lg">
                         <p className="text-green-700">
                           <strong>Cliente encontrado:</strong> {foundClient.name}
+                        </p>
+                        <p className="text-green-600 text-sm">
+                          Status: {foundClient.subscription_status === 'active' ? 'Ativo' : 'Inativo'}
                         </p>
                         
                         {dependents.length > 0 && (
@@ -795,6 +1139,11 @@ const SchedulingPage: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                  {services.length === 0 && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Nenhum serviço cadastrado. Entre em contato com o administrador.
+                    </p>
+                  )}
                 </div>
 
                 {/* Date and Time */}
@@ -889,7 +1238,18 @@ const SchedulingPage: React.FC = () => {
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={
+                    (formData.patient_type === 'particular' && !formData.private_patient_id) ||
+                    (formData.patient_type === 'convenio' && !foundClient && !foundDependent) ||
+                    !formData.service_id ||
+                    !formData.appointment_date ||
+                    !formData.appointment_time ||
+                    !formData.value
+                  }
+                >
                   Criar Agendamento
                 </button>
               </div>
@@ -931,7 +1291,7 @@ const SchedulingPage: React.FC = () => {
                   <span className="mr-2">{getPatientTypeInfo(selectedAppointment).icon}</span>
                   <div>
                     <p className="font-medium">{selectedAppointment.patient_name}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className={`text-sm ${getPatientTypeInfo(selectedAppointment).color}`}>
                       {getPatientTypeInfo(selectedAppointment).label}
                     </p>
                   </div>
@@ -979,6 +1339,11 @@ const SchedulingPage: React.FC = () => {
                     <MapPin className="h-4 w-4 mr-2 text-gray-400" />
                     {selectedAppointment.location_name}
                   </p>
+                  {selectedAppointment.location_address && (
+                    <p className="text-sm text-gray-500 ml-6">
+                      {selectedAppointment.location_address}
+                    </p>
+                  )}
                 </div>
               )}
 
