@@ -151,30 +151,12 @@ router.post('/webhook', async (req, res) => {
 // Get professional's scheduling subscription status
 router.get('/subscription-status', authenticate, authorize(['professional']), async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT * FROM professional_scheduling_subscriptions 
-       WHERE professional_id = $1 
-       ORDER BY created_at DESC 
-       LIMIT 1`,
-      [req.user.id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.json({
-        has_subscription: false,
-        status: 'inactive',
-        expires_at: null
-      });
-    }
-
-    const subscription = result.rows[0];
-    const isActive = subscription.status === 'active' && new Date(subscription.expires_at) > new Date();
-
+    // 🔥 LIBERADO: Todos os profissionais têm acesso à agenda
     res.json({
       has_subscription: true,
-      status: isActive ? 'active' : 'expired',
-      expires_at: subscription.expires_at,
-      created_at: subscription.created_at
+      status: 'active',
+      expires_at: null,
+      created_at: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error fetching subscription status:', error);

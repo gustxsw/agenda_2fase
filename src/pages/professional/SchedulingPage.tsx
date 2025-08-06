@@ -252,82 +252,8 @@ const SchedulingPage: React.FC = () => {
   }
 
   // Show subscription required screen
-  if (!subscriptionStatus || !subscriptionStatus.has_subscription || subscriptionStatus.status !== 'active') {
-    console.log('🔍 Showing subscription screen. Status:', subscriptionStatus);
-    return (
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <CalendarDays className="h-16 w-16 text-red-600 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Sistema de Agendamentos</h1>
-          <p className="text-gray-600">Gerencie sua agenda profissional de forma eficiente</p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">
-              Assinatura Necessária
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Para acessar o sistema de agendamentos, você precisa de uma assinatura ativa.
-            </p>
-          </div>
-
-          <div className="bg-red-50 rounded-lg p-6 mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-red-900 mb-2">
-                  Sistema de Agendamentos Premium
-                </h3>
-                <ul className="text-red-700 space-y-1 text-sm">
-                  <li>• Calendário completo (diário, semanal, mensal)</li>
-                  <li>• Configuração de horários de trabalho</li>
-                  <li>• Gestão de pacientes particulares</li>
-                  <li>• Prontuários médicos completos</li>
-                  <li>• Geração de documentos médicos</li>
-                  <li>• Relatórios detalhados</li>
-                </ul>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-red-600">R$ 49,90</div>
-                <div className="text-sm text-red-500">por mês</div>
-              </div>
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
-              {error}
-            </div>
-          )}
-
-          <div className="text-center">
-            <button
-              onClick={handleSubscriptionPayment}
-              className={`btn btn-primary text-lg px-8 py-4 ${
-                isPaymentLoading ? 'opacity-70 cursor-not-allowed' : ''
-              }`}
-              disabled={isPaymentLoading}
-            >
-              {isPaymentLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2 inline-block"></div>
-                  Processando...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="h-5 w-5 mr-2 inline" />
-                  Assinar por R$ 49,90/mês
-                </>
-              )}
-            </button>
-            <p className="text-sm text-gray-500 mt-4">
-              Pagamento seguro via Mercado Pago
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // 🔥 LIBERADO: Agenda disponível para todos os profissionais
+  // Comentado o bloqueio por assinatura
 
   return (
     <div>
@@ -354,24 +280,19 @@ const SchedulingPage: React.FC = () => {
       </div>
 
       {/* Subscription status */}
-      {subscriptionStatus && (
-        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
-          <div className="flex items-center">
-            <CalendarDays className="h-5 w-5 text-green-600 mr-2" />
-            <div>
-              <p className="text-green-700 font-medium">
-                Assinatura Ativa
-              </p>
-              <p className="text-green-600 text-sm">
-                Válida até {subscriptionStatus.expires_at ? 
-                  format(parseISO(subscriptionStatus.expires_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : 
-                  'N/A'
-                }
-              </p>
-            </div>
+      <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+        <div className="flex items-center">
+          <CalendarDays className="h-5 w-5 text-green-600 mr-2" />
+          <div>
+            <p className="text-green-700 font-medium">
+              Sistema de Agendamentos Liberado
+            </p>
+            <p className="text-green-600 text-sm">
+              Acesso completo ao sistema de agendamentos para todos os profissionais
+            </p>
           </div>
         </div>
-      )}
+      </div>
 
       {/* View mode selector */}
       <div className="flex items-center justify-between mb-6">

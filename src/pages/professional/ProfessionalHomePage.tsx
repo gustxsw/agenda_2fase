@@ -81,6 +81,7 @@ const ProfessionalHomePage: React.FC = () => {
         setPhotoUrl(userData.photo_url);
       }
       
+      // 🔥 LIBERADO: Sempre buscar dados de receita
       const revenueResponse = await fetch(
         `${apiUrl}/api/reports/professional-revenue?start_date=${dateRange.start}&end_date=${dateRange.end}`,
         {

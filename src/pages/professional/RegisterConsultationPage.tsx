@@ -151,32 +151,20 @@ const RegisterConsultationPage: React.FC = () => {
         }
         
         // Check if professional has scheduling subscription
-        const subscriptionResponse = await fetch(`${apiUrl}/api/scheduling-payment/subscription-status`, {
+        // 🔥 LIBERADO: Todos os profissionais têm acesso à agenda
+        setHasSchedulingSubscription(true);
+        
+        // Fetch private patients
+        const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
           },
         });
         
-        if (subscriptionResponse.ok) {
-          const subscriptionData = await subscriptionResponse.json();
-          console.log('🔍 Professional subscription status:', subscriptionData);
-          setHasSchedulingSubscription(subscriptionData.status === 'active');
-          
-          // If has subscription, fetch private patients
-          if (subscriptionData.status === 'active') {
-            const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-              },
-            });
-            
-            if (patientsResponse.ok) {
-              const patientsData = await patientsResponse.json();
-              setPrivatePatients(patientsData);
-            }
-          }
+        if (patientsResponse.ok) {
+          const patientsData = await patientsResponse.json();
+          setPrivatePatients(patientsData);
         }
       } catch (error) {
         console.error('Error fetching data:', error);

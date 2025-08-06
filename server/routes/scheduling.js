@@ -21,11 +21,15 @@ router.get('/settings', authenticate, authorize(['professional']), async (req, r
         break_start_time: '12:00',
         break_end_time: '13:00',
         consultation_duration: 60,
-        has_scheduling_subscription: false
+        has_scheduling_subscription: true
       });
     }
 
-    res.json(result.rows[0]);
+    // Ensure all professionals have scheduling access
+    const settings = result.rows[0];
+    settings.has_scheduling_subscription = true;
+
+    res.json(settings);
   } catch (error) {
     console.error('Error fetching schedule settings:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
