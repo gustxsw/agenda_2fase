@@ -1204,22 +1204,7 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
 });
 
 // Dependents routes
-app.get('/api/dependents/:client_id', authenticate, async (req, res) => {
-  try {
-    const { client_id } = req.params;
-
-    const result = await pool.query(
-      'SELECT * FROM dependents WHERE client_id = $1 ORDER BY name',
-      [client_id]
-    );
-
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching dependents:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
-  }
-});
-
+// 🔥 IMPORTANT: Lookup route MUST come before /:id route
 app.get('/api/dependents/lookup', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const { cpf } = req.query;
@@ -1228,14 +1213,18 @@ app.get('/api/dependents/lookup', authenticate, authorize(['professional']), asy
       return res.status(400).json({ message: 'CPF é obrigatório' });
     }
 
-    const cleanCpf = cpf.replace(/\D/g, '');
+    // Clean CPF
+    const cleanCpf = cpf.toString().replace(/\D/g, '');
 
     if (!/^\d{11}$/.test(cleanCpf)) {
       return res.status(400).json({ message: 'CPF deve conter 11 dígitos numéricos' });
     }
 
+    // Find dependent by CPF with client info
     const result = await pool.query(
-      `SELECT d.*, c.name as client_name, c.subscription_status as client_subscription_status
+      `SELECT d.*, 
+              c.name as client_name,
+              c.subscription_status as client_subscription_status
        FROM dependents d
        JOIN users c ON d.client_id = c.id
        WHERE d.cpf = $1`,
@@ -1249,6 +1238,22 @@ app.get('/api/dependents/lookup', authenticate, authorize(['professional']), asy
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error looking up dependent:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+app.get('/api/dependents/:client_id', authenticate, async (req, res) => {
+  try {
+    const { client_id } = req.params;
+
+    const result = await pool.query(
+      'SELECT * FROM dependents WHERE client_id = $1 ORDER BY name',
+      [client_id]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching dependents:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
