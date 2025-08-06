@@ -26,7 +26,7 @@ const ProfessionalsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   
-  // 🔥 NEW: Modal state for photo viewing
+  // Photo modal state
   const [selectedPhoto, setSelectedPhoto] = useState<{
     url: string;
     name: string;
@@ -112,7 +112,7 @@ const ProfessionalsPage: React.FC = () => {
     setFilteredProfessionals(filtered);
   }, [professionals, searchTerm, selectedCity]);
 
-  // 🔥 NEW: Function to open photo modal
+  // Function to open photo modal
   const openPhotoModal = (photoUrl: string, professionalName: string) => {
     setSelectedPhoto({
       url: photoUrl,
@@ -120,12 +120,12 @@ const ProfessionalsPage: React.FC = () => {
     });
   };
 
-  // 🔥 NEW: Function to close photo modal
+  // Function to close photo modal
   const closePhotoModal = () => {
     setSelectedPhoto(null);
   };
 
-  // 🔥 NEW: Handle escape key to close modal
+  // Handle escape key to close modal
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -235,6 +235,7 @@ const ProfessionalsPage: React.FC = () => {
           </div>
         )}
       </div>
+
       {error && (
         <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 flex items-center">
           <Calendar className="h-5 w-5 mr-2 flex-shrink-0" />
@@ -285,7 +286,10 @@ const ProfessionalsPage: React.FC = () => {
                             // Fallback to default icon if image fails to load
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
-                            target.parentElement?.nextElementSibling?.classList.remove('hidden');
+                            const fallbackDiv = target.parentElement?.nextElementSibling as HTMLElement;
+                            if (fallbackDiv) {
+                              fallbackDiv.classList.remove('hidden');
+                            }
                           }}
                         />
                       </button>
@@ -348,7 +352,7 @@ const ProfessionalsPage: React.FC = () => {
         </div>
       )}
 
-      {/* 🔥 NEW: Photo Modal */}
+      {/* Photo Modal */}
       {selectedPhoto && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
           {/* Backdrop - click to close */}
