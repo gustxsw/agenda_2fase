@@ -362,6 +362,146 @@ const initializeDatabase = async () => {
 // Initialize database on startup
 initializeDatabase().catch(console.error);
 
+// 🔥 FUNÇÃO PARA CRIAR PROFISSIONAL DE TESTE
+async function createTestProfessional() {
+  try {
+    console.log('🔄 Verificando se profissional de teste existe...');
+
+    // Verificar se o profissional já existe
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE cpf = $1',
+      ['12345678901']
+    );
+
+    if (existingUser.rows.length > 0) {
+      console.log('✅ Profissional de teste já existe!');
+      return;
+    }
+
+    console.log('🔄 Criando profissional de teste...');
+
+    // Hash da senha
+    const password = 'teste123';
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Verificar se já existe uma categoria de teste
+    let categoryResult = await pool.query(
+      'SELECT id FROM service_categories WHERE name = $1',
+      ['Fisioterapia']
+    );
+
+    let categoryId;
+    if (categoryResult.rows.length === 0) {
+      // Criar categoria de teste
+      const newCategory = await pool.query(
+        `INSERT INTO service_categories (name, description) 
+         VALUES ($1, $2) 
+         RETURNING id`,
+        ['Fisioterapia', 'Serviços de fisioterapia e reabilitação']
+      );
+      categoryId = newCategory.rows[0].id;
+      console.log('✅ Categoria "Fisioterapia" criada com ID:', categoryId);
+    } else {
+      categoryId = categoryResult.rows[0].id;
+      console.log('✅ Categoria "Fisioterapia" já existe com ID:', categoryId);
+    }
+
+    // Criar profissional de teste
+    const userResult = await pool.query(
+      `INSERT INTO users 
+       (name, cpf, email, phone, birth_date, address, address_number, 
+        neighborhood, city, state, password_hash, roles, percentage, category_id, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CURRENT_TIMESTAMP)
+       RETURNING id, name, cpf`,
+      [
+        'Dr. João Silva', // name
+        '12345678901', // cpf
+        'joao.silva@teste.com', // email
+        '64981234567', // phone
+        '1985-03-15', // birth_date
+        'Rua das Flores, 123', // address
+        '123', // address_number
+        'Centro', // neighborhood
+        'Goiânia', // city
+        'GO', // state
+        passwordHash, // password_hash
+        JSON.stringify(['professional']), // roles
+        70, // percentage (70% para o profissional, 30% para o convênio)
+        categoryId // category_id
+      ]
+    );
+
+    const professionalId = userResult.rows[0].id;
+    console.log('✅ Profissional criado:', userResult.rows[0]);
+
+    // Criar alguns serviços de teste
+    const services = [
+      { name: 'Consulta Fisioterapêutica', price: 100.00 },
+      { name: 'Sessão de RPG', price: 80.00 },
+      { name: 'Massoterapia', price: 60.00 },
+      { name: 'Pilates Terapêutico', price: 90.00 }
+    ];
+
+    for (const service of services) {
+      try {
+        await pool.query(
+          `INSERT INTO services (name, description, base_price, category_id, is_base_service) 
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            service.name,
+            `Serviço de ${service.name.toLowerCase()}`,
+            service.price,
+            categoryId,
+            true
+          ]
+        );
+        console.log(`✅ Serviço "${service.name}" criado`);
+      } catch (error) {
+        // Serviço pode já existir, ignorar erro
+        console.log(`⚠️ Serviço "${service.name}" já existe ou erro:`, error.message);
+      }
+    }
+
+    // Criar local de atendimento padrão
+    try {
+      await pool.query(
+        `INSERT INTO attendance_locations 
+         (professional_id, name, address, address_number, neighborhood, city, state, phone, is_default)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          professionalId,
+          'Clínica Quiro Ferreira',
+          'Rua das Flores',
+          '123',
+          'Centro',
+          'Goiânia',
+          'GO',
+          '64981234567',
+          true
+        ]
+      );
+      console.log('✅ Local de atendimento padrão criado');
+    } catch (error) {
+      console.log('⚠️ Local de atendimento já existe ou erro:', error.message);
+    }
+
+    console.log('🎉 PROFISSIONAL DE TESTE CRIADO COM SUCESSO!');
+    console.log('📋 DADOS PARA LOGIN:');
+    console.log('   CPF: 123.456.789-01');
+    console.log('   Senha: teste123');
+    console.log('   Role: professional');
+    console.log('   Porcentagem: 70%');
+    console.log('   Categoria: Fisioterapia');
+
+  } catch (error) {
+    console.error('❌ Erro ao criar profissional de teste:', error);
+  }
+}
+
+// 🔥 EXECUTAR CRIAÇÃO DO PROFISSIONAL DE TESTE NO STARTUP
+createTestProfessional();
+
 // Middleware
 app.use(cors({
   origin: [
