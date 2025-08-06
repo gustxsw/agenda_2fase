@@ -1469,6 +1469,169 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
   }
 });
 
+// Get professional revenue report
+app.get('/api/reports/professional-revenue', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    if (!start_date || !end_date) {
+      return res.status(400).json({ message: 'Datas de início e fim são obrigatórias' });
+    }
+
+    console.log('🔍 Fetching professional revenue for user:', req.user.id);
+    console.log('🔍 Date range:', { start_date, end_date });
+
+    // Get professional's percentage
+    const professionalResult = await pool.query(
+      'SELECT percentage FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const professionalPercentage = professionalResult.rows[0]?.percentage || 50;
+
+    // Get consultations for this professional
+    const consultationsResult = await pool.query(
+      `SELECT 
+         c.id,
+         c.date,
+         c.value as total_value,
+         c.value * ($3 / 100.0) as professional_payment,
+         c.value * ((100 - $3) / 100.0) as amount_to_pay,
+         s.name as service_name,
+         COALESCE(pp.name, cl.name, d.name) as client_name,
+         CASE 
+           WHEN pp.id IS NOT NULL THEN 'particular'
+           WHEN cl.id IS NOT NULL THEN 'convenio'
+           WHEN d.id IS NOT NULL THEN 'dependente'
+           ELSE 'unknown'
+         END as patient_type
+       FROM consultations c
+       LEFT JOIN services s ON c.service_id = s.id
+       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
+       LEFT JOIN users cl ON c.client_id = cl.id
+       LEFT JOIN dependents d ON c.dependent_id = d.id
+       WHERE c.professional_id = $1
+       AND c.date >= $2 AND c.date <= $4
+       ORDER BY c.date DESC`,
+      [req.user.id, start_date, professionalPercentage, end_date]
+    );
+
+    // Calculate summary
+    const consultations = consultationsResult.rows;
+    const totalRevenue = consultations.reduce((sum, c) => sum + parseFloat(c.total_value), 0);
+    const totalAmountToPay = consultations.reduce((sum, c) => sum + parseFloat(c.amount_to_pay), 0);
+    const convenioConsultations = consultations.filter(c => c.patient_type === 'convenio' || c.patient_type === 'dependente').length;
+    const privateConsultations = consultations.filter(c => c.patient_type === 'particular').length;
+    const convenioRevenue = consultations
+      .filter(c => c.patient_type === 'convenio' || c.patient_type === 'dependente')
+      .reduce((sum, c) => sum + parseFloat(c.total_value), 0);
+    const privateRevenue = consultations
+      .filter(c => c.patient_type === 'particular')
+      .reduce((sum, c) => sum + parseFloat(c.total_value), 0);
+
+    const summary = {
+      total_consultations: consultations.length,
+      convenio_consultations: convenioConsultations,
+      private_consultations: privateConsultations,
+      total_revenue: totalRevenue,
+      convenio_revenue: convenioRevenue,
+      private_revenue: privateRevenue,
+      professional_percentage: professionalPercentage,
+      amount_to_pay: totalAmountToPay
+    };
+
+    console.log('✅ Professional revenue summary:', summary);
+
+    res.json({
+      summary,
+      consultations: consultations.map(c => ({
+        date: c.date,
+        client_name: c.client_name,
+        service_name: c.service_name,
+        total_value: parseFloat(c.total_value),
+        amount_to_pay: parseFloat(c.amount_to_pay),
+        patient_type: c.patient_type
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Error fetching professional revenue:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Get detailed professional report
+app.get('/api/reports/professional-detailed', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    if (!start_date || !end_date) {
+      return res.status(400).json({ message: 'Datas de início e fim são obrigatórias' });
+    }
+
+    // Get professional's percentage
+    const professionalResult = await pool.query(
+      'SELECT percentage FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    const professionalPercentage = professionalResult.rows[0]?.percentage || 50;
+
+    // Get detailed consultations
+    const consultationsResult = await pool.query(
+      `SELECT 
+         c.id,
+         c.date,
+         c.value as total_value,
+         s.name as service_name,
+         COALESCE(pp.name, cl.name, d.name) as client_name,
+         CASE 
+           WHEN pp.id IS NOT NULL THEN 'particular'
+           WHEN cl.id IS NOT NULL THEN 'convenio'
+           WHEN d.id IS NOT NULL THEN 'dependente'
+           ELSE 'unknown'
+         END as patient_type
+       FROM consultations c
+       LEFT JOIN services s ON c.service_id = s.id
+       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
+       LEFT JOIN users cl ON c.client_id = cl.id
+       LEFT JOIN dependents d ON c.dependent_id = d.id
+       WHERE c.professional_id = $1
+       AND c.date >= $2 AND c.date <= $3
+       ORDER BY c.date DESC`,
+      [req.user.id, start_date, end_date]
+    );
+
+    const consultations = consultationsResult.rows;
+    
+    // Calculate metrics
+    const convenioConsultations = consultations.filter(c => c.patient_type === 'convenio' || c.patient_type === 'dependente');
+    const privateConsultations = consultations.filter(c => c.patient_type === 'particular');
+    
+    const convenioRevenue = convenioConsultations.reduce((sum, c) => sum + parseFloat(c.total_value), 0);
+    const privateRevenue = privateConsultations.reduce((sum, c) => sum + parseFloat(c.total_value), 0);
+    const totalRevenue = convenioRevenue + privateRevenue;
+    
+    // Calculate what professional owes to clinic (only from convenio consultations)
+    const amountToPay = convenioRevenue * ((100 - professionalPercentage) / 100);
+
+    const summary = {
+      total_consultations: consultations.length,
+      convenio_consultations: convenioConsultations.length,
+      private_consultations: privateConsultations.length,
+      total_revenue: totalRevenue,
+      convenio_revenue: convenioRevenue,
+      private_revenue: privateRevenue,
+      professional_percentage: professionalPercentage,
+      amount_to_pay: amountToPay
+    };
+
+    res.json({ summary });
+  } catch (error) {
+    console.error('Error fetching detailed professional report:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
 app.get('/api/reports/professional-revenue', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
