@@ -1201,10 +1201,10 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
       // Create consultation
       const consultationResult = await client.query(
         `INSERT INTO consultations 
-         (professional_id, client_id, dependent_id, private_patient_id, service_id, value, date)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (client_id, dependent_id, private_patient_id, professional_id, service_id, value, date, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
          RETURNING *`,
-        [req.user.id, client_id, dependent_id, private_patient_id, service_id, location_id, value, date]
+        [client_id, dependent_id, private_patient_id, req.user.id, service_id, value, date]
       );
 
       const consultation = consultationResult.rows[0];
