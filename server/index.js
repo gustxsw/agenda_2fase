@@ -1198,16 +1198,14 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
     try {
       await client.query('BEGIN');
       
-      await client.query('BEGIN');
-      
       // Create consultation
       const consultationResult = await client.query(
-      `INSERT INTO consultations 
-       (professional_id, client_id, dependent_id, private_patient_id, service_id, location_id, value, date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [req.user.id, client_id, dependent_id, private_patient_id, service_id, location_id, value, date]
-    );
+        `INSERT INTO consultations 
+         (professional_id, client_id, dependent_id, private_patient_id, service_id, location_id, value, date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [req.user.id, client_id, dependent_id, private_patient_id, service_id, location_id, value, date]
+      );
 
       const consultation = consultationResult.rows[0];
       
@@ -1216,7 +1214,7 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
         // Get consultation duration from settings
         const settingsResult = await client.query(
           `SELECT consultation_duration FROM professional_schedule_settings WHERE professional_id = $1`,
-          [professional_id]
+          [req.user.id]
         );
         
         const consultationDuration = settingsResult.rows[0]?.consultation_duration || 60;
@@ -1226,7 +1224,7 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
            (professional_id, private_patient_id, client_id, dependent_id, service_id,
             appointment_date, appointment_time, location_id, value, status, consultation_duration, consultation_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', $10, $11)`,
-          [professional_id, private_patient_id, client_id, dependent_id, service_id, 
+          [req.user.id, private_patient_id, client_id, dependent_id, service_id, 
            appointment_date, appointment_time, location_id, value, consultationDuration, consultation.id]
         );
       }
@@ -1670,59 +1668,6 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
     res.json({ summary });
   } catch (error) {
     console.error('Error fetching detailed professional report:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
-  }
-});
-
-app.get('/api/reports/professional-revenue', authenticate, authorize(['professional']), async (req, res) => {
-  try {
-    const { start_date, end_date } = req.query;
-
-    if (!start_date || !end_date) {
-      return res.status(400).json({ message: 'Datas de início e fim são obrigatórias' });
-    }
-
-    // Get professional's percentage
-    const professionalResult = await pool.query(
-      'SELECT percentage FROM users WHERE id = $1',
-      [req.user.id]
-    );
-
-    const professionalPercentage = professionalResult.rows[0]?.percentage || 50;
-
-    // Get consultations for the professional in the date range
-    const consultationsResult = await pool.query(
-      `SELECT c.*, 
-              COALESCE(pp.name, cl.name, d.name) as client_name,
-              s.name as service_name,
-              c.value as total_value,
-              (c.value * ((100 - $3) / 100.0)) as amount_to_pay
-       FROM consultations c
-       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
-       LEFT JOIN users cl ON c.client_id = cl.id
-       LEFT JOIN dependents d ON c.dependent_id = d.id
-       LEFT JOIN services s ON c.service_id = s.id
-       WHERE c.professional_id = $1
-       AND c.date >= $2 AND c.date <= $4
-       ORDER BY c.date DESC`,
-      [req.user.id, start_date, professionalPercentage, end_date]
-    );
-
-    // Calculate summary
-    const totalRevenue = consultationsResult.rows.reduce((sum, row) => sum + parseFloat(row.total_value), 0);
-    const totalAmountToPay = consultationsResult.rows.reduce((sum, row) => sum + parseFloat(row.amount_to_pay), 0);
-
-    res.json({
-      summary: {
-        professional_percentage: professionalPercentage,
-        total_revenue: totalRevenue,
-        consultation_count: consultationsResult.rows.length,
-        amount_to_pay: totalAmountToPay
-      },
-      consultations: consultationsResult.rows
-    });
-  } catch (error) {
-    console.error('Error generating professional revenue report:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
@@ -2353,7 +2298,6 @@ app.post('/api/upload-image', authenticate, authorize(['professional']), async (
           return res.status(404).json({ message: 'Usuário não encontrado' });
         }
 
-      await client.query('COMMIT');
         res.json({
           message: 'Imagem enviada com sucesso',
           imageUrl: req.file.path
@@ -2653,10 +2597,9 @@ app.get('/api/scheduling/available-slots', authenticate, authorize(['professiona
                (slotEndTime > bookedStart && slotEndTime <= bookedEnd);
       });
 
-      await client.query('ROLLBACK');
+      if (!isInBreak && !isBooked) {
+        slots.push({
           time: timeString,
-    } finally {
-      client.release();
           available: true,
           duration: duration
         });
