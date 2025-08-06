@@ -214,10 +214,10 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     // Handle roles update
-    let rolesArray = existingUser.roles;
+    let rolesJson = existingUser.roles;
     if (roles !== undefined) {
-      const newRolesArray = Array.isArray(roles) ? roles : [roles];
-      rolesArray = stringifyRoles(newRolesArray);
+      const rolesArray = Array.isArray(roles) ? roles : [roles];
+      rolesJson = stringifyRoles(rolesArray);
     }
 
     const result = await pool.query(
@@ -229,7 +229,7 @@ router.put('/:id', authenticate, async (req, res) => {
        WHERE id = $15
        RETURNING id, name, cpf, email, roles, percentage, category_id`,
       [name, email, phone, birth_date, address, address_number, address_complement,
-       neighborhood, city, state, rolesArray, percentage, category_id, passwordHash, id]
+       neighborhood, city, state, rolesJson, percentage, category_id, passwordHash, id]
     );
 
     const updatedUser = result.rows[0];

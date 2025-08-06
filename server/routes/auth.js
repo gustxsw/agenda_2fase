@@ -22,20 +22,20 @@ const parseRoles = (roles) => {
 
 // Helper function to safely stringify roles for database
 const stringifyRoles = (roles) => {
-  if (!roles) return [];
-  if (Array.isArray(roles)) return roles;
+  if (!roles) return JSON.stringify([]);
+  if (Array.isArray(roles)) return JSON.stringify(roles);
   if (typeof roles === 'string') {
     try {
       // Test if it's already valid JSON
-      const parsed = JSON.parse(roles);
-      return Array.isArray(parsed) ? parsed : [parsed];
+      JSON.parse(roles);
+      return roles;
     } catch (e) {
       // Convert string to array and stringify
       const rolesArray = roles.includes(',') ? roles.split(',').map(r => r.trim()) : [roles];
-      return rolesArray;
+      return JSON.stringify(rolesArray);
     }
   }
-  return [roles];
+  return JSON.stringify([roles]);
 };
 
 // Login endpoint

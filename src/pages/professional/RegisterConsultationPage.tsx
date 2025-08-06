@@ -1,7 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { Search, Calendar, User, Users, AlertTriangle, MapPin, UserPlus, X, Check } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
+import {
+  Search,
+  Calendar,
+  User,
+  Users,
+  AlertTriangle,
+  MapPin,
+  UserPlus,
+  X,
+  Check,
+} from "lucide-react";
 
 type Service = {
   id: number;
@@ -51,54 +61,62 @@ type PrivatePatient = {
 const RegisterConsultationPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  
+
   // Patient type selection
-  const [patientType, setPatientType] = useState<'convenio' | 'particular'>('convenio');
-  
+  const [patientType, setPatientType] = useState<"convenio" | "particular">(
+    "convenio"
+  );
+
   // Form state
-  const [cpf, setCpf] = useState('');
+  const [cpf, setCpf] = useState("");
   const [clientId, setClientId] = useState<number | null>(null);
-  const [clientName, setClientName] = useState('');
-  const [subscriptionStatus, setSubscriptionStatus] = useState('');
+  const [clientName, setClientName] = useState("");
+  const [subscriptionStatus, setSubscriptionStatus] = useState("");
   const [dependents, setDependents] = useState<Dependent[]>([]);
-  const [selectedDependentId, setSelectedDependentId] = useState<number | null>(null);
+  const [selectedDependentId, setSelectedDependentId] = useState<number | null>(
+    null
+  );
   const [foundDependent, setFoundDependent] = useState<Dependent | null>(null);
-  const [categoryId, setCategoryId] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<string>("");
   const [serviceId, setServiceId] = useState<number | null>(null);
-  const [locationId, setLocationId] = useState<string>('');
-  const [value, setValue] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  
+  const [locationId, setLocationId] = useState<string>("");
+  const [value, setValue] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+
   // UI state
   const [categories, setCategories] = useState<Category[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [filteredServices, setFilteredServices] = useState<Service[]>([]);
-  const [attendanceLocations, setAttendanceLocations] = useState<AttendanceLocation[]>([]);
+  const [attendanceLocations, setAttendanceLocations] = useState<
+    AttendanceLocation[]
+  >([]);
   const [privatePatients, setPrivatePatients] = useState<PrivatePatient[]>([]);
-  const [hasSchedulingSubscription, setHasSchedulingSubscription] = useState(false);
-  const [selectedPrivatePatient, setSelectedPrivatePatient] = useState<string>('');
+  const [hasSchedulingSubscription, setHasSchedulingSubscription] =
+    useState(false);
+  const [selectedPrivatePatient, setSelectedPrivatePatient] =
+    useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isCreatingPatient, setIsCreatingPatient] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   // Private patient form state
   const [showCreatePatientModal, setShowCreatePatientModal] = useState(false);
   const [newPatientData, setNewPatientData] = useState({
-    name: '',
-    cpf: '',
-    email: '',
-    phone: '',
-    birth_date: '',
-    address: '',
-    address_number: '',
-    address_complement: '',
-    neighborhood: '',
-    city: '',
-    state: '',
-    zip_code: ''
+    name: "",
+    cpf: "",
+    email: "",
+    phone: "",
+    birth_date: "",
+    address: "",
+    address_number: "",
+    address_complement: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+    zip_code: "",
   });
 
   // Get API URL with fallback
@@ -112,418 +130,463 @@ const RegisterConsultationPage: React.FC = () => {
 
     return "http://localhost:3001";
   };
-  
+
   // Load categories and services on component mount
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem("token");
         const apiUrl = getApiUrl();
-        
-        console.log('Fetching consultation data from:', apiUrl);
-        
+
+        console.log("Fetching consultation data from:", apiUrl);
+
         // Fetch categories
-        const categoriesResponse = await fetch(`${apiUrl}/api/service-categories`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
+        const categoriesResponse = await fetch(
+          `${apiUrl}/api/service-categories`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
         if (!categoriesResponse.ok) {
-          throw new Error('Falha ao carregar categorias');
+          throw new Error("Falha ao carregar categorias");
         }
-        
+
         const categoriesData = await categoriesResponse.json();
         setCategories(categoriesData);
-        
+
         // Fetch services
         const servicesResponse = await fetch(`${apiUrl}/api/services`, {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
-        
+
         if (!servicesResponse.ok) {
-          throw new Error('Falha ao carregar serviços');
+          throw new Error("Falha ao carregar serviços");
         }
-        
+
         const servicesData = await servicesResponse.json();
         setServices(servicesData);
-        
+
         // Fetch attendance locations
-        const locationsResponse = await fetch(`${apiUrl}/api/attendance-locations`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
+        const locationsResponse = await fetch(
+          `${apiUrl}/api/attendance-locations`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
         if (locationsResponse.ok) {
           const locationsData = await locationsResponse.json();
           setAttendanceLocations(locationsData);
-          
+
           // Set default location if exists
-          const defaultLocation = locationsData.find((loc: AttendanceLocation) => loc.is_default);
+          const defaultLocation = locationsData.find(
+            (loc: AttendanceLocation) => loc.is_default
+          );
           if (defaultLocation) {
             setLocationId(defaultLocation.id.toString());
           }
         }
-        
+
         // Fetch private patients
         const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         });
-        
+
         if (patientsResponse.ok) {
           const patientsData = await patientsResponse.json();
           setPrivatePatients(patientsData);
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
-        setError('Não foi possível carregar os dados necessários');
+        console.error("Error fetching data:", error);
+        setError("Não foi possível carregar os dados necessários");
       }
     };
-    
+
     fetchData();
   }, []);
-  
+
   // Filter services when category changes
   useEffect(() => {
     if (categoryId) {
-      const filtered = services.filter(service => service.category_id === parseInt(categoryId));
+      const filtered = services.filter(
+        (service) => service.category_id === parseInt(categoryId)
+      );
       setFilteredServices(filtered);
       setServiceId(null);
-      setValue('');
+      setValue("");
     } else {
       setFilteredServices([]);
       setServiceId(null);
-      setValue('');
+      setValue("");
     }
   }, [categoryId, services]);
-  
+
   // Search client or dependent by CPF
   const searchByCpf = async () => {
-    setError('');
-    setSuccess('');
-    
+    setError("");
+    setSuccess("");
+
     // Validate CPF format
-    if (!/^\d{11}$/.test(cpf.replace(/\D/g, ''))) {
-      setError('CPF deve conter 11 dígitos numéricos');
+    if (!/^\d{11}$/.test(cpf.replace(/\D/g, ""))) {
+      setError("CPF deve conter 11 dígitos numéricos");
       return;
     }
-    
+
     try {
       setIsSearching(true);
-      
-      const token = localStorage.getItem('token');
+
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
-      const cleanCpf = cpf.replace(/\D/g, '');
-      
+      const cleanCpf = cpf.replace(/\D/g, "");
+
       // First, try to find a dependent with this CPF
-      const dependentResponse = await fetch(`${apiUrl}/api/dependents/lookup?cpf=${cleanCpf}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
+      const dependentResponse = await fetch(
+        `${apiUrl}/api/dependents/lookup?cpf=${cleanCpf}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       if (dependentResponse.ok) {
         const dependentData = await dependentResponse.json();
-        
+
         // 🔥 Check if the client has active subscription
-        if (dependentData.client_subscription_status !== 'active') {
-          setError('Este dependente não pode ser atendido pois o titular não possui assinatura ativa.');
+        if (dependentData.client_subscription_status !== "active") {
+          setError(
+            "Este dependente não pode ser atendido pois o titular não possui assinatura ativa."
+          );
           resetForm();
           return;
         }
-        
+
         setFoundDependent(dependentData);
         setClientId(dependentData.client_id);
         setClientName(dependentData.client_name);
         setSubscriptionStatus(dependentData.client_subscription_status);
         setSelectedDependentId(dependentData.id);
         setDependents([]);
-        setSuccess(`Dependente encontrado: ${dependentData.name} (Titular: ${dependentData.client_name})`);
+        setSuccess(
+          `Dependente encontrado: ${dependentData.name} (Titular: ${dependentData.client_name})`
+        );
         return;
       }
-      
+
       // If not found as dependent, try to find as client
-      const clientResponse = await fetch(`${apiUrl}/api/clients/lookup?cpf=${cleanCpf}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
+      const clientResponse = await fetch(
+        `${apiUrl}/api/clients/lookup?cpf=${cleanCpf}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       if (!clientResponse.ok) {
         if (clientResponse.status === 404) {
-          throw new Error('Cliente ou dependente não encontrado. Verifique o CPF ou entre em contato com o administrador.');
+          throw new Error(
+            "Cliente ou dependente não encontrado. Verifique o CPF ou entre em contato com o administrador."
+          );
         } else {
-          throw new Error('Falha ao buscar cliente');
+          throw new Error("Falha ao buscar cliente");
         }
       }
-      
+
       const clientData = await clientResponse.json();
-      
+
       // 🔥 Check if client has active subscription
-      if (clientData.subscription_status !== 'active') {
-        setError('Este cliente não pode ser atendido pois não possui assinatura ativa.');
+      if (clientData.subscription_status !== "active") {
+        setError(
+          "Este cliente não pode ser atendido pois não possui assinatura ativa."
+        );
         resetForm();
         return;
       }
-      
+
       setClientId(clientData.id);
       setClientName(clientData.name);
       setSubscriptionStatus(clientData.subscription_status);
       setSelectedDependentId(null);
       setFoundDependent(null);
-      
+
       // Fetch dependents
-      const dependentsResponse = await fetch(`${apiUrl}/api/dependents/${clientData.id}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
+      const dependentsResponse = await fetch(
+        `${apiUrl}/api/dependents/${clientData.id}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       if (dependentsResponse.ok) {
         const dependentsData = await dependentsResponse.json();
         setDependents(dependentsData);
       }
-      
-      setSuccess('Cliente encontrado com sucesso!');
+
+      setSuccess("Cliente encontrado com sucesso!");
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);
       } else {
-        setError('Ocorreu um erro ao buscar o cliente');
+        setError("Ocorreu um erro ao buscar o cliente");
       }
       resetForm();
     } finally {
       setIsSearching(false);
     }
   };
-  
+
   const resetForm = () => {
     setClientId(null);
-    setClientName('');
-    setSubscriptionStatus('');
+    setClientName("");
+    setSubscriptionStatus("");
     setDependents([]);
     setSelectedDependentId(null);
     setFoundDependent(null);
   };
-  
+
   // Create new private patient
   const createPrivatePatient = async () => {
-    setError('');
-    setSuccess('');
-    
+    setError("");
+    setSuccess("");
+
     // Validate required fields
     if (!newPatientData.name || !newPatientData.cpf) {
-      setError('Nome e CPF são obrigatórios');
+      setError("Nome e CPF são obrigatórios");
       return;
     }
-    
+
     // Validate CPF format
-    const cleanCpf = newPatientData.cpf.replace(/\D/g, '');
+    const cleanCpf = newPatientData.cpf.replace(/\D/g, "");
     if (!/^\d{11}$/.test(cleanCpf)) {
-      setError('CPF deve conter 11 dígitos numéricos');
+      setError("CPF deve conter 11 dígitos numéricos");
       return;
     }
-    
+
     try {
       setIsCreatingPatient(true);
-      
-      const token = localStorage.getItem('token');
+
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
-      
+
       const response = await fetch(`${apiUrl}/api/private-patients`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           ...newPatientData,
-          cpf: cleanCpf
+          cpf: cleanCpf,
         }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Erro ao criar paciente');
+        throw new Error(errorData.message || "Erro ao criar paciente");
       }
-      
+
       const createdPatient = await response.json();
-      
+
       // Add to private patients list
-      setPrivatePatients(prev => [...prev, createdPatient]);
-      
+      setPrivatePatients((prev) => [...prev, createdPatient]);
+
       // Select the newly created patient
       setSelectedPrivatePatient(createdPatient.id.toString());
-      
+
       // Close modal and reset form
       setShowCreatePatientModal(false);
       setNewPatientData({
-        name: '',
-        cpf: '',
-        email: '',
-        phone: '',
-        birth_date: '',
-        address: '',
-        address_number: '',
-        address_complement: '',
-        neighborhood: '',
-        city: '',
-        state: '',
-        zip_code: ''
+        name: "",
+        cpf: "",
+        email: "",
+        phone: "",
+        birth_date: "",
+        address: "",
+        address_number: "",
+        address_complement: "",
+        neighborhood: "",
+        city: "",
+        state: "",
+        zip_code: "",
       });
-      
-      setSuccess(`Paciente ${createdPatient.name} criado e selecionado com sucesso!`);
+
+      setSuccess(
+        `Paciente ${createdPatient.name} criado e selecionado com sucesso!`
+      );
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Erro ao criar paciente');
+      setError(
+        error instanceof Error ? error.message : "Erro ao criar paciente"
+      );
     } finally {
       setIsCreatingPatient(false);
     }
   };
-  
+
   const openCreatePatientModal = () => {
     setShowCreatePatientModal(true);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
   };
-  
+
   const closeCreatePatientModal = () => {
     setShowCreatePatientModal(false);
     setNewPatientData({
-      name: '',
-      cpf: '',
-      email: '',
-      phone: '',
-      birth_date: '',
-      address: '',
-      address_number: '',
-      address_complement: '',
-      neighborhood: '',
-      city: '',
-      state: '',
-      zip_code: ''
+      name: "",
+      cpf: "",
+      email: "",
+      phone: "",
+      birth_date: "",
+      address: "",
+      address_number: "",
+      address_complement: "",
+      neighborhood: "",
+      city: "",
+      state: "",
+      zip_code: "",
     });
   };
-  
-  const handleNewPatientInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+
+  const handleNewPatientInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-    setNewPatientData(prev => ({ ...prev, [name]: value }));
+    setNewPatientData((prev) => ({ ...prev, [name]: value }));
   };
-  
+
   const formatNewPatientCpf = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
+    const numericValue = value.replace(/\D/g, "");
     const limitedValue = numericValue.slice(0, 11);
-    setNewPatientData(prev => ({ ...prev, cpf: limitedValue }));
+    setNewPatientData((prev) => ({ ...prev, cpf: limitedValue }));
   };
-  
+
   const formatNewPatientPhone = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
+    const numericValue = value.replace(/\D/g, "");
     const limitedValue = numericValue.slice(0, 11);
-    setNewPatientData(prev => ({ ...prev, phone: limitedValue }));
+    setNewPatientData((prev) => ({ ...prev, phone: limitedValue }));
   };
-  
+
   const formatNewPatientZipCode = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
+    const numericValue = value.replace(/\D/g, "");
     const limitedValue = numericValue.slice(0, 8);
-    setNewPatientData(prev => ({ ...prev, zip_code: limitedValue }));
+    setNewPatientData((prev) => ({ ...prev, zip_code: limitedValue }));
   };
-  
+
   // Update value when service changes
   const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = Number(e.target.value);
     setServiceId(selectedId);
-    
-    const selectedService = services.find(service => service.id === selectedId);
+
+    const selectedService = services.find(
+      (service) => service.id === selectedId
+    );
     if (selectedService) {
       setValue(selectedService.base_price.toString());
     }
   };
-  
+
   // Format CPF as user types (###.###.###-##)
   const formatCpf = (value: string) => {
     // Remove non-numeric characters
-    const numericValue = value.replace(/\D/g, '');
-    
+    const numericValue = value.replace(/\D/g, "");
+
     // Limit to 11 digits
     const limitedValue = numericValue.slice(0, 11);
-    
+
     setCpf(limitedValue);
   };
-  
+
   const formattedCpf = cpf
-    ? cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-    : '';
-  
+    ? cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+    : "";
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-    
+    setError("");
+    setSuccess("");
+
     // Validate form
-    if (patientType === 'convenio' && !clientId && !selectedDependentId) {
-      setError('É necessário selecionar um cliente ou dependente');
+    if (patientType === "convenio" && !clientId && !selectedDependentId) {
+      setError("É necessário selecionar um cliente ou dependente");
       return;
     }
-    
+
     // 🔥 Double check subscription status before submitting
-    if (patientType === 'convenio' && subscriptionStatus !== 'active') {
-      setError('Não é possível registrar consulta para cliente sem assinatura ativa');
+    if (patientType === "convenio" && subscriptionStatus !== "active") {
+      setError(
+        "Não é possível registrar consulta para cliente sem assinatura ativa"
+      );
       return;
     }
-    
+
     // Validate patient selection for particular patients
-    if (patientType === 'particular' && !selectedPrivatePatient) {
-      setError('É necessário selecionar um paciente particular');
+    if (patientType === "particular" && !selectedPrivatePatient) {
+      setError("É necessário selecionar um paciente particular");
       return;
     }
-    
+
     if (!serviceId) {
-      setError('É necessário selecionar um serviço');
+      setError("É necessário selecionar um serviço");
       return;
     }
-    
+
     if (!value || Number(value) <= 0) {
-      setError('O valor deve ser maior que zero');
+      setError("O valor deve ser maior que zero");
       return;
     }
-    
+
     if (!date || !time) {
-      setError('Data e hora são obrigatórios');
+      setError("Data e hora são obrigatórios");
       return;
     }
-    
+
     // Combine date and time
     const dateTime = new Date(`${date}T${time}`);
-    
+
     try {
       setIsLoading(true);
-      
-      const token = localStorage.getItem('token');
+
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
-      
+
       // Create both consultation record and appointment
       const response = await fetch(`${apiUrl}/api/consultations`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          client_id: patientType === 'convenio' ? (selectedDependentId ? null : clientId) : null,
-          dependent_id: patientType === 'convenio' ? selectedDependentId : null,
-          private_patient_id: patientType === 'particular' ? parseInt(selectedPrivatePatient) : null,
+          client_id:
+            patientType === "convenio"
+              ? selectedDependentId
+                ? null
+                : clientId
+              : null,
+          dependent_id: patientType === "convenio" ? selectedDependentId : null,
+          private_patient_id:
+            patientType === "particular"
+              ? parseInt(selectedPrivatePatient)
+              : null,
           professional_id: user?.id,
           service_id: serviceId,
           location_id: locationId ? parseInt(locationId) : null,
@@ -532,50 +595,56 @@ const RegisterConsultationPage: React.FC = () => {
           // Add appointment data
           appointment_date: date,
           appointment_time: time,
-          create_appointment: true
+          create_appointment: true,
         }),
       });
-      
-      console.log('📡 Consultation creation response status:', response.status);
-      
+
+      console.log("📡 Consultation creation response status:", response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ Consultation creation failed:', errorData);
-        throw new Error(errorData.message || 'Falha ao registrar consulta');
+        console.error("❌ Consultation creation failed:", errorData);
+        throw new Error(errorData.message || "Falha ao registrar consulta");
       }
-      
+
       const responseData = await response.json();
-      console.log('✅ Consultation and appointment created:', responseData);
-      
+      console.log("✅ Consultation and appointment created:", responseData);
+
       // Reset form
-      setCpf('');
+      setCpf("");
       setClientId(null);
-      setClientName('');
-      setSubscriptionStatus('');
+      setClientName("");
+      setSubscriptionStatus("");
       setSelectedDependentId(null);
       setFoundDependent(null);
       setDependents([]);
-      setSelectedPrivatePatient('');
-      setPatientType('convenio');
-      setCategoryId('');
+      setSelectedPrivatePatient("");
+      setPatientType("convenio");
+      setCategoryId("");
       setServiceId(null);
-      setLocationId('');
-      setValue('');
-      setDate('');
-      setTime('');
-      
-      setSuccess(`Consulta registrada e agendamento criado com sucesso! ${responseData.appointment ? 'Agendamento ID: ' + responseData.appointment.id : ''}`);
-      
+      setLocationId("");
+      setValue("");
+      setDate("");
+      setTime("");
+
+      setSuccess(
+        `Consulta registrada e agendamento criado com sucesso! ${
+          responseData.appointment
+            ? "Agendamento ID: " + responseData.appointment.id
+            : ""
+        }`
+      );
+
       // Redirect after a delay
       setTimeout(() => {
-        navigate('/professional');
+        navigate("/professional");
       }, 2000);
     } catch (error) {
-      console.error('Error registering consultation:', error);
+      console.error("Error registering consultation:", error);
       if (error instanceof Error) {
         setError(error.message);
       } else {
-        setError('Ocorreu um erro ao registrar a consulta');
+        setError("Ocorreu um erro ao registrar a consulta");
       }
     } finally {
       setIsLoading(false);
@@ -585,40 +654,44 @@ const RegisterConsultationPage: React.FC = () => {
   // 🔥 Function to get subscription status display
   const getSubscriptionStatusDisplay = (status: string) => {
     switch (status) {
-      case 'active':
+      case "active":
         return {
-          text: 'Assinatura Ativa',
-          className: 'bg-green-100 text-green-800',
-          icon: null
+          text: "Assinatura Ativa",
+          className: "bg-green-100 text-green-800",
+          icon: null,
         };
-      case 'pending':
+      case "pending":
         return {
-          text: 'Situação Cadastral Pendente',
-          className: 'bg-red-100 text-red-800',
-          icon: <AlertTriangle className="h-4 w-4 mr-1" />
+          text: "Situação Cadastral Pendente",
+          className: "bg-red-100 text-red-800",
+          icon: <AlertTriangle className="h-4 w-4 mr-1" />,
         };
-      case 'expired':
+      case "expired":
         return {
-          text: 'Assinatura Vencida',
-          className: 'bg-red-100 text-red-800',
-          icon: <AlertTriangle className="h-4 w-4 mr-1" />
+          text: "Assinatura Vencida",
+          className: "bg-red-100 text-red-800",
+          icon: <AlertTriangle className="h-4 w-4 mr-1" />,
         };
       default:
         return {
-          text: 'Status Desconhecido',
-          className: 'bg-gray-100 text-gray-800',
-          icon: <AlertTriangle className="h-4 w-4 mr-1" />
+          text: "Status Desconhecido",
+          className: "bg-gray-100 text-gray-800",
+          icon: <AlertTriangle className="h-4 w-4 mr-1" />,
         };
     }
   };
-  
+
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Registrar Nova Consulta</h1>
-        <p className="text-gray-600">Preencha os dados para registrar uma nova consulta</p>
+        <h1 className="text-2xl font-bold text-gray-900">
+          Registrar Nova Consulta
+        </h1>
+        <p className="text-gray-600">
+          Preencha os dados para registrar uma nova consulta
+        </p>
       </div>
-      
+
       <div className="card">
         {error && (
           <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4 flex items-center">
@@ -626,39 +699,39 @@ const RegisterConsultationPage: React.FC = () => {
             {error}
           </div>
         )}
-        
+
         {success && (
           <div className="bg-green-50 text-green-600 p-3 rounded-md mb-4">
             {success}
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit}>
           {/* Patient Type Selection */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3">Tipo de Atendimento</h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 type="button"
                 onClick={() => {
-                  setPatientType('convenio');
+                  setPatientType("convenio");
                   // Reset forms
-                  setCpf('');
+                  setCpf("");
                   setClientId(null);
-                  setClientName('');
-                  setSubscriptionStatus('');
+                  setClientName("");
+                  setSubscriptionStatus("");
                   setSelectedDependentId(null);
                   setFoundDependent(null);
                   setDependents([]);
-                  setSelectedPrivatePatient('');
-                  setError('');
-                  setSuccess('');
+                  setSelectedPrivatePatient("");
+                  setError("");
+                  setSuccess("");
                 }}
                 className={`p-4 rounded-lg border-2 transition-all ${
-                  patientType === 'convenio'
-                    ? 'border-red-600 bg-red-50 text-red-700'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  patientType === "convenio"
+                    ? "border-red-600 bg-red-50 text-red-700"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                 }`}
               >
                 <div className="text-center">
@@ -667,26 +740,26 @@ const RegisterConsultationPage: React.FC = () => {
                   <p className="text-sm mt-1">Buscar por CPF no sistema</p>
                 </div>
               </button>
-              
+
               <button
                 type="button"
                 onClick={() => {
-                  setPatientType('particular');
+                  setPatientType("particular");
                   // Reset forms
-                  setCpf('');
+                  setCpf("");
                   setClientId(null);
-                  setClientName('');
-                  setSubscriptionStatus('');
+                  setClientName("");
+                  setSubscriptionStatus("");
                   setSelectedDependentId(null);
                   setFoundDependent(null);
                   setDependents([]);
-                  setError('');
-                  setSuccess('');
+                  setError("");
+                  setSuccess("");
                 }}
                 className={`p-4 rounded-lg border-2 transition-all ${
-                  patientType === 'particular'
-                    ? 'border-red-600 bg-red-50 text-red-700'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  patientType === "particular"
+                    ? "border-red-600 bg-red-50 text-red-700"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                 }`}
               >
                 <div className="text-center">
@@ -697,123 +770,164 @@ const RegisterConsultationPage: React.FC = () => {
               </button>
             </div>
           </div>
-          
+
           {/* Patient Selection based on type */}
-          {patientType === 'convenio' ? (
+          {patientType === "convenio" ? (
             <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-3 flex items-center">
-              <Search className="h-5 w-5 mr-2 text-red-600" />
-              Buscar por CPF (Cliente ou Dependente)
-            </h2>
-            
-            <div className="flex items-center space-x-2">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={formattedCpf}
-                  onChange={(e) => formatCpf(e.target.value)}
-                  placeholder="000.000.000-00"
-                  className="input"
-                  disabled={isSearching || isLoading}
-                />
+              <h2 className="text-lg font-semibold mb-3 flex items-center">
+                <Search className="h-5 w-5 mr-2 text-red-600" />
+                Buscar por CPF (Cliente ou Dependente)
+              </h2>
+
+              <div className="flex items-center space-x-2">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={formattedCpf}
+                    onChange={(e) => formatCpf(e.target.value)}
+                    placeholder="000.000.000-00"
+                    className="input"
+                    disabled={isSearching || isLoading}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={searchByCpf}
+                  className={`btn btn-primary ${
+                    isSearching ? "opacity-70 cursor-not-allowed" : ""
+                  }`}
+                  disabled={isSearching || isLoading || !cpf}
+                >
+                  {isSearching ? "Buscando..." : "Buscar"}
+                </button>
               </div>
-              
-              <button
-                type="button"
-                onClick={searchByCpf}
-                className={`btn btn-primary ${isSearching ? 'opacity-70 cursor-not-allowed' : ''}`}
-                disabled={isSearching || isLoading || !cpf}
-              >
-                {isSearching ? 'Buscando...' : 'Buscar'}
-              </button>
-            </div>
-            
-            {/* Display found client or dependent */}
-            {clientId && (
-              <div className="mt-3">
-                <div className={`p-3 rounded-md mb-3 ${
-                  subscriptionStatus === 'active' 
-                    ? 'bg-green-50 text-green-700' 
-                    : 'bg-red-50 text-red-700'
-                }`}>
-                  {foundDependent ? (
-                    <div className="flex items-center">
-                      <User className="h-5 w-5 mr-2" />
-                      <div className="flex-1">
-                        <p><span className="font-medium">Dependente:</span> {foundDependent.name}</p>
-                        <p><span className="font-medium">Titular:</span> {clientName}</p>
-                        <div className="flex items-center mt-1">
-                          <span className="font-medium mr-2">Status:</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center ${
-                            getSubscriptionStatusDisplay(subscriptionStatus).className
-                          }`}>
-                            {getSubscriptionStatusDisplay(subscriptionStatus).icon}
-                            {getSubscriptionStatusDisplay(subscriptionStatus).text}
-                          </span>
+
+              {/* Display found client or dependent */}
+              {clientId && (
+                <div className="mt-3">
+                  <div
+                    className={`p-3 rounded-md mb-3 ${
+                      subscriptionStatus === "active"
+                        ? "bg-green-50 text-green-700"
+                        : "bg-red-50 text-red-700"
+                    }`}
+                  >
+                    {foundDependent ? (
+                      <div className="flex items-center">
+                        <User className="h-5 w-5 mr-2" />
+                        <div className="flex-1">
+                          <p>
+                            <span className="font-medium">Dependente:</span>{" "}
+                            {foundDependent.name}
+                          </p>
+                          <p>
+                            <span className="font-medium">Titular:</span>{" "}
+                            {clientName}
+                          </p>
+                          <div className="flex items-center mt-1">
+                            <span className="font-medium mr-2">Status:</span>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium flex items-center ${
+                                getSubscriptionStatusDisplay(subscriptionStatus)
+                                  .className
+                              }`}
+                            >
+                              {
+                                getSubscriptionStatusDisplay(subscriptionStatus)
+                                  .icon
+                              }
+                              {
+                                getSubscriptionStatusDisplay(subscriptionStatus)
+                                  .text
+                              }
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <Users className="h-5 w-5 mr-2" />
-                      <div className="flex-1">
-                        <p><span className="font-medium">Cliente:</span> {clientName}</p>
-                        <div className="flex items-center mt-1">
-                          <span className="font-medium mr-2">Status:</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center ${
-                            getSubscriptionStatusDisplay(subscriptionStatus).className
-                          }`}>
-                            {getSubscriptionStatusDisplay(subscriptionStatus).icon}
-                            {getSubscriptionStatusDisplay(subscriptionStatus).text}
-                          </span>
+                    ) : (
+                      <div className="flex items-center">
+                        <Users className="h-5 w-5 mr-2" />
+                        <div className="flex-1">
+                          <p>
+                            <span className="font-medium">Cliente:</span>{" "}
+                            {clientName}
+                          </p>
+                          <div className="flex items-center mt-1">
+                            <span className="font-medium mr-2">Status:</span>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium flex items-center ${
+                                getSubscriptionStatusDisplay(subscriptionStatus)
+                                  .className
+                              }`}
+                            >
+                              {
+                                getSubscriptionStatusDisplay(subscriptionStatus)
+                                  .icon
+                              }
+                              {
+                                getSubscriptionStatusDisplay(subscriptionStatus)
+                                  .text
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 🔥 Show warning for non-active subscriptions */}
+                  {subscriptionStatus !== "active" && (
+                    <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-4">
+                      <div className="flex items-center">
+                        <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+                        <div>
+                          <p className="text-red-700 font-medium">
+                            Não é possível registrar consulta
+                          </p>
+                          <p className="text-red-600 text-sm">
+                            {subscriptionStatus === "pending"
+                              ? "O cliente precisa regularizar sua situação cadastral com o convênio."
+                              : "O cliente precisa renovar sua assinatura para continuar utilizando os serviços."}
+                          </p>
                         </div>
                       </div>
                     </div>
                   )}
-                </div>
 
-                {/* 🔥 Show warning for non-active subscriptions */}
-                {subscriptionStatus !== 'active' && (
-                  <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-4">
-                    <div className="flex items-center">
-                      <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
+                  {/* Show dependents selection only if client was found directly and has active subscription */}
+                  {!foundDependent &&
+                    dependents.length > 0 &&
+                    subscriptionStatus === "active" && (
                       <div>
-                        <p className="text-red-700 font-medium">
-                          Não é possível registrar consulta
-                        </p>
-                        <p className="text-red-600 text-sm">
-                          {subscriptionStatus === 'pending' 
-                            ? 'O cliente precisa regularizar sua situação cadastral com o convênio.'
-                            : 'O cliente precisa renovar sua assinatura para continuar utilizando os serviços.'
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Selecionar Dependente (opcional)
+                        </label>
+                        <select
+                          value={selectedDependentId || ""}
+                          onChange={(e) =>
+                            setSelectedDependentId(
+                              e.target.value ? Number(e.target.value) : null
+                            )
                           }
-                        </p>
+                          className="input"
+                        >
+                          <option value="">Consulta para o titular</option>
+                          {dependents.map((dependent) => (
+                            <option key={dependent.id} value={dependent.id}>
+                              {dependent.name} (CPF:{" "}
+                              {dependent.cpf.replace(
+                                /(\d{3})(\d{3})(\d{3})(\d{2})/,
+                                "$1.$2.$3-$4"
+                              )}
+                              )
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Show dependents selection only if client was found directly and has active subscription */}
-                {!foundDependent && dependents.length > 0 && subscriptionStatus === 'active' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Selecionar Dependente (opcional)
-                    </label>
-                    <select
-                      value={selectedDependentId || ''}
-                      onChange={(e) => setSelectedDependentId(e.target.value ? Number(e.target.value) : null)}
-                      className="input"
-                    >
-                      <option value="">Consulta para o titular</option>
-                      {dependents.map((dependent) => (
-                        <option key={dependent.id} value={dependent.id}>
-                          {dependent.name} (CPF: {dependent.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
+                    )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="mb-6">
@@ -822,7 +936,7 @@ const RegisterConsultationPage: React.FC = () => {
                   <User className="h-5 w-5 mr-2 text-red-600" />
                   Selecionar Paciente Particular
                 </h2>
-                
+
                 <button
                   type="button"
                   onClick={openCreatePatientModal}
@@ -832,9 +946,12 @@ const RegisterConsultationPage: React.FC = () => {
                   Novo Paciente
                 </button>
               </div>
-              
+
               <div>
-                <label htmlFor="privatePatient" className="block text-sm font-medium text-gray-700 mb-1">
+                <label
+                  htmlFor="privatePatient"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
                   Paciente *
                 </label>
                 <select
@@ -848,31 +965,40 @@ const RegisterConsultationPage: React.FC = () => {
                   <option value="">Selecione um paciente</option>
                   {privatePatients.map((patient) => (
                     <option key={patient.id} value={patient.id}>
-                      {patient.name} - CPF: {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                      {patient.name} - CPF:{" "}
+                      {patient.cpf.replace(
+                        /(\d{3})(\d{3})(\d{3})(\d{2})/,
+                        "$1.$2.$3-$4"
+                      )}
                     </option>
                   ))}
                 </select>
-                
+
                 {privatePatients.length === 0 && (
                   <p className="text-sm text-gray-500 mt-1">
-                    Nenhum paciente particular cadastrado. Clique em "Novo Paciente" para adicionar.
+                    Nenhum paciente particular cadastrado. Clique em "Novo
+                    Paciente" para adicionar.
                   </p>
                 )}
               </div>
             </div>
           )}
-          
+
           {/* Only show consultation details if subscription is active */}
-          {(patientType === 'particular' && selectedPrivatePatient) || (patientType === 'convenio' && subscriptionStatus === 'active') ? (
+          {(patientType === "particular" && selectedPrivatePatient) ||
+          (patientType === "convenio" && subscriptionStatus === "active") ? (
             <div className="mb-6">
               <h2 className="text-lg font-semibold mb-3 flex items-center">
                 <Calendar className="h-5 w-5 mr-2 text-red-600" />
                 Detalhes da Consulta
               </h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="category"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Categoria do Serviço
                   </label>
                   <select
@@ -891,14 +1017,17 @@ const RegisterConsultationPage: React.FC = () => {
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
-                  <label htmlFor="service" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="service"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Serviço
                   </label>
                   <select
                     id="service"
-                    value={serviceId || ''}
+                    value={serviceId || ""}
                     onChange={handleServiceChange}
                     className="input"
                     disabled={isLoading || !categoryId}
@@ -907,14 +1036,21 @@ const RegisterConsultationPage: React.FC = () => {
                     <option value="">Selecione um serviço</option>
                     {filteredServices.map((service) => (
                       <option key={service.id} value={service.id}>
-                        {service.name} - {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(service.base_price)}
+                        {service.name} -{" "}
+                        {new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(service.base_price)}
                       </option>
                     ))}
                   </select>
                 </div>
-                
+
                 <div>
-                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="location"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Local de Atendimento
                   </label>
                   <select
@@ -927,7 +1063,7 @@ const RegisterConsultationPage: React.FC = () => {
                     <option value="">Selecione um local</option>
                     {attendanceLocations.map((location) => (
                       <option key={location.id} value={location.id}>
-                        {location.name} {location.is_default && '(Padrão)'}
+                        {location.name} {location.is_default && "(Padrão)"}
                       </option>
                     ))}
                   </select>
@@ -937,9 +1073,12 @@ const RegisterConsultationPage: React.FC = () => {
                     </p>
                   )}
                 </div>
-                
+
                 <div>
-                  <label htmlFor="value" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="value"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Valor (R$)
                   </label>
                   <input
@@ -954,9 +1093,12 @@ const RegisterConsultationPage: React.FC = () => {
                     required
                   />
                 </div>
-                
+
                 <div>
-                  <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="date"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Data
                   </label>
                   <input
@@ -969,9 +1111,12 @@ const RegisterConsultationPage: React.FC = () => {
                     required
                   />
                 </div>
-                
+
                 <div>
-                  <label htmlFor="time" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    htmlFor="time"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
                     Hora
                   </label>
                   <input
@@ -987,49 +1132,54 @@ const RegisterConsultationPage: React.FC = () => {
               </div>
             </div>
           ) : null}
-          
+
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => navigate('/professional')}
+              onClick={() => navigate("/professional")}
               className="btn btn-secondary mr-2"
               disabled={isLoading}
             >
               Cancelar
             </button>
-            
+
             <button
               type="submit"
               className={`btn btn-primary ${
-                isLoading || 
-                (patientType === 'particular' && !selectedPrivatePatient) ||
-                (patientType === 'convenio' && subscriptionStatus !== 'active')
-                  ? 'opacity-70 cursor-not-allowed' 
-                  : ''
+                isLoading ||
+                (patientType === "particular" && !selectedPrivatePatient) ||
+                (patientType === "convenio" && subscriptionStatus !== "active")
+                  ? "opacity-70 cursor-not-allowed"
+                  : ""
               }`}
               disabled={
-                isLoading || 
-                (patientType === 'particular' && !selectedPrivatePatient) ||
-                (patientType === 'convenio' && subscriptionStatus !== 'active') ||
-                (patientType === 'convenio' && !clientId && !selectedDependentId) || 
-                !serviceId || 
-                !value || 
-                !date || 
+                isLoading ||
+                (patientType === "particular" && !selectedPrivatePatient) ||
+                (patientType === "convenio" &&
+                  subscriptionStatus !== "active") ||
+                (patientType === "convenio" &&
+                  !clientId &&
+                  !selectedDependentId) ||
+                !serviceId ||
+                !value ||
+                !date ||
                 !time
               }
             >
-              {isLoading ? 'Registrando...' : 'Registrar Consulta'}
+              {isLoading ? "Registrando..." : "Registrar Consulta"}
             </button>
           </div>
         </form>
       </div>
-      
+
       {/* Create Private Patient Modal */}
       {showCreatePatientModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-xl font-bold">Cadastrar Novo Paciente Particular</h2>
+              <h2 className="text-xl font-bold">
+                Cadastrar Novo Paciente Particular
+              </h2>
               <button
                 onClick={closeCreatePatientModal}
                 className="text-gray-500 hover:text-gray-700"
@@ -1068,7 +1218,14 @@ const RegisterConsultationPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={newPatientData.cpf ? newPatientData.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : ''}
+                    value={
+                      newPatientData.cpf
+                        ? newPatientData.cpf.replace(
+                            /(\d{3})(\d{3})(\d{3})(\d{2})/,
+                            "$1.$2.$3-$4"
+                          )
+                        : ""
+                    }
                     onChange={(e) => formatNewPatientCpf(e.target.value)}
                     className="input"
                     placeholder="000.000.000-00"
@@ -1097,7 +1254,14 @@ const RegisterConsultationPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={newPatientData.phone ? newPatientData.phone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : ''}
+                    value={
+                      newPatientData.phone
+                        ? newPatientData.phone.replace(
+                            /(\d{2})(\d{5})(\d{4})/,
+                            "($1) $2-$3"
+                          )
+                        : ""
+                    }
                     onChange={(e) => formatNewPatientPhone(e.target.value)}
                     className="input"
                     placeholder="(00) 00000-0000"
@@ -1125,7 +1289,14 @@ const RegisterConsultationPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={newPatientData.zip_code ? newPatientData.zip_code.replace(/(\d{5})(\d{3})/, '$1-$2') : ''}
+                    value={
+                      newPatientData.zip_code
+                        ? newPatientData.zip_code.replace(
+                            /(\d{5})(\d{3})/,
+                            "$1-$2"
+                          )
+                        : ""
+                    }
                     onChange={(e) => formatNewPatientZipCode(e.target.value)}
                     className="input"
                     placeholder="00000-000"
@@ -1258,10 +1429,12 @@ const RegisterConsultationPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={createPrivatePatient}
-                  className={`btn btn-primary ${isCreatingPatient ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  className={`btn btn-primary ${
+                    isCreatingPatient ? "opacity-70 cursor-not-allowed" : ""
+                  }`}
                   disabled={isCreatingPatient}
                 >
-                  {isCreatingPatient ? 'Criando...' : 'Criar Paciente'}
+                  {isCreatingPatient ? "Criando..." : "Criar Paciente"}
                 </button>
               </div>
             </div>
