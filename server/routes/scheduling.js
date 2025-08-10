@@ -1,7 +1,22 @@
-const express = require('express');
-const { pool } = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+import express from 'express';
+import { pool } from '../db.js';
+import { authenticate, authorize } from '../middleware/auth.js';
+
 const router = express.Router();
+
+// Helper function to safely parse roles
+const parseRoles = (roles) => {
+  if (!roles) return [];
+  if (Array.isArray(roles)) return roles;
+  if (typeof roles === 'string') {
+    try {
+      return JSON.parse(roles);
+    } catch (e) {
+      return roles.includes(',') ? roles.split(',').map(r => r.trim()) : [roles];
+    }
+  }
+  return [roles];
+};
 
 // Get professional's schedule settings
 router.get('/settings', authenticate, authorize(['professional']), async (req, res) => {
@@ -50,8 +65,8 @@ router.put('/settings', authenticate, authorize(['professional']), async (req, r
 
     const result = await pool.query(
       `INSERT INTO professional_schedule_settings 
-       (professional_id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (professional_id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration, has_scheduling_subscription)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
        ON CONFLICT (professional_id) 
        DO UPDATE SET 
          work_days = $2,
@@ -60,6 +75,7 @@ router.put('/settings', authenticate, authorize(['professional']), async (req, r
          break_start_time = $5,
          break_end_time = $6,
          consultation_duration = $7,
+         has_scheduling_subscription = true,
          updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
       [req.user.id, work_days, work_start_time, work_end_time, break_start_time, break_end_time, consultation_duration]
@@ -190,4 +206,4 @@ router.delete('/appointments/:id', authenticate, authorize(['professional']), as
   }
 });
 
-module.exports = router;
+export default router;

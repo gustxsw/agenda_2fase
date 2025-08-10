@@ -1,7 +1,31 @@
-const express = require('express');
-const { pool } = require('../db');
-const { authenticate, authorize } = require('../middleware/auth');
+import express from 'express';
+import { pool } from '../db.js';
+import { authenticate, authorize } from '../middleware/auth.js';
+
 const router = express.Router();
+
+// Get medical records for current professional
+router.get('/', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT mr.*, 
+              COALESCE(pp.name, c.name, d.name) as patient_name,
+              COALESCE(pp.cpf, c.cpf, d.cpf) as patient_cpf
+       FROM medical_records mr
+       LEFT JOIN private_patients pp ON mr.private_patient_id = pp.id
+       LEFT JOIN users c ON mr.client_id = c.id
+       LEFT JOIN dependents d ON mr.dependent_id = d.id
+       WHERE mr.professional_id = $1
+       ORDER BY mr.created_at DESC`,
+      [req.user.id]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching medical records:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
 
 // Get medical records for a patient
 router.get('/patient/:patientId/:patientType', authenticate, authorize(['professional']), async (req, res) => {
@@ -162,4 +186,4 @@ router.delete('/:id', authenticate, authorize(['professional']), async (req, res
   }
 });
 
-module.exports = router;
+export default router;
