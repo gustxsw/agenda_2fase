@@ -110,6 +110,16 @@ const MedicalRecordsPage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
+      // Fetch medical records
+      const recordsResponse = await fetch(`${apiUrl}/api/medical-records`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (recordsResponse.ok) {
+        const recordsData = await recordsResponse.json();
+        setRecords(recordsData);
+      }
+
       // Fetch patients
       const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -119,10 +129,6 @@ const MedicalRecordsPage: React.FC = () => {
         const patientsData = await patientsResponse.json();
         setPatients(patientsData);
       }
-
-      // For now, we'll simulate medical records since we need to implement the endpoint
-      // In a real implementation, you would fetch from /api/medical-records
-      setRecords([]);
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Não foi possível carregar os dados');
@@ -255,39 +261,48 @@ const MedicalRecordsPage: React.FC = () => {
   };
 
   const confirmDelete = (record: MedicalRecord) => {
-    setRecordToDelete(record);
+    if (!record) return;
+    
+    const recordToDelete = record;
     setShowDeleteConfirm(true);
+    
+    // Create a simple confirmation function
+    const deleteRecord = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const apiUrl = getApiUrl();
+
+        const response = await fetch(`${apiUrl}/api/medical-records/${recordToDelete.id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Erro ao excluir prontuário');
+        }
+
+        await fetchData();
+        setSuccess('Prontuário excluído com sucesso!');
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'Erro ao excluir prontuário');
+      } finally {
+        setShowDeleteConfirm(false);
+      }
+    };
+    
+    // Store the delete function for the modal
+    (window as any).confirmDeleteRecord = deleteRecord;
   };
 
   const cancelDelete = () => {
-    setRecordToDelete(null);
     setShowDeleteConfirm(false);
+    delete (window as any).confirmDeleteRecord;
   };
 
-  const deleteRecord = async () => {
-    if (!recordToDelete) return;
-
-    try {
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-
-      const response = await fetch(`${apiUrl}/api/medical-records/${recordToDelete.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Erro ao excluir prontuário');
-      }
-
-      await fetchData();
-      setSuccess('Prontuário excluído com sucesso!');
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Erro ao excluir prontuário');
-    } finally {
-      setRecordToDelete(null);
-      setShowDeleteConfirm(false);
+  const executeDelete = () => {
+    if ((window as any).confirmDeleteRecord) {
+      (window as any).confirmDeleteRecord();
     }
   };
 
@@ -837,7 +852,7 @@ const MedicalRecordsPage: React.FC = () => {
       )}
 
       {/* Delete confirmation modal */}
-      {showDeleteConfirm && recordToDelete && (
+      {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md p-6">
             <h2 className="text-xl font-bold mb-4">Confirmar Exclusão</h2>
@@ -856,7 +871,7 @@ const MedicalRecordsPage: React.FC = () => {
                 Cancelar
               </button>
               <button
-                onClick={deleteRecord}
+                onClick={executeDelete}
                 className="btn bg-red-600 text-white hover:bg-red-700 flex items-center"
               >
                 <Check className="h-4 w-4 mr-2" />

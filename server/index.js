@@ -9,6 +9,16 @@ import { pool } from "./db.js";
 import { authenticate, authorize } from "./middleware/auth.js";
 import createUpload from "./middleware/upload.js";
 import dotenv from "dotenv";
+import authRoutes from './routes/auth.js';
+import usersRoutes from './routes/users.js';
+import professionalsRoutes from './routes/professionals.js';
+import clientsRoutes from './routes/clients.js';
+import schedulingRoutes from './routes/scheduling.js';
+import medicalRecordsRoutes from './routes/medicalRecords.js';
+import privatePatients from './routes/privatePatients.js';
+import attendanceLocationsRoutes from './routes/attendanceLocations.js';
+import consultationsRoutes from './routes/consultations.js';
+import reportsRoutes from './routes/reports.js';
 
 // ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -584,6 +594,18 @@ if (MercadoPagoConfig && process.env.MP_ACCESS_TOKEN) {
     },
   });
 }
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/professionals', professionalsRoutes);
+app.use('/api/clients', clientsRoutes);
+app.use('/api/scheduling', schedulingRoutes);
+app.use('/api/medical-records', medicalRecordsRoutes);
+app.use('/api/private-patients', privatePatients);
+app.use('/api/attendance-locations', attendanceLocationsRoutes);
+app.use('/api/consultations', consultationsRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Auth routes
 app.post("/api/auth/login", async (req, res) => {
