@@ -849,10 +849,6 @@ const RegisterConsultationPage: React.FC = () => {
           </div>
         </form>
       </div>
-              </div>
-            </div>
-          </div>
-    </div>
   );
 };
 
