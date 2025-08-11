@@ -261,48 +261,39 @@ const MedicalRecordsPage: React.FC = () => {
   };
 
   const confirmDelete = (record: MedicalRecord) => {
-    if (!record) return;
-    
-    const recordToDelete = record;
+    setRecordToDelete(record);
     setShowDeleteConfirm(true);
-    
-    // Create a simple confirmation function
-    const deleteRecord = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const apiUrl = getApiUrl();
-
-        const response = await fetch(`${apiUrl}/api/medical-records/${recordToDelete.id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Erro ao excluir prontuário');
-        }
-
-        await fetchData();
-        setSuccess('Prontuário excluído com sucesso!');
-      } catch (error) {
-        setError(error instanceof Error ? error.message : 'Erro ao excluir prontuário');
-      } finally {
-        setShowDeleteConfirm(false);
-      }
-    };
-    
-    // Store the delete function for the modal
-    (window as any).confirmDeleteRecord = deleteRecord;
   };
 
   const cancelDelete = () => {
+    setRecordToDelete(null);
     setShowDeleteConfirm(false);
-    delete (window as any).confirmDeleteRecord;
   };
 
-  const executeDelete = () => {
-    if ((window as any).confirmDeleteRecord) {
-      (window as any).confirmDeleteRecord();
+  const deleteRecord = async () => {
+    if (!recordToDelete) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/api/medical-records/${recordToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao excluir prontuário');
+      }
+
+      await fetchData();
+      setSuccess('Prontuário excluído com sucesso!');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Erro ao excluir prontuário');
+    } finally {
+      setRecordToDelete(null);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -871,7 +862,7 @@ const MedicalRecordsPage: React.FC = () => {
                 Cancelar
               </button>
               <button
-                onClick={executeDelete}
+                onClick={deleteRecord}
                 className="btn bg-red-600 text-white hover:bg-red-700 flex items-center"
               >
                 <Check className="h-4 w-4 mr-2" />

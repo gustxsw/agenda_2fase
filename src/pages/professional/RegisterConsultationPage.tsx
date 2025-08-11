@@ -669,7 +669,7 @@ const RegisterConsultationPage: React.FC = () => {
           </div>
 
           {/* Only show consultation details if subscription is active */}
-          {subscriptionStatus === "active" ? (
+          {subscriptionStatus === "active" && (
             <div className="mb-6">
               <h2 className="text-lg font-semibold mb-3 flex items-center">
                 <Calendar className="h-5 w-5 mr-2 text-red-600" />
@@ -814,7 +814,7 @@ const RegisterConsultationPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          ) : null}
+          )}
 
           <div className="flex justify-end">
             <button

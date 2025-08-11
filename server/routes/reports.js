@@ -257,7 +257,7 @@ router.get('/professionals-by-city', authenticate, authorize(['admin']), async (
     const processedData = result.rows.map(row => {
       const categoryMap = new Map();
       
-      row.categories_raw.forEach((cat: any) => {
+      row.categories_raw.forEach((cat) => {
         const name = cat.category_name;
         if (categoryMap.has(name)) {
           categoryMap.set(name, categoryMap.get(name) + 1);
