@@ -18,6 +18,11 @@ import medicalRecordsRoutes from './routes/medicalRecords.js';
 import privatePatients from './routes/privatePatients.js';
 import attendanceLocationsRoutes from './routes/attendanceLocations.js';
 import consultationsRoutes from './routes/consultations.js';
+import schedulingRoutes from './routes/scheduling.js';
+import medicalRecordsRoutes from './routes/medicalRecords.js';
+import privatePatientsRoutes from './routes/privatePatients.js';
+import attendanceLocationsRoutes from './routes/attendanceLocations.js';
+import reportsRoutes from './routes/reports.js';
 import reportsRoutes from './routes/reports.js';
 
 // ES module compatibility
@@ -605,6 +610,11 @@ app.use('/api/medical-records', medicalRecordsRoutes);
 app.use('/api/private-patients', privatePatients);
 app.use('/api/attendance-locations', attendanceLocationsRoutes);
 app.use('/api/consultations', consultationsRoutes);
+app.use('/api/scheduling', schedulingRoutes);
+app.use('/api/medical-records', medicalRecordsRoutes);
+app.use('/api/private-patients', privatePatientsRoutes);
+app.use('/api/attendance-locations', attendanceLocationsRoutes);
+app.use('/api/reports', reportsRoutes);
 app.use('/api/reports', reportsRoutes);
 
 // Auth routes
