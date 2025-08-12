@@ -211,25 +211,23 @@ const DocumentsPage: React.FC = () => {
       const result = await response.json();
       const { title, documentUrl } = result;
 
-      // Clean filename
+      // Clean filename for PDF
       const fileName = title.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
       
-      // Create download link that opens in new tab for mobile compatibility
+      // Create download link for PDF
       const link = document.createElement('a');
       link.href = documentUrl;
+      link.download = `${fileName}.pdf`;
+      
+      // For mobile devices, also open in new tab as fallback
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      
-      // For desktop browsers, try to force download
-      if (window.navigator.userAgent.indexOf('Mobile') === -1) {
-        link.download = `${fileName}.html`;
-      }
       
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      setSuccess('Documento aberto em nova aba. Use Ctrl+S (ou Cmd+S no Mac) para salvar ou imprimir.');
+      setSuccess('Documento PDF gerado e baixado com sucesso!');
       await fetchData();
 
       setTimeout(() => {
@@ -529,9 +527,9 @@ const DocumentsPage: React.FC = () => {
                           </a>
                           <a
                             href={document.document_url}
-                            download
+                            download={`${document.title.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_')}.pdf`}
                             className="text-green-600 hover:text-green-900"
-                            title="Download"
+                            title="Download PDF"
                           >
                             <Download className="h-4 w-4" />
                           </a>

@@ -2649,7 +2649,7 @@ app.post('/api/medical-documents', authenticate, authorize(['professional']), as
       return res.status(400).json({ 
         message: 'É necessário especificar um paciente' 
       });
-    }
+    // Generate PDF document using the utility function
 
     // Get patient information for the template
     let patientInfo = {};
@@ -2726,7 +2726,7 @@ app.post('/api/medical-documents', authenticate, authorize(['professional']), as
     res.status(201).json({
       message: 'Documento criado com sucesso',
       document: insertResult.rows[0]
-    });
+      title: `${title}.pdf`,
   } catch (error) {
     console.error('❌ Error creating medical document:', error);
     res.status(500).json({ 

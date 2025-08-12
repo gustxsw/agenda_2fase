@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary';
+import puppeteer from 'puppeteer';
 
 // Document templates
 const templates = {
@@ -835,7 +836,7 @@ ${data.content}
 </html>`
 };
 
-// Generate HTML document and upload to Cloudinary
+// Generate PDF document and upload to Cloudinary
 export const generateDocumentPDF = async (documentType, templateData) => {
   try {
     console.log('🔄 Generating document:', { documentType, templateData });
@@ -846,29 +847,69 @@ export const generateDocumentPDF = async (documentType, templateData) => {
     // Generate HTML content
     const htmlContent = templateFunction(templateData);
     
-    console.log('✅ HTML content generated, length:', htmlContent.length);
+    console.log('✅ HTML content generated, converting to PDF...');
     
-    // Upload HTML to Cloudinary as raw file (will be converted to PDF on download)
+    // Launch Puppeteer to convert HTML to PDF
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu'
+      ]
+    });
+    
+    const page = await browser.newPage();
+    
+    // Set content and wait for it to load
+    await page.setContent(htmlContent, { 
+      waitUntil: 'networkidle0',
+      timeout: 30000 
+    });
+    
+    // Generate PDF with professional settings
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '20mm',
+        right: '20mm',
+        bottom: '20mm',
+        left: '20mm'
+      },
+      preferCSSPageSize: true
+    });
+    
+    await browser.close();
+    
+    console.log('✅ PDF generated, size:', pdfBuffer.length, 'bytes');
+    
+    // Upload PDF to Cloudinary
     const uploadResult = await cloudinary.uploader.upload(
-      `data:text/html;base64,${Buffer.from(htmlContent).toString('base64')}`,
+      `data:application/pdf;base64,${pdfBuffer.toString('base64')}`,
       {
         folder: 'quiro-ferreira/documents',
         resource_type: 'raw',
-        format: 'html',
+        format: 'pdf',
         public_id: `document_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         use_filename: false,
         unique_filename: true
       }
     );
     
-    console.log('✅ Document uploaded to Cloudinary:', uploadResult.secure_url);
+    console.log('✅ PDF uploaded to Cloudinary:', uploadResult.secure_url);
     
     return {
       url: uploadResult.secure_url,
       public_id: uploadResult.public_id
     };
   } catch (error) {
-    console.error('❌ Error generating document:', error);
-    throw new Error(`Erro ao gerar documento: ${error.message}`);
+    console.error('❌ Error generating PDF document:', error);
+    throw new Error(`Erro ao gerar documento PDF: ${error.message}`);
   }
 };
