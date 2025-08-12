@@ -177,30 +177,28 @@ const DocumentsPage: React.FC = () => {
 
   const closeModal = () => {
     setShowCreateModal(false);
-    setError('');
-    setSuccess('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsCreating(true);
     setError('');
     setSuccess('');
 
     try {
-      setIsCreating(true);
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
       const response = await fetch(`${apiUrl}/api/medical-documents`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          private_patient_id: formData.patient_type === 'private' ? parseInt(formData.patient_id) : null,
-          document_type: formData.document_type,
           title: formData.title,
+          document_type: formData.document_type,
+          private_patient_id: formData.patient_type === 'private' ? parseInt(formData.patient_id) : null,
           template_data: formData
         })
       });
@@ -210,7 +208,28 @@ const DocumentsPage: React.FC = () => {
         throw new Error(errorData.message || 'Erro ao criar documento');
       }
 
-      setSuccess('Documento criado com sucesso!');
+      const result = await response.json();
+      const { title, documentUrl } = result;
+
+      // Clean filename
+      const fileName = title.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+      
+      // Create download link that opens in new tab for mobile compatibility
+      const link = document.createElement('a');
+      link.href = documentUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      
+      // For desktop browsers, try to force download
+      if (window.navigator.userAgent.indexOf('Mobile') === -1) {
+        link.download = `${fileName}.html`;
+      }
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccess('Documento aberto em nova aba. Use Ctrl+S (ou Cmd+S no Mac) para salvar ou imprimir.');
       await fetchData();
 
       setTimeout(() => {
@@ -599,18 +618,10 @@ const DocumentsPage: React.FC = () => {
                     <option value="">Selecione um paciente</option>
                     {patients.map((patient) => (
                       <option key={patient.id} value={patient.id}>
-                        {patient.name} - {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                        {patient.name} - CPF: {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
                       </option>
                     ))}
                   </select>
-                  {patients.length === 0 && (
-                    <p className="text-sm text-red-600 mt-1">
-                      Nenhum paciente particular cadastrado. 
-                      <a href="/professional/private-patients" className="underline ml-1">
-                        Cadastre um paciente primeiro.
-                      </a>
-                    </p>
-                  )}
                 </div>
 
                 {/* Professional Information */}
