@@ -838,6 +838,9 @@ ${data.content}
 
 // Generate PDF document and upload to Cloudinary
 export const generateDocumentPDF = async (documentType, templateData) => {
+  let browser = null;
+  let page = null;
+  
   try {
     console.log('🔄 Generating document:', { documentType, templateData });
     
@@ -849,45 +852,65 @@ export const generateDocumentPDF = async (documentType, templateData) => {
     
     console.log('✅ HTML content generated, converting to PDF...');
     
-    // Launch Puppeteer to convert HTML to PDF
-    const browser = await puppeteer.launch({
+    // Launch Puppeteer with optimized settings for WebContainer
+    browser = await puppeteer.launch({
       headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
         '--no-first-run',
         '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
-      ]
+        '--disable-gpu',
+        '--disable-extensions',
+        '--disable-default-apps',
+        '--disable-features=TranslateUI',
+        '--disable-ipc-flooding-protection'
+      ],
+      timeout: 30000,
+      protocolTimeout: 30000
     });
     
-    const page = await browser.newPage();
+    page = await browser.newPage();
+    
+    // Set page timeout and viewport
+    await page.setDefaultTimeout(30000);
+    await page.setViewport({ width: 1200, height: 1600 });
     
     // Set content and wait for it to load
     await page.setContent(htmlContent, { 
-      waitUntil: 'networkidle0',
-      timeout: 30000 
+      waitUntil: 'domcontentloaded',
+      timeout: 20000 
     });
+    
+    // Wait a bit for any dynamic content to render
+    await page.waitForTimeout(1000);
     
     // Generate PDF with professional settings
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
+      displayHeaderFooter: false,
       margin: {
         top: '20mm',
         right: '20mm',
         bottom: '20mm',
         left: '20mm'
       },
-      preferCSSPageSize: true
+      preferCSSPageSize: true,
+      timeout: 30000
     });
     
-    await browser.close();
-    
     console.log('✅ PDF generated, size:', pdfBuffer.length, 'bytes');
+    
+    // Validate PDF buffer
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      throw new Error('PDF buffer is empty');
+    }
     
     // Upload PDF to Cloudinary
     const uploadResult = await cloudinary.uploader.upload(
@@ -898,7 +921,8 @@ export const generateDocumentPDF = async (documentType, templateData) => {
         format: 'pdf',
         public_id: `document_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         use_filename: false,
-        unique_filename: true
+        unique_filename: true,
+        timeout: 60000
       }
     );
     
@@ -910,6 +934,29 @@ export const generateDocumentPDF = async (documentType, templateData) => {
     };
   } catch (error) {
     console.error('❌ Error generating PDF document:', error);
-    throw new Error(`Erro ao gerar documento PDF: ${error.message}`);
+    
+    // Provide more specific error messages
+    if (error.message.includes('Target closed') || error.message.includes('Protocol error')) {
+      throw new Error('Erro de timeout na geração do PDF. Tente novamente em alguns segundos.');
+    } else if (error.message.includes('Navigation timeout')) {
+      throw new Error('Timeout ao processar o documento. Verifique o conteúdo e tente novamente.');
+    } else if (error.message.includes('Cloudinary')) {
+      throw new Error('Erro ao fazer upload do documento. Verifique a configuração do Cloudinary.');
+    } else {
+      throw new Error(`Erro ao gerar documento PDF: ${error.message}`);
+    }
+  } finally {
+    // Ensure cleanup happens even if there's an error
+    try {
+      if (page) {
+        await page.close();
+      }
+      if (browser) {
+        await browser.close();
+      }
+    } catch (cleanupError) {
+      console.warn('⚠️ Error during cleanup:', cleanupError.message);
+    }
+  }
   }
 };
