@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Edit, Trash2, Clock, MapPin, User, Users, Search, Filter, X, Check } from 'lucide-react';
+import { Calendar, Plus, Edit, Trash2, Clock, MapPin, User, Users, Search, Filter, X, Check, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
 type Appointment = {
   id: number;
@@ -60,6 +60,13 @@ const SchedulingPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  
+  // Status update modal state
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [appointmentToUpdate, setAppointmentToUpdate] = useState<Appointment | null>(null);
+  const [newStatus, setNewStatus] = useState('');
+  const [statusNotes, setStatusNotes] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -208,8 +215,16 @@ const SchedulingPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const openStatusModal = (appointment: Appointment) => {
+    setAppointmentToUpdate(appointment);
+    setNewStatus(appointment.status);
+    setStatusNotes(appointment.notes || '');
+    setIsStatusModalOpen(true);
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
+    setIsStatusModalOpen(false);
     setError('');
     setSuccess('');
   };
@@ -273,6 +288,53 @@ const SchedulingPage: React.FC = () => {
       }, 1500);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Erro ao salvar agendamento');
+    }
+  };
+
+  const handleStatusUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appointmentToUpdate) return;
+
+    try {
+      setIsUpdatingStatus(true);
+      setError('');
+      setSuccess('');
+
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/api/scheduling/appointments/${appointmentToUpdate.id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          notes: statusNotes
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao atualizar status');
+      }
+
+      const successMessage = newStatus === 'completed' 
+        ? 'Status atualizado e consulta registrada nos relatórios!'
+        : 'Status atualizado com sucesso!';
+      
+      setSuccess(successMessage);
+      await fetchData();
+
+      setTimeout(() => {
+        setIsStatusModalOpen(false);
+        setAppointmentToUpdate(null);
+      }, 1500);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Erro ao atualizar status');
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -341,6 +403,21 @@ const SchedulingPage: React.FC = () => {
         return { text: 'Faltou', className: 'bg-yellow-100 text-yellow-800' };
       default:
         return { text: status, className: 'bg-gray-100 text-gray-800' };
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'scheduled':
+        return <Clock className="h-4 w-4 text-blue-600" />;
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'cancelled':
+        return <XCircle className="h-4 w-4 text-red-600" />;
+      case 'no_show':
+        return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
+      default:
+        return <Clock className="h-4 w-4 text-gray-600" />;
     }
   };
 
@@ -549,9 +626,14 @@ const SchedulingPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}>
-                          {statusInfo.text}
-                        </span>
+                        <button
+                          onClick={() => openStatusModal(appointment)}
+                          className={`px-2 py-1 text-xs font-medium rounded-full flex items-center hover:opacity-80 transition-opacity ${statusInfo.className}`}
+                          title="Clique para alterar status"
+                        >
+                          {getStatusIcon(appointment.status)}
+                          <span className="ml-1">{statusInfo.text}</span>
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-2">
@@ -737,6 +819,110 @@ const SchedulingPage: React.FC = () => {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   {modalMode === 'create' ? 'Criar Agendamento' : 'Salvar Alterações'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Status update modal */}
+      {isStatusModalOpen && appointmentToUpdate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold flex items-center">
+                {getStatusIcon(appointmentToUpdate.status)}
+                <span className="ml-2">Alterar Status</span>
+              </h2>
+            </div>
+
+            {error && (
+              <div className="mx-6 mt-4 bg-red-50 text-red-600 p-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mx-6 mt-4 bg-green-50 text-green-600 p-3 rounded-lg">
+                {success}
+              </div>
+            )}
+
+            <form onSubmit={handleStatusUpdate} className="p-6">
+              <div className="mb-4">
+                <p className="text-gray-700 mb-2">
+                  <span className="font-medium">Paciente:</span> {appointmentToUpdate.patient_name}
+                </p>
+                <p className="text-gray-700 mb-2">
+                  <span className="font-medium">Serviço:</span> {appointmentToUpdate.service_name}
+                </p>
+                <p className="text-gray-700 mb-4">
+                  <span className="font-medium">Data/Hora:</span> {formatDate(appointmentToUpdate.appointment_date)} às {formatTime(appointmentToUpdate.appointment_time)}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Novo Status *
+                  </label>
+                  <select
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value)}
+                    className="input"
+                    required
+                  >
+                    <option value="scheduled">Agendado</option>
+                    <option value="completed">Realizado</option>
+                    <option value="cancelled">Cancelado</option>
+                    <option value="no_show">Faltou</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Observações
+                  </label>
+                  <textarea
+                    value={statusNotes}
+                    onChange={(e) => setStatusNotes(e.target.value)}
+                    className="input min-h-[80px]"
+                    placeholder="Adicione observações sobre o atendimento..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {newStatus === 'completed' && (
+                <div className="bg-green-50 p-4 rounded-lg mt-4">
+                  <div className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                    <div>
+                      <p className="text-green-800 font-medium">Consulta será registrada nos relatórios</p>
+                      <p className="text-green-700 text-sm">
+                        Ao marcar como "Realizado", esta consulta será automaticamente incluída nos seus relatórios financeiros.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="btn btn-secondary"
+                  disabled={isUpdatingStatus}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className={`btn btn-primary ${isUpdatingStatus ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  disabled={isUpdatingStatus}
+                >
+                  {isUpdatingStatus ? 'Atualizando...' : 'Atualizar Status'}
                 </button>
               </div>
             </form>
