@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Edit, Trash2, Clock, MapPin, User, ChevronLeft, ChevronRight, Eye, X, Check } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks, startOfDay, endOfDay } from 'date-fns';
+import { Calendar, Plus, Edit, Trash2, Clock, MapPin, User, ChevronLeft, ChevronRight, Eye, X, Check, AlertCircle } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 type Appointment = {
@@ -50,7 +50,6 @@ const SchedulingPage: React.FC = () => {
   // Calendar state
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
-  const [selectedDate, setSelectedDate] = useState(new Date());
   
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -88,10 +87,7 @@ const SchedulingPage: React.FC = () => {
     return "http://localhost:3001";
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [currentDate, viewMode]);
-
+  // Get date range based on view mode
   const getDateRange = () => {
     switch (viewMode) {
       case 'month':
@@ -112,40 +108,44 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  // Fetch all data
   const fetchData = async () => {
     try {
       setIsLoading(true);
       setError('');
+      
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
       const dateRange = getDateRange();
 
-      console.log('🔄 Fetching appointments with date range:', dateRange);
-      console.log('🔄 API URL:', apiUrl);
+      console.log('🔄 Fetching scheduling data...');
+      console.log('📅 Date range:', dateRange);
+      console.log('🌐 API URL:', apiUrl);
 
-      // Fetch appointments
-      const appointmentsResponse = await fetch(
-        `${apiUrl}/api/scheduling/appointments?start_date=${dateRange.start}&end_date=${dateRange.end}`,
-        {
-          method: 'GET',
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+      // Fetch appointments with date filter
+      const appointmentsUrl = `${apiUrl}/api/scheduling/appointments?start_date=${dateRange.start}&end_date=${dateRange.end}`;
+      console.log('📡 Fetching appointments from:', appointmentsUrl);
+
+      const appointmentsResponse = await fetch(appointmentsUrl, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      );
+      });
 
       console.log('📡 Appointments response status:', appointmentsResponse.status);
 
-      if (appointmentsResponse.ok) {
-        const appointmentsData = await appointmentsResponse.json();
-        console.log('✅ Appointments data received:', appointmentsData);
-        setAppointments(appointmentsData);
-      } else {
+      if (!appointmentsResponse.ok) {
         const errorData = await appointmentsResponse.json();
-        console.error('❌ Error fetching appointments:', errorData);
+        console.error('❌ Appointments error:', errorData);
         throw new Error(errorData.message || 'Erro ao carregar agendamentos');
       }
+
+      const appointmentsData = await appointmentsResponse.json();
+      console.log('✅ Appointments loaded:', appointmentsData.length, 'items');
+      console.log('📋 Sample appointment:', appointmentsData[0]);
+      setAppointments(appointmentsData);
 
       // Fetch private patients
       const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
@@ -158,6 +158,7 @@ const SchedulingPage: React.FC = () => {
 
       if (patientsResponse.ok) {
         const patientsData = await patientsResponse.json();
+        console.log('✅ Private patients loaded:', patientsData.length, 'items');
         setPrivatePatients(patientsData);
       }
 
@@ -172,6 +173,7 @@ const SchedulingPage: React.FC = () => {
 
       if (servicesResponse.ok) {
         const servicesData = await servicesResponse.json();
+        console.log('✅ Services loaded:', servicesData.length, 'items');
         setServices(servicesData);
       }
 
@@ -186,16 +188,24 @@ const SchedulingPage: React.FC = () => {
 
       if (locationsResponse.ok) {
         const locationsData = await locationsResponse.json();
+        console.log('✅ Locations loaded:', locationsData.length, 'items');
         setLocations(locationsData);
       }
+
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
       setError(error instanceof Error ? error.message : 'Não foi possível carregar os dados da agenda');
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Load data when component mounts or date/view changes
+  useEffect(() => {
+    fetchData();
+  }, [currentDate, viewMode]);
+
+  // Status colors and text
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled':
@@ -226,11 +236,13 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  // Get appointments for specific date
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return appointments.filter(apt => apt.appointment_date === dateStr);
   };
 
+  // Calendar navigation
   const navigateCalendar = (direction: 'prev' | 'next') => {
     switch (viewMode) {
       case 'month':
@@ -245,7 +257,10 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  // Modal functions
   const openCreateModal = (date?: Date) => {
+    console.log('🔄 Opening create modal for date:', date);
+    
     setModalMode('create');
     setFormData({
       private_patient_id: '',
@@ -261,6 +276,8 @@ const SchedulingPage: React.FC = () => {
   };
 
   const openEditModal = (appointment: Appointment) => {
+    console.log('🔄 Opening edit modal for appointment:', appointment);
+    
     setModalMode('edit');
     setFormData({
       private_patient_id: appointment.private_patient_id?.toString() || '',
@@ -276,6 +293,7 @@ const SchedulingPage: React.FC = () => {
   };
 
   const openDetailModal = (appointment: Appointment) => {
+    console.log('🔄 Opening detail modal for appointment:', appointment);
     setSelectedAppointment(appointment);
     setIsDetailModalOpen(true);
   };
@@ -287,6 +305,7 @@ const SchedulingPage: React.FC = () => {
     setSuccess('');
   };
 
+  // Form handlers
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -302,6 +321,7 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  // Submit form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -320,10 +340,12 @@ const SchedulingPage: React.FC = () => {
       const method = modalMode === 'create' ? 'POST' : 'PUT';
 
       const requestBody = {
-        ...formData,
         private_patient_id: formData.private_patient_id ? parseInt(formData.private_patient_id) : null,
         service_id: parseInt(formData.service_id),
+        appointment_date: formData.appointment_date,
+        appointment_time: formData.appointment_time,
         location_id: formData.location_id ? parseInt(formData.location_id) : null,
+        notes: formData.notes,
         value: parseFloat(formData.value)
       };
 
@@ -350,6 +372,8 @@ const SchedulingPage: React.FC = () => {
       console.log('✅ Appointment saved:', responseData);
 
       setSuccess(modalMode === 'create' ? 'Agendamento criado com sucesso!' : 'Agendamento atualizado com sucesso!');
+      
+      // Refresh data immediately
       await fetchData();
 
       setTimeout(() => {
@@ -361,6 +385,7 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  // Delete appointment
   const confirmDelete = (appointment: Appointment) => {
     setAppointmentToDelete(appointment);
     setShowDeleteConfirm(true);
@@ -397,6 +422,8 @@ const SchedulingPage: React.FC = () => {
       }
 
       console.log('✅ Appointment deleted successfully');
+      
+      // Refresh data immediately
       await fetchData();
       setSuccess('Agendamento excluído com sucesso!');
     } catch (error) {
@@ -408,6 +435,7 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  // Utility functions
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -419,6 +447,19 @@ const SchedulingPage: React.FC = () => {
     return timeString.slice(0, 5);
   };
 
+  const getViewTitle = () => {
+    switch (viewMode) {
+      case 'month':
+        return format(currentDate, "MMMM 'de' yyyy", { locale: ptBR });
+      case 'week':
+        const weekStart = startOfWeek(currentDate, { locale: ptBR });
+        const weekEnd = endOfWeek(currentDate, { locale: ptBR });
+        return `${format(weekStart, 'd MMM', { locale: ptBR })} - ${format(weekEnd, 'd MMM yyyy', { locale: ptBR })}`;
+      case 'day':
+        return format(currentDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
+    }
+  };
+
   // Render Month View
   const renderMonthView = () => {
     const monthStart = startOfMonth(currentDate);
@@ -426,12 +467,10 @@ const SchedulingPage: React.FC = () => {
     const startDate = startOfWeek(monthStart, { locale: ptBR });
     const endDate = endOfWeek(monthEnd, { locale: ptBR });
 
-    const dateFormat = 'd';
     const rows = [];
     let days = [];
     let day = startDate;
 
-    // Create calendar grid
     while (day <= endDate) {
       for (let i = 0; i < 7; i++) {
         const cloneDay = day;
@@ -449,7 +488,7 @@ const SchedulingPage: React.FC = () => {
               <span className={`text-sm font-medium ${
                 isSameDay(day, new Date()) ? 'text-blue-600' : 'text-gray-900'
               }`}>
-                {format(day, dateFormat)}
+                {format(day, 'd')}
               </span>
               {dayAppointments.length > 0 && (
                 <span className="bg-red-100 text-red-800 text-xs px-1.5 py-0.5 rounded-full">
@@ -649,19 +688,6 @@ const SchedulingPage: React.FC = () => {
     );
   };
 
-  const getViewTitle = () => {
-    switch (viewMode) {
-      case 'month':
-        return format(currentDate, "MMMM 'de' yyyy", { locale: ptBR });
-      case 'week':
-        const weekStart = startOfWeek(currentDate, { locale: ptBR });
-        const weekEnd = endOfWeek(currentDate, { locale: ptBR });
-        return `${format(weekStart, 'd MMM', { locale: ptBR })} - ${format(weekEnd, 'd MMM yyyy', { locale: ptBR })}`;
-      case 'day':
-        return format(currentDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
-    }
-  };
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -748,10 +774,18 @@ const SchedulingPage: React.FC = () => {
             <span className="text-sm text-gray-600">Faltou</span>
           </div>
         </div>
+
+        {/* Debug info */}
+        <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500">
+          <p>📊 Total de agendamentos carregados: {appointments.length}</p>
+          <p>📅 Período atual: {getDateRange().start} até {getDateRange().end}</p>
+        </div>
       </div>
 
+      {/* Error and Success Messages */}
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
           {error}
         </div>
       )}
