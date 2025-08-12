@@ -2088,14 +2088,6 @@ app.get('/api/consultations', authenticate, async (req, res) => {
                prof.name as professional_name
         FROM consultations c
         LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
-        LEFT JOIN users u ON c.client_id = u.id
-        LEFT JOIN dependents d ON c.dependent_id = d.id
-        LEFT JOIN services s ON c.service_id = s.id
-        LEFT JOIN users prof ON c.professional_id = prof.id
-        WHERE c.client_id = $1 OR c.dependent_id IN (
-          SELECT id FROM dependents WHERE client_id = $1
-        )
-        ORDER BY c.date DESC
       `;
       params = [req.user.id];
     } else if (req.user.currentRole === 'professional') {
@@ -2107,13 +2099,21 @@ app.get('/api/consultations', authenticate, async (req, res) => {
                  ELSE false 
                END as is_dependent,
                s.name as service_name,
-               prof.name as professional_name
-        FROM consultations c
+          u.percentage,
+          CASE 
+            WHEN c.private_patient_id IS NOT NULL THEN c.value
+            ELSE (c.value * COALESCE(u.percentage, 50)::decimal / 100.0)
+          END as professional_amount,
+          CASE 
+            WHEN c.private_patient_id IS NOT NULL THEN 0
+            ELSE (c.value * (100 - COALESCE(u.percentage, 50)::decimal) / 100.0)
+          END as amount_to_pay
         LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
         LEFT JOIN users u ON c.client_id = u.id
         LEFT JOIN dependents d ON c.dependent_id = d.id
         LEFT JOIN services s ON c.service_id = s.id
         LEFT JOIN users prof ON c.professional_id = prof.id
+        LEFT JOIN users u ON c.professional_id = u.id
         WHERE c.professional_id = $1
         ORDER BY c.date DESC
       `;
@@ -2626,36 +2626,44 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
              'count', 1
            )
          ) as categories_raw
-       FROM users u
-       LEFT JOIN service_categories sc ON u.category_id = sc.id
+        end_date
        WHERE u.roles::jsonb ? 'professional' 
        AND u.city IS NOT NULL 
        AND u.city != ''
        GROUP BY u.city, u.state
        ORDER BY total_professionals DESC, u.city`
-    );
-
-    const processedData = result.rows.map(row => {
-      const categoryMap = new Map();
+      const totalRevenue = consultations.reduce((sum, c) => sum + Number(c.value), 0);
+      const convenioConsultations = consultations.filter(c => c.private_patient_id === null);
+      const privateConsultations = consultations.filter(c => c.private_patient_id !== null);
       
-      row.categories_raw.forEach((cat) => {
-        const name = cat.category_name;
-        if (categoryMap.has(name)) {
-          categoryMap.set(name, categoryMap.get(name) + 1);
+      const convenioRevenue = convenioConsultations.reduce((sum, c) => sum + Number(c.value), 0);
+      const privateRevenue = privateConsultations.reduce((sum, c) => sum + Number(c.value), 0);
+      const amountToPay = consultations.reduce((sum, c) => sum + Number(c.amount_to_pay), 0);
+      
+      // Get professional percentage (use first consultation's percentage or default)
+      const professionalPercentage = consultations.length > 0 
+        ? (consultations[0].percentage || 50)
+        : 50;
         } else {
           categoryMap.set(name, 1);
         }
-      });
+          professional_percentage: Number(professionalPercentage),
 
-      const categories = Array.from(categoryMap.entries()).map(([name, count]) => ({
+          convenio_revenue: convenioRevenue,
+          private_revenue: privateRevenue,
+          consultation_count: Number(consultations.length),
+          convenio_consultations: convenioConsultations.length,
+          private_consultations: privateConsultations.length,
         category_name: name,
         count: count
       }));
 
       return {
         city: row.city,
-        state: row.state,
-        total_professionals: parseInt(row.total_professionals),
+          total_value: Number(c.value),
+          professional_amount: Number(c.professional_amount),
+          amount_to_pay: Number(c.amount_to_pay),
+          is_private: c.private_patient_id !== null
         categories: categories
       };
     });
