@@ -1,5 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Stethoscope, Plus, Search, User, Calendar, FileText, Edit, Trash2, Eye, X, Check } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import {
+  Stethoscope,
+  Plus,
+  Search,
+  User,
+  Calendar,
+  FileText,
+  Edit,
+  Trash2,
+  Eye,
+  X,
+  Check,
+} from "lucide-react";
 
 type MedicalRecord = {
   id: number;
@@ -28,44 +40,48 @@ const MedicalRecordsPage: React.FC = () => {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [patients, setPatients] = useState<PrivatePatient[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPatient, setSelectedPatient] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPatient, setSelectedPatient] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
-  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
-  
+  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(
+    null
+  );
+
   // Form state
   const [formData, setFormData] = useState({
-    private_patient_id: '',
-    chief_complaint: '',
-    history_present_illness: '',
-    past_medical_history: '',
-    medications: '',
-    allergies: '',
-    physical_examination: '',
-    diagnosis: '',
-    treatment_plan: '',
-    notes: '',
+    private_patient_id: "",
+    chief_complaint: "",
+    history_present_illness: "",
+    past_medical_history: "",
+    medications: "",
+    allergies: "",
+    physical_examination: "",
+    diagnosis: "",
+    treatment_plan: "",
+    notes: "",
     vital_signs: {
-      blood_pressure: '',
-      heart_rate: '',
-      temperature: '',
-      respiratory_rate: '',
-      oxygen_saturation: '',
-      weight: '',
-      height: ''
-    }
+      blood_pressure: "",
+      heart_rate: "",
+      temperature: "",
+      respiratory_rate: "",
+      oxygen_saturation: "",
+      weight: "",
+      height: "",
+    },
   });
-  
+
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<MedicalRecord | null>(null);
+  const [recordToDelete, setRecordToDelete] = useState<MedicalRecord | null>(
+    null
+  );
 
   // Get API URL
   const getApiUrl = () => {
@@ -86,18 +102,25 @@ const MedicalRecordsPage: React.FC = () => {
     let filtered = records;
 
     if (searchTerm) {
-      filtered = filtered.filter(record =>
-        record.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.chief_complaint.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        record.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        (record) =>
+          record.patient_name
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          record.chief_complaint
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          record.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (selectedPatient) {
       // This would need to be implemented based on patient ID
       // For now, we'll filter by patient name
-      filtered = filtered.filter(record =>
-        record.patient_name === patients.find(p => p.id.toString() === selectedPatient)?.name
+      filtered = filtered.filter(
+        (record) =>
+          record.patient_name ===
+          patients.find((p) => p.id.toString() === selectedPatient)?.name
       );
     }
 
@@ -107,12 +130,12 @@ const MedicalRecordsPage: React.FC = () => {
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
       // Fetch medical records
       const recordsResponse = await fetch(`${apiUrl}/api/medical-records`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (recordsResponse.ok) {
@@ -122,7 +145,7 @@ const MedicalRecordsPage: React.FC = () => {
 
       // Fetch patients
       const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (patientsResponse.ok) {
@@ -130,62 +153,62 @@ const MedicalRecordsPage: React.FC = () => {
         setPatients(patientsData);
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
-      setError('Não foi possível carregar os dados');
+      console.error("Error fetching data:", error);
+      setError("Não foi possível carregar os dados");
     } finally {
       setIsLoading(false);
     }
   };
 
   const openCreateModal = () => {
-    setModalMode('create');
+    setModalMode("create");
     setFormData({
-      private_patient_id: '',
-      chief_complaint: '',
-      history_present_illness: '',
-      past_medical_history: '',
-      medications: '',
-      allergies: '',
-      physical_examination: '',
-      diagnosis: '',
-      treatment_plan: '',
-      notes: '',
+      private_patient_id: "",
+      chief_complaint: "",
+      history_present_illness: "",
+      past_medical_history: "",
+      medications: "",
+      allergies: "",
+      physical_examination: "",
+      diagnosis: "",
+      treatment_plan: "",
+      notes: "",
       vital_signs: {
-        blood_pressure: '',
-        heart_rate: '',
-        temperature: '',
-        respiratory_rate: '',
-        oxygen_saturation: '',
-        weight: '',
-        height: ''
-      }
+        blood_pressure: "",
+        heart_rate: "",
+        temperature: "",
+        respiratory_rate: "",
+        oxygen_saturation: "",
+        weight: "",
+        height: "",
+      },
     });
     setSelectedRecord(null);
     setIsModalOpen(true);
   };
 
   const openEditModal = (record: MedicalRecord) => {
-    setModalMode('edit');
+    setModalMode("edit");
     setFormData({
-      private_patient_id: '', // Would need to be set based on the record
-      chief_complaint: record.chief_complaint || '',
-      history_present_illness: record.history_present_illness || '',
-      past_medical_history: record.past_medical_history || '',
-      medications: record.medications || '',
-      allergies: record.allergies || '',
-      physical_examination: record.physical_examination || '',
-      diagnosis: record.diagnosis || '',
-      treatment_plan: record.treatment_plan || '',
-      notes: record.notes || '',
+      private_patient_id: "", // Would need to be set based on the record
+      chief_complaint: record.chief_complaint || "",
+      history_present_illness: record.history_present_illness || "",
+      past_medical_history: record.past_medical_history || "",
+      medications: record.medications || "",
+      allergies: record.allergies || "",
+      physical_examination: record.physical_examination || "",
+      diagnosis: record.diagnosis || "",
+      treatment_plan: record.treatment_plan || "",
+      notes: record.notes || "",
       vital_signs: record.vital_signs || {
-        blood_pressure: '',
-        heart_rate: '',
-        temperature: '',
-        respiratory_rate: '',
-        oxygen_saturation: '',
-        weight: '',
-        height: ''
-      }
+        blood_pressure: "",
+        heart_rate: "",
+        temperature: "",
+        respiratory_rate: "",
+        oxygen_saturation: "",
+        weight: "",
+        height: "",
+      },
     });
     setSelectedRecord(record);
     setIsModalOpen(true);
@@ -199,64 +222,75 @@ const MedicalRecordsPage: React.FC = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setIsViewModalOpen(false);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
     const { name, value } = e.target;
-    
-    if (name.startsWith('vital_signs.')) {
-      const vitalSign = name.split('.')[1];
-      setFormData(prev => ({
+
+    if (name.startsWith("vital_signs.")) {
+      const vitalSign = name.split(".")[1];
+      setFormData((prev) => ({
         ...prev,
         vital_signs: {
           ...prev.vital_signs,
-          [vitalSign]: value
-        }
+          [vitalSign]: value,
+        },
       }));
     } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
-      const url = modalMode === 'create' 
-        ? `${apiUrl}/api/medical-records`
-        : `${apiUrl}/api/medical-records/${selectedRecord?.id}`;
+      const url =
+        modalMode === "create"
+          ? `${apiUrl}/api/medical-records`
+          : `${apiUrl}/api/medical-records/${selectedRecord?.id}`;
 
-      const method = modalMode === 'create' ? 'POST' : 'PUT';
+      const method = modalMode === "create" ? "POST" : "PUT";
 
       const response = await fetch(url, {
         method,
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Erro ao salvar prontuário');
+        throw new Error(errorData.message || "Erro ao salvar prontuário");
       }
 
-      setSuccess(modalMode === 'create' ? 'Prontuário criado com sucesso!' : 'Prontuário atualizado com sucesso!');
+      setSuccess(
+        modalMode === "create"
+          ? "Prontuário criado com sucesso!"
+          : "Prontuário atualizado com sucesso!"
+      );
       await fetchData();
 
       setTimeout(() => {
         closeModal();
       }, 1500);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Erro ao salvar prontuário');
+      setError(
+        error instanceof Error ? error.message : "Erro ao salvar prontuário"
+      );
     }
   };
 
@@ -274,23 +308,28 @@ const MedicalRecordsPage: React.FC = () => {
     if (!recordToDelete) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
-      const response = await fetch(`${apiUrl}/api/medical-records/${recordToDelete.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await fetch(
+        `${apiUrl}/api/medical-records/${recordToDelete.id}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Erro ao excluir prontuário');
+        throw new Error(errorData.message || "Erro ao excluir prontuário");
       }
 
       await fetchData();
-      setSuccess('Prontuário excluído com sucesso!');
+      setSuccess("Prontuário excluído com sucesso!");
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Erro ao excluir prontuário');
+      setError(
+        error instanceof Error ? error.message : "Erro ao excluir prontuário"
+      );
     } finally {
       setRecordToDelete(null);
       setShowDeleteConfirm(false);
@@ -299,12 +338,12 @@ const MedicalRecordsPage: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -312,10 +351,14 @@ const MedicalRecordsPage: React.FC = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Prontuários Médicos</h1>
-          <p className="text-gray-600">Gerencie os prontuários dos seus pacientes</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Prontuários Médicos
+          </h1>
+          <p className="text-gray-600">
+            Gerencie os prontuários dos seus pacientes
+          </p>
         </div>
-        
+
         <button
           onClick={openCreateModal}
           className="btn btn-primary flex items-center"
@@ -374,13 +417,14 @@ const MedicalRecordsPage: React.FC = () => {
           <div className="text-center py-12">
             <Stethoscope className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm || selectedPatient ? 'Nenhum prontuário encontrado' : 'Nenhum prontuário cadastrado'}
+              {searchTerm || selectedPatient
+                ? "Nenhum prontuário encontrado"
+                : "Nenhum prontuário cadastrado"}
             </h3>
             <p className="text-gray-600 mb-4">
               {searchTerm || selectedPatient
-                ? 'Tente ajustar os filtros de busca.'
-                : 'Comece criando o primeiro prontuário médico.'
-              }
+                ? "Tente ajustar os filtros de busca."
+                : "Comece criando o primeiro prontuário médico."}
             </p>
             {!searchTerm && !selectedPatient && (
               <button
@@ -433,12 +477,12 @@ const MedicalRecordsPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
-                        {record.chief_complaint || 'Não informado'}
+                        {record.chief_complaint || "Não informado"}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
-                        {record.diagnosis || 'Não informado'}
+                        {record.diagnosis || "Não informado"}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -486,7 +530,9 @@ const MedicalRecordsPage: React.FC = () => {
           <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold">
-                {modalMode === 'create' ? 'Novo Prontuário' : 'Editar Prontuário'}
+                {modalMode === "create"
+                  ? "Novo Prontuário"
+                  : "Editar Prontuário"}
               </h2>
             </div>
 
@@ -716,7 +762,9 @@ const MedicalRecordsPage: React.FC = () => {
                   Cancelar
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {modalMode === 'create' ? 'Criar Prontuário' : 'Salvar Alterações'}
+                  {modalMode === "create"
+                    ? "Criar Prontuário"
+                    : "Salvar Alterações"}
                 </button>
               </div>
             </form>
@@ -740,33 +788,46 @@ const MedicalRecordsPage: React.FC = () => {
 
             <div className="p-6 space-y-6">
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-gray-900 mb-2">Informações do Paciente</h3>
-                <p><strong>Nome:</strong> {selectedRecord.patient_name}</p>
-                <p><strong>Data do Atendimento:</strong> {formatDate(selectedRecord.created_at)}</p>
+                <h3 className="font-semibold text-gray-900 mb-2">
+                  Informações do Paciente
+                </h3>
+                <p>
+                  <strong>Nome:</strong> {selectedRecord.patient_name}
+                </p>
+                <p>
+                  <strong>Data do Atendimento:</strong>{" "}
+                  {formatDate(selectedRecord.created_at)}
+                </p>
               </div>
 
               {selectedRecord.vital_signs && (
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-2">Sinais Vitais</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">
+                    Sinais Vitais
+                  </h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     {selectedRecord.vital_signs.blood_pressure && (
                       <div>
-                        <strong>PA:</strong> {selectedRecord.vital_signs.blood_pressure}
+                        <strong>PA:</strong>{" "}
+                        {selectedRecord.vital_signs.blood_pressure}
                       </div>
                     )}
                     {selectedRecord.vital_signs.heart_rate && (
                       <div>
-                        <strong>FC:</strong> {selectedRecord.vital_signs.heart_rate}
+                        <strong>FC:</strong>{" "}
+                        {selectedRecord.vital_signs.heart_rate}
                       </div>
                     )}
                     {selectedRecord.vital_signs.temperature && (
                       <div>
-                        <strong>Temp:</strong> {selectedRecord.vital_signs.temperature}
+                        <strong>Temp:</strong>{" "}
+                        {selectedRecord.vital_signs.temperature}
                       </div>
                     )}
                     {selectedRecord.vital_signs.respiratory_rate && (
                       <div>
-                        <strong>FR:</strong> {selectedRecord.vital_signs.respiratory_rate}
+                        <strong>FR:</strong>{" "}
+                        {selectedRecord.vital_signs.respiratory_rate}
                       </div>
                     )}
                   </div>
@@ -776,64 +837,94 @@ const MedicalRecordsPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {selectedRecord.chief_complaint && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Queixa Principal</h4>
-                    <p className="text-gray-700">{selectedRecord.chief_complaint}</p>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      Queixa Principal
+                    </h4>
+                    <p className="text-gray-700">
+                      {selectedRecord.chief_complaint}
+                    </p>
                   </div>
                 )}
 
                 {selectedRecord.history_present_illness && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">História da Doença Atual</h4>
-                    <p className="text-gray-700">{selectedRecord.history_present_illness}</p>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      História da Doença Atual
+                    </h4>
+                    <p className="text-gray-700">
+                      {selectedRecord.history_present_illness}
+                    </p>
                   </div>
                 )}
 
                 {selectedRecord.past_medical_history && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">História Médica Pregressa</h4>
-                    <p className="text-gray-700">{selectedRecord.past_medical_history}</p>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      História Médica Pregressa
+                    </h4>
+                    <p className="text-gray-700">
+                      {selectedRecord.past_medical_history}
+                    </p>
                   </div>
                 )}
 
                 {selectedRecord.medications && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Medicamentos</h4>
-                    <p className="text-gray-700">{selectedRecord.medications}</p>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      Medicamentos
+                    </h4>
+                    <p className="text-gray-700">
+                      {selectedRecord.medications}
+                    </p>
                   </div>
                 )}
 
                 {selectedRecord.allergies && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Alergias</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      Alergias
+                    </h4>
                     <p className="text-gray-700">{selectedRecord.allergies}</p>
                   </div>
                 )}
 
                 {selectedRecord.physical_examination && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Exame Físico</h4>
-                    <p className="text-gray-700">{selectedRecord.physical_examination}</p>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      Exame Físico
+                    </h4>
+                    <p className="text-gray-700">
+                      {selectedRecord.physical_examination}
+                    </p>
                   </div>
                 )}
 
                 {selectedRecord.diagnosis && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Diagnóstico</h4>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      Diagnóstico
+                    </h4>
                     <p className="text-gray-700">{selectedRecord.diagnosis}</p>
                   </div>
                 )}
 
                 {selectedRecord.treatment_plan && (
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Plano de Tratamento</h4>
-                    <p className="text-gray-700">{selectedRecord.treatment_plan}</p>
+                    <h4 className="font-semibold text-gray-900 mb-2">
+                      Plano de Tratamento
+                    </h4>
+                    <p className="text-gray-700">
+                      {selectedRecord.treatment_plan}
+                    </p>
                   </div>
                 )}
               </div>
 
               {selectedRecord.notes && (
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Observações</h4>
+                  <h4 className="font-semibold text-gray-900 mb-2">
+                    Observações
+                  </h4>
                   <p className="text-gray-700">{selectedRecord.notes}</p>
                 </div>
               )}
@@ -847,12 +938,12 @@ const MedicalRecordsPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md p-6">
             <h2 className="text-xl font-bold mb-4">Confirmar Exclusão</h2>
-            
+
             <p className="mb-6">
-              Tem certeza que deseja excluir este prontuário?
-              Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir este prontuário? Esta ação não pode
+              ser desfeita.
             </p>
-            
+
             <div className="flex justify-end space-x-3">
               <button
                 onClick={cancelDelete}

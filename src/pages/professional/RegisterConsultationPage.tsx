@@ -408,8 +408,7 @@ const RegisterConsultationPage: React.FC = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          client_id:
-            selectedDependentId ? null : clientId,
+          client_id: selectedDependentId ? null : clientId,
           dependent_id: selectedDependentId,
           private_patient_id: null,
           professional_id: user?.id,
@@ -829,8 +828,7 @@ const RegisterConsultationPage: React.FC = () => {
             <button
               type="submit"
               className={`btn btn-primary ${
-                isLoading ||
-                subscriptionStatus !== "active"
+                isLoading || subscriptionStatus !== "active"
                   ? "opacity-70 cursor-not-allowed"
                   : ""
               }`}
