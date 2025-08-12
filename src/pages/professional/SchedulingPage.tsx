@@ -397,6 +397,25 @@ Obrigado! 🙏`;
     window.open(whatsappUrl, '_blank');
   };
 
+  const sendConfirmationMessage = (appointment: Appointment) => {
+    const phone = appointment.patient_phone?.replace(/\D/g, '');
+    if (!phone) {
+      setError('Número de telefone não encontrado para este paciente');
+      return;
+    }
+
+    const date = new Date(appointment.appointment_date).toLocaleDateString('pt-BR');
+    const time = appointment.appointment_time.slice(0, 5);
+    
+    // Get professional name from user context
+    const professionalName = user?.name || 'Profissional';
+    
+    const message = `Olá ${appointment.patient_name}, gostaria de confirmar o seu atendimento com ${professionalName} às ${time} do dia ${date}.`;
+
+    const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const confirmDelete = (appointment: Appointment) => {
     setAppointmentToDelete(appointment);
     setShowDeleteConfirm(true);
@@ -722,13 +741,23 @@ Obrigado! 🙏`;
                           
                           <div className="flex items-center space-x-2">
                             {apt.patient_phone && (
-                              <button
-                                onClick={() => sendWhatsAppMessage(apt)}
-                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                title="Enviar WhatsApp"
-                              >
-                                <MessageCircle className="h-4 w-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => sendConfirmationMessage(apt)}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Confirmar Presença"
+                                >
+                                  <Phone className="h-4 w-4" />
+                                </button>
+                                
+                                <button
+                                  onClick={() => sendWhatsAppMessage(apt)}
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  title="Mensagem Completa"
+                                >
+                                  <MessageCircle className="h-4 w-4" />
+                                </button>
+                              </>
                             )}
                             
                             <button
@@ -879,13 +908,23 @@ Obrigado! 🙏`;
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end space-x-2">
                             {appointment.patient_phone && (
-                              <button
-                                onClick={() => sendWhatsAppMessage(appointment)}
-                                className="text-green-600 hover:text-green-900"
-                                title="Enviar WhatsApp"
-                              >
-                                <MessageCircle className="h-4 w-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => sendConfirmationMessage(appointment)}
+                                  className="text-blue-600 hover:text-blue-900"
+                                  title="Confirmar Presença"
+                                >
+                                  <Phone className="h-4 w-4" />
+                                </button>
+                                
+                                <button
+                                  onClick={() => sendWhatsAppMessage(appointment)}
+                                  className="text-green-600 hover:text-green-900"
+                                  title="Mensagem Completa"
+                                >
+                                  <MessageCircle className="h-4 w-4" />
+                                </button>
+                              </>
                             )}
                             
                             <button
@@ -927,8 +966,10 @@ Obrigado! 🙏`;
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <Eye className="h-5 w-5 text-red-600 mr-2" />
-          Legenda de Status
+          Legenda de Status e Ações
         </h3>
+        
+        {/* Status Legend */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {statusOptions.map((status) => (
             <div key={status.value} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors">
@@ -937,10 +978,42 @@ Obrigado! 🙏`;
             </div>
           ))}
         </div>
-        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-          <p className="text-sm text-blue-700">
-            💡 <strong>Dica:</strong> Clique nos agendamentos do calendário para alterar o status rapidamente, ou use o WhatsApp para confirmar consultas.
-          </p>
+        
+        {/* Actions Legend */}
+        <div className="mt-6 border-t border-gray-200 pt-4">
+          <h4 className="text-md font-semibold text-gray-900 mb-3">Ações Disponíveis</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="flex items-center space-x-2 p-2 rounded-lg bg-blue-50">
+              <Phone className="h-4 w-4 text-blue-600" />
+              <span className="text-sm text-blue-700 font-medium">Confirmar Presença</span>
+            </div>
+            <div className="flex items-center space-x-2 p-2 rounded-lg bg-green-50">
+              <MessageCircle className="h-4 w-4 text-green-600" />
+              <span className="text-sm text-green-700 font-medium">Mensagem Completa</span>
+            </div>
+            <div className="flex items-center space-x-2 p-2 rounded-lg bg-gray-50">
+              <Clock className="h-4 w-4 text-gray-600" />
+              <span className="text-sm text-gray-700 font-medium">Alterar Status</span>
+            </div>
+            <div className="flex items-center space-x-2 p-2 rounded-lg bg-red-50">
+              <Edit className="h-4 w-4 text-red-600" />
+              <span className="text-sm text-red-700 font-medium">Editar/Excluir</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="space-y-2">
+            <p className="text-sm text-blue-700">
+              💡 <strong>Dicas de Uso:</strong>
+            </p>
+            <ul className="text-sm text-blue-600 space-y-1 ml-4">
+              <li>• Clique nos agendamentos do calendário para alterar o status rapidamente</li>
+              <li>• Use <strong>Confirmar Presença</strong> (📞) para enviar mensagem rápida de confirmação</li>
+              <li>• Use <strong>Mensagem Completa</strong> (💬) para enviar detalhes completos da consulta</li>
+              <li>• Clique duplo em um dia vazio para criar novo agendamento</li>
+            </ul>
+          </div>
         </div>
       </div>
 
