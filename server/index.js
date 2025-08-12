@@ -1944,7 +1944,7 @@ app.put('/api/scheduling/settings', authenticate, authorize(['professional']), a
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating schedule settings:', error);
-            'SELECT COALESCE(percentage, 50) as percentage FROM users WHERE id = $1',
+    res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
 
@@ -2449,58 +2449,72 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
 app.get('/api/reports/professional-revenue', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
-
-    if (!start_date || !end_date) {
-      return res.status(400).json({ message: 'Data inicial e final são obrigatórias' });
-    }
-
-    const professionalResult = await pool.query(
+    const professionalId = req.user.id;
+    
+    console.log('🔄 Generating professional revenue report for:', professionalId);
+    console.log('📅 Date range:', { start_date, end_date });
+    
+    // Get professional percentage
+    const professionalQuery = await pool.query(
       'SELECT percentage FROM users WHERE id = $1',
-      [req.user.id]
+      [professionalId]
     );
-
-    if (professionalResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Profissional não encontrado' });
-    }
-
-    const professionalPercentage = professionalResult.rows[0].percentage || 50;
-
-    const consultationsResult = await pool.query(
-      `SELECT 
-         c.date,
-         COALESCE(u.name, d.name, pp.name) as client_name,
-         s.name as service_name,
-         c.value as total_value,
-         CASE 
-           WHEN pp.id IS NOT NULL THEN c.value
-           ELSE c.value * ((100 - $3) / 100.0)
-         END as amount_to_pay
-       FROM consultations c
-       LEFT JOIN users u ON c.client_id = u.id
-       LEFT JOIN dependents d ON c.dependent_id = d.id
-       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
-       LEFT JOIN services s ON c.service_id = s.id
-       WHERE c.professional_id = $1 
-       AND c.date >= $2 AND c.date <= $4
-       ORDER BY c.date DESC`,
-      [req.user.id, start_date, professionalPercentage, end_date]
-    );
-
+    
+    const professionalPercentage = professionalQuery.rows[0]?.percentage || 50;
+    console.log('💰 Professional percentage:', professionalPercentage);
+    
+    // Get consultations with calculated amounts
+    const consultationsQuery = `
+      SELECT 
+        c.date,
+        COALESCE(cl.name, d.name, pp.name) as client_name,
+        s.name as service_name,
+        c.value as total_value,
+        (c.value * $3::decimal / 100.0) as professional_amount,
+        (c.value - (c.value * $3::decimal / 100.0)) as amount_to_pay
+      FROM consultations c
+      LEFT JOIN users cl ON c.client_id = cl.id
+      LEFT JOIN dependents d ON c.dependent_id = d.id
+      LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
+      LEFT JOIN services s ON c.service_id = s.id
+      WHERE c.professional_id = $1
+        AND c.date >= $2
+        AND c.date <= $4
+      ORDER BY c.date DESC
+    `;
+    
+    const consultationsResult = await pool.query(consultationsQuery, [
+      professionalId,
+      start_date,
+      professionalPercentage,
+      end_date
+    ]);
+    
+    console.log('📊 Consultations found:', consultationsResult.rows.length);
+    
+    // Calculate summary
     const consultations = consultationsResult.rows;
-    const totalRevenue = consultations.reduce((sum, c) => sum + parseFloat(c.total_value), 0);
-    const totalAmountToPay = consultations.reduce((sum, c) => sum + parseFloat(c.amount_to_pay), 0);
-
+    const summary = {
+      professional_percentage: professionalPercentage,
+      total_revenue: consultations.reduce((sum, c) => sum + parseFloat(c.total_value || 0), 0),
+      consultation_count: consultations.length,
+      amount_to_pay: consultations.reduce((sum, c) => sum + parseFloat(c.amount_to_pay || 0), 0)
+    };
+    
+    console.log('📈 Summary calculated:', summary);
+    
     res.json({
-      summary: {
-        professional_percentage: professionalPercentage,
-        total_revenue: totalRevenue,
-        consultation_count: consultations.length,
-        amount_to_pay: totalAmountToPay,
-      },
-      consultations: consultations,
+      summary,
+      consultations: consultations.map(c => ({
+        date: c.date,
+        client_name: c.client_name,
+        service_name: c.service_name,
+        total_value: parseFloat(c.total_value || 0),
+        amount_to_pay: parseFloat(c.amount_to_pay || 0)
+      }))
     });
   } catch (error) {
-    console.error('Error generating professional revenue report:', error);
+    console.error('❌ Error generating professional revenue report:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
@@ -2515,7 +2529,7 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
     }
 
     const professionalResult = await pool.query(
-      'SELECT percentage FROM users WHERE id = $1',
+      'SELECT COALESCE(percentage, 50) as percentage FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -2551,7 +2565,7 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
         total_revenue: parseFloat(summary.total_revenue),
         convenio_revenue: parseFloat(summary.convenio_revenue),
         private_revenue: parseFloat(summary.private_revenue),
-            'SELECT COALESCE(percentage, 50) as percentage FROM users WHERE id = $1',
+        professional_percentage: professionalPercentage,
         amount_to_pay: amountToPay,
       }
     });
@@ -2568,8 +2582,8 @@ app.get('/api/reports/clients-by-city', authenticate, authorize(['admin']), asyn
       `SELECT 
          city,
          state,
-              (c.value * $3::decimal / 100) as professional_amount,
-              (c.value * (100 - $3::decimal) / 100) as clinic_amount
+         COUNT(*) as client_count,
+         COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active_clients,
          COUNT(CASE WHEN subscription_status = 'pending' THEN 1 END) as pending_clients,
          COUNT(CASE WHEN subscription_status = 'expired' THEN 1 END) as expired_clients
        FROM users 
@@ -2597,7 +2611,7 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
          COUNT(*) as total_professionals,
          json_agg(
            json_build_object(
-          const amountToPay = convenioRevenue * (100 - professionalPercentage) / 100.0;
+             'category_name', COALESCE(sc.name, 'Sem categoria'),
              'count', 1
            )
          ) as categories_raw
