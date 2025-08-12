@@ -10,8 +10,8 @@ import { CloudinaryStorage } from "multer-storage-cloudinary";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { pool } from "./db.js";
-import { generateDocumentPDF } from './utils/documentGenerator.js';
-import createUpload from './middleware/upload.js';
+import { generateDocumentPDF } from "./utils/documentGenerator.js";
+import createUpload from "./middleware/upload.js";
 
 // Load environment variables
 dotenv.config();
@@ -1042,11 +1042,9 @@ app.post("/api/users", authenticate, authorize(["admin"]), async (req, res) => {
     } = req.body;
 
     if (!name || !cpf || !password || !roles || roles.length === 0) {
-      return res
-        .status(400)
-        .json({
-          message: "Nome, CPF, senha e pelo menos uma role são obrigatórios",
-        });
+      return res.status(400).json({
+        message: "Nome, CPF, senha e pelo menos uma role são obrigatórios",
+      });
     }
 
     const cleanCpf = cpf.replace(/\D/g, "");
@@ -1479,12 +1477,9 @@ app.post(
       const { client_id, name, cpf, birth_date } = req.body;
 
       if (req.user.currentRole === "client" && req.user.id !== client_id) {
-        return res
-          .status(403)
-          .json({
-            message:
-              "Você só pode adicionar dependentes para sua própria conta",
-          });
+        return res.status(403).json({
+          message: "Você só pode adicionar dependentes para sua própria conta",
+        });
       }
 
       if (!name || !cpf) {
@@ -2594,11 +2589,16 @@ app.post(
 // =============================================================================
 
 // Get all medical documents for the authenticated professional
-app.get('/api/medical-documents', authenticate, authorize(['professional']), async (req, res) => {
-    const totalRevenue = Number(totalRevenueQuery.rows[0].total);
-    const professionalId = req.user.id;
-    
-    const result = await pool.query(`
+app.get(
+  "/api/medical-documents",
+  authenticate,
+  authorize(["professional"]),
+  async (req, res) => {
+    try {
+      const professionalId = req.user.id;
+
+      const result = await pool.query(
+        `
       SELECT 
         md.*,
         COALESCE(pp.name, c.name, d.name) as patient_name,
@@ -2609,161 +2609,187 @@ app.get('/api/medical-documents', authenticate, authorize(['professional']), asy
       LEFT JOIN dependents d ON md.dependent_id = d.id
       WHERE md.professional_id = $1
       ORDER BY md.created_at DESC
-    `, [professionalId]);
-    
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching medical documents:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
+    `,
+        [professionalId]
+      );
+
+      res.json(result.rows);
+    } catch (error) {
+      console.error("Error fetching medical documents:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
   }
-});
+);
 
 // Create a new medical document
-app.post('/api/medical-documents', authenticate, authorize(['professional']), async (req, res) => {
-  try {
-    const professionalId = req.user.id;
-    const {
-      private_patient_id,
-      client_id,
-      dependent_id,
-      document_type,
-      title,
-      template_data
-    } = req.body;
+app.post(
+  "/api/medical-documents",
+  authenticate,
+  authorize(["professional"]),
+  async (req, res) => {
+    try {
+      const professionalId = req.user.id;
+      const {
+        private_patient_id,
+        client_id,
+        dependent_id,
+        document_type,
+        title,
+        template_data,
+      } = req.body;
 
-    console.log('🔄 Creating medical document:', {
-      professionalId,
-      document_type,
-      title,
-      template_data
-    });
-
-    // Validate required fields
-    if (!document_type || !title || !template_data) {
-      return res.status(400).json({ 
-        message: 'Tipo de documento, título e dados do template são obrigatórios' 
+      console.log("🔄 Creating medical document:", {
+        professionalId,
+        document_type,
+        title,
+        template_data,
       });
-    }
 
-    // Validate that at least one patient type is provided
-    if (!private_patient_id && !client_id && !dependent_id) {
-      return res.status(400).json({ 
-        message: 'É necessário especificar um paciente' 
-      });
-    }
-
-    // Get patient information for the template
-    let patientInfo = {};
-    
-    if (private_patient_id) {
-      const patientResult = await pool.query(
-        'SELECT name, cpf FROM private_patients WHERE id = $1 AND professional_id = $2',
-        [private_patient_id, professionalId]
-      );
-      
-      if (patientResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Paciente particular não encontrado' });
+      // Validate required fields
+      if (!document_type || !title || !template_data) {
+        return res.status(400).json({
+          message:
+            "Tipo de documento, título e dados do template são obrigatórios",
+        });
       }
-      
-      patientInfo = patientResult.rows[0];
-    } else if (client_id) {
-      const clientResult = await pool.query(
-        'SELECT name, cpf FROM users WHERE id = $1',
-        [client_id]
-      );
-      
-      if (clientResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Cliente não encontrado' });
+
+      // Validate that at least one patient type is provided
+      if (!private_patient_id && !client_id && !dependent_id) {
+        return res.status(400).json({
+          message: "É necessário especificar um paciente",
+        });
       }
-      
-      patientInfo = clientResult.rows[0];
-    } else if (dependent_id) {
-      const dependentResult = await pool.query(
-        'SELECT name, cpf FROM dependents WHERE id = $1',
-        [dependent_id]
-      );
-      
-      if (dependentResult.rows.length === 0) {
-        return res.status(404).json({ message: 'Dependente não encontrado' });
+
+      // Get patient information for the template
+      let patientInfo = {};
+
+      if (private_patient_id) {
+        const patientResult = await pool.query(
+          "SELECT name, cpf FROM private_patients WHERE id = $1 AND professional_id = $2",
+          [private_patient_id, professionalId]
+        );
+
+        if (patientResult.rows.length === 0) {
+          return res
+            .status(404)
+            .json({ message: "Paciente particular não encontrado" });
+        }
+
+        patientInfo = patientResult.rows[0];
+      } else if (client_id) {
+        const clientResult = await pool.query(
+          "SELECT name, cpf FROM users WHERE id = $1",
+          [client_id]
+        );
+
+        if (clientResult.rows.length === 0) {
+          return res.status(404).json({ message: "Cliente não encontrado" });
+        }
+
+        patientInfo = clientResult.rows[0];
+      } else if (dependent_id) {
+        const dependentResult = await pool.query(
+          "SELECT name, cpf FROM dependents WHERE id = $1",
+          [dependent_id]
+        );
+
+        if (dependentResult.rows.length === 0) {
+          return res.status(404).json({ message: "Dependente não encontrado" });
+        }
+
+        patientInfo = dependentResult.rows[0];
       }
-      
-      patientInfo = dependentResult.rows[0];
-    }
 
-    // Prepare template data with patient info
-    const completeTemplateData = {
-      ...template_data,
-      patientName: patientInfo.name,
-      patientCpf: patientInfo.cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') || 'Não informado'
-    };
+      // Prepare template data with patient info
+      const completeTemplateData = {
+        ...template_data,
+        patientName: patientInfo.name,
+        patientCpf:
+          patientInfo.cpf?.replace(
+            /(\d{3})(\d{3})(\d{3})(\d{2})/,
+            "$1.$2.$3-$4"
+          ) || "Não informado",
+      };
 
-    console.log('🔄 Complete template data:', completeTemplateData);
+      console.log("🔄 Complete template data:", completeTemplateData);
 
-    // Generate document and upload to Cloudinary
-    const documentResult = await generateDocumentPDF(document_type, completeTemplateData);
-    
-    console.log('✅ Document generated:', documentResult);
+      // Generate document and upload to Cloudinary
+      const documentResult = await generateDocumentPDF(
+        document_type,
+        completeTemplateData
+      );
 
-    // Save document record to database
-    const insertResult = await pool.query(`
+      console.log("✅ Document generated:", documentResult);
+
+      // Save document record to database
+      const insertResult = await pool.query(
+        `
       INSERT INTO medical_documents (
         professional_id, private_patient_id, client_id, dependent_id,
         document_type, title, document_url, template_data
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
-    `, [
-      professionalId,
-      private_patient_id || null,
-      client_id || null,
-      dependent_id || null,
-      document_type,
-      title,
-      documentResult.url,
-      JSON.stringify(completeTemplateData)
-    ]);
+    `,
+        [
+          professionalId,
+          private_patient_id || null,
+          client_id || null,
+          dependent_id || null,
+          document_type,
+          title,
+          documentResult.url,
+          JSON.stringify(completeTemplateData),
+        ]
+      );
 
-    console.log('✅ Document saved to database:', insertResult.rows[0]);
+      console.log("✅ Document saved to database:", insertResult.rows[0]);
 
-    res.status(201).json({
-      message: 'Documento criado com sucesso',
-      document: insertResult.rows[0]
-    });
-  } catch (error) {
-    console.error('❌ Error creating medical document:', error);
-    res.status(500).json({ 
-      message: error.message || 'Erro interno do servidor' 
-    });
+      res.status(201).json({
+        message: "Documento criado com sucesso",
+        document: insertResult.rows[0],
+      });
+    } catch (error) {
+      console.error("❌ Error creating medical document:", error);
+      res.status(500).json({
+        message: error.message || "Erro interno do servidor",
+      });
+    }
   }
-});
+);
 
 // Delete a medical document
-app.delete('/api/medical-documents/:id', authenticate, authorize(['professional']), async (req, res) => {
-  try {
-    const professionalId = req.user.id;
-    const documentId = req.params.id;
+app.delete(
+  "/api/medical-documents/:id",
+  authenticate,
+  authorize(["professional"]),
+  async (req, res) => {
+    try {
+      const professionalId = req.user.id;
+      const documentId = req.params.id;
 
-    // Check if document exists and belongs to the professional
-    const checkResult = await pool.query(
-      'SELECT * FROM medical_documents WHERE id = $1 AND professional_id = $2',
-      [documentId, professionalId]
-    );
+      // Check if document exists and belongs to the professional
+      const checkResult = await pool.query(
+        "SELECT * FROM medical_documents WHERE id = $1 AND professional_id = $2",
+        [documentId, professionalId]
+      );
 
-    if (checkResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Documento não encontrado' });
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ message: "Documento não encontrado" });
+      }
+
+      // Delete from database
+      await pool.query(
+        "DELETE FROM medical_documents WHERE id = $1 AND professional_id = $2",
+        [documentId, professionalId]
+      );
+
+      res.json({ message: "Documento excluído com sucesso" });
+    } catch (error) {
+      console.error("Error deleting medical document:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
     }
-
-    // Delete from database
-    await pool.query(
-      'DELETE FROM medical_documents WHERE id = $1 AND professional_id = $2',
-      [documentId, professionalId]
-    );
-
-    res.json({ message: 'Documento excluído com sucesso' });
-  } catch (error) {
-    console.error('Error deleting medical document:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
   }
-});
+);
 
 // =============================================================================
 // MEDICAL RECORDS ROUTES
@@ -2970,8 +2996,8 @@ app.get(
         `SELECT 
          p.name as professional_name,
          p.percentage as professional_percentage,
-        ROUND(COALESCE(SUM(c.value * (u.percentage / 100.0)), 0), 2) as professional_payment,
-        ROUND(COALESCE(SUM(c.value * ((100 - u.percentage) / 100.0)), 0), 2) as clinic_revenue
+         COALESCE(SUM(c.value), 0) as revenue,
+         COUNT(c.id) as consultation_count,
          COALESCE(SUM(c.value * (p.percentage / 100.0)), 0) as professional_payment,
          COALESCE(SUM(c.value * ((100 - p.percentage) / 100.0)), 0) as clinic_revenue
        FROM users p
@@ -2986,7 +3012,7 @@ app.get(
       const serviceRevenueResult = await pool.query(
         `SELECT 
          s.name as service_name,
-        ROUND(COALESCE(SUM(c.value), 0), 2) as revenue,
+         COALESCE(SUM(c.value), 0) as revenue,
          COUNT(c.id) as consultation_count
        FROM services s
        LEFT JOIN consultations c ON c.service_id = s.id 
@@ -3002,11 +3028,11 @@ app.get(
         revenue_by_professional: professionalRevenueResult.rows,
         revenue_by_service: serviceRevenueResult.rows,
       });
-        professional_percentage: Number(row.professional_percentage),
-        revenue: Number(row.revenue),
-        consultation_count: Number(row.consultation_count),
-        professional_payment: Number(row.professional_payment),
-        clinic_revenue: Number(row.clinic_revenue)
+    } catch (error) {
+      console.error("Error generating revenue report:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  }
 );
 
 // Get professional revenue report
@@ -3043,7 +3069,7 @@ app.get(
          s.name as service_name,
          c.value as total_value,
          CASE 
-        ROUND(c.value * ($3 / 100.0), 2) as amount_to_pay,
+           WHEN pp.id IS NOT NULL THEN c.value
            ELSE c.value * ((100 - $3) / 100.0)
          END as amount_to_pay
        FROM consultations c
@@ -3069,12 +3095,12 @@ app.get(
 
       res.json({
         summary: {
-    const convenioRevenue = convenioConsultations.reduce((sum, c) => sum + Number(c.value), 0);
-    const privateRevenue = privateConsultations.reduce((sum, c) => sum + Number(c.value), 0);
-    const totalRevenue = consultations.reduce((sum, c) => sum + Number(c.value), 0);
-    const totalAmountToPay = consultations.reduce((sum, c) => sum + Number(c.amount_to_pay), 0);
+          professional_percentage: professionalPercentage,
+          total_revenue: totalRevenue,
+          consultation_count: consultations.length,
+          amount_to_pay: totalAmountToPay,
         },
-    const amountToPay = Math.round(convenioRevenue * ((100 - professionalPercentage) / 100) * 100) / 100;
+        consultations: consultations,
       });
     } catch (error) {
       console.error("Error generating professional revenue report:", error);
@@ -3290,11 +3316,9 @@ app.post(
       const { professional_id, expires_at, reason } = req.body;
 
       if (!professional_id || !expires_at) {
-        return res
-          .status(400)
-          .json({
-            message: "ID do profissional e data de expiração são obrigatórios",
-          });
+        return res.status(400).json({
+          message: "ID do profissional e data de expiração são obrigatórios",
+        });
       }
 
       const professionalCheck = await pool.query(
@@ -3625,8 +3649,8 @@ app.use("/api/*", (req, res) => {
   console.warn(`🚫 API route not found: ${req.method} ${req.path}`);
   res.status(404).json({
     message: "Endpoint não encontrado",
-        revenue: Number(row.revenue),
-        consultation_count: Number(row.consultation_count)
+    path: req.path,
+    method: req.method,
   });
 });
 
@@ -3761,8 +3785,8 @@ const startServer = async () => {
       console.log("  🏗️ /api/services/* - Service management");
       console.log("  📂 /api/service-categories/* - Service categories");
       console.log("  👶 /api/dependents/* - Dependent management");
-        total_value: Number(c.value),
-        amount_to_pay: Number(c.amount_to_pay)
+      console.log("  🖼️ /api/upload-image - Image upload");
+      console.log("  ❤️ /api/health - Health check");
       console.log("");
     });
   } catch (error) {
