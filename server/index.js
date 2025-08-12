@@ -2595,7 +2595,7 @@ app.post(
 
 // Get all medical documents for the authenticated professional
 app.get('/api/medical-documents', authenticate, authorize(['professional']), async (req, res) => {
-  try {
+    const totalRevenue = Number(totalRevenueQuery.rows[0].total);
     const professionalId = req.user.id;
     
     const result = await pool.query(`
@@ -2970,8 +2970,8 @@ app.get(
         `SELECT 
          p.name as professional_name,
          p.percentage as professional_percentage,
-         COALESCE(SUM(c.value), 0) as revenue,
-         COUNT(c.id) as consultation_count,
+        ROUND(COALESCE(SUM(c.value * (u.percentage / 100.0)), 0), 2) as professional_payment,
+        ROUND(COALESCE(SUM(c.value * ((100 - u.percentage) / 100.0)), 0), 2) as clinic_revenue
          COALESCE(SUM(c.value * (p.percentage / 100.0)), 0) as professional_payment,
          COALESCE(SUM(c.value * ((100 - p.percentage) / 100.0)), 0) as clinic_revenue
        FROM users p
@@ -2986,7 +2986,7 @@ app.get(
       const serviceRevenueResult = await pool.query(
         `SELECT 
          s.name as service_name,
-         COALESCE(SUM(c.value), 0) as revenue,
+        ROUND(COALESCE(SUM(c.value), 0), 2) as revenue,
          COUNT(c.id) as consultation_count
        FROM services s
        LEFT JOIN consultations c ON c.service_id = s.id 
@@ -3002,11 +3002,11 @@ app.get(
         revenue_by_professional: professionalRevenueResult.rows,
         revenue_by_service: serviceRevenueResult.rows,
       });
-    } catch (error) {
-      console.error("Error generating revenue report:", error);
-      res.status(500).json({ message: "Erro interno do servidor" });
-    }
-  }
+        professional_percentage: Number(row.professional_percentage),
+        revenue: Number(row.revenue),
+        consultation_count: Number(row.consultation_count),
+        professional_payment: Number(row.professional_payment),
+        clinic_revenue: Number(row.clinic_revenue)
 );
 
 // Get professional revenue report
@@ -3043,7 +3043,7 @@ app.get(
          s.name as service_name,
          c.value as total_value,
          CASE 
-           WHEN pp.id IS NOT NULL THEN c.value
+        ROUND(c.value * ($3 / 100.0), 2) as amount_to_pay,
            ELSE c.value * ((100 - $3) / 100.0)
          END as amount_to_pay
        FROM consultations c
@@ -3069,12 +3069,12 @@ app.get(
 
       res.json({
         summary: {
-          professional_percentage: professionalPercentage,
-          total_revenue: totalRevenue,
-          consultation_count: consultations.length,
-          amount_to_pay: totalAmountToPay,
+    const convenioRevenue = convenioConsultations.reduce((sum, c) => sum + Number(c.value), 0);
+    const privateRevenue = privateConsultations.reduce((sum, c) => sum + Number(c.value), 0);
+    const totalRevenue = consultations.reduce((sum, c) => sum + Number(c.value), 0);
+    const totalAmountToPay = consultations.reduce((sum, c) => sum + Number(c.amount_to_pay), 0);
         },
-        consultations: consultations,
+    const amountToPay = Math.round(convenioRevenue * ((100 - professionalPercentage) / 100) * 100) / 100;
       });
     } catch (error) {
       console.error("Error generating professional revenue report:", error);
@@ -3625,8 +3625,8 @@ app.use("/api/*", (req, res) => {
   console.warn(`🚫 API route not found: ${req.method} ${req.path}`);
   res.status(404).json({
     message: "Endpoint não encontrado",
-    path: req.path,
-    method: req.method,
+        revenue: Number(row.revenue),
+        consultation_count: Number(row.consultation_count)
   });
 });
 
@@ -3761,8 +3761,8 @@ const startServer = async () => {
       console.log("  🏗️ /api/services/* - Service management");
       console.log("  📂 /api/service-categories/* - Service categories");
       console.log("  👶 /api/dependents/* - Dependent management");
-      console.log("  🖼️ /api/upload-image - Image upload");
-      console.log("  ❤️ /api/health - Health check");
+        total_value: Number(c.value),
+        amount_to_pay: Number(c.amount_to_pay)
       console.log("");
     });
   } catch (error) {
