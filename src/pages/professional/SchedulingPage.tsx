@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Edit, Trash2, Clock, MapPin, User, Users, Search, Filter, X, Check } from 'lucide-react';
+import { Calendar, Plus, Edit, Trash2, Clock, MapPin, User, ChevronLeft, ChevronRight, Eye, X, Check } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks, startOfDay, endOfDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 type Appointment = {
   id: number;
@@ -37,20 +39,18 @@ type AttendanceLocation = {
   is_default: boolean;
 };
 
+type ViewMode = 'month' | 'week' | 'day';
+
 const SchedulingPage: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
   const [privatePatients, setPrivatePatients] = useState<PrivatePatient[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [locations, setLocations] = useState<AttendanceLocation[]>([]);
   
-  // Date range for viewing appointments
-  const [startDate, setStartDate] = useState(getDefaultStartDate());
-  const [endDate, setEndDate] = useState(getDefaultEndDate());
-  
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  // Calendar state
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [selectedDate, setSelectedDate] = useState(new Date());
   
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -58,6 +58,7 @@ const SchedulingPage: React.FC = () => {
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   
@@ -87,50 +88,40 @@ const SchedulingPage: React.FC = () => {
     return "http://localhost:3001";
   };
 
-  // Get default date range (current month)
-  function getDefaultStartDate() {
-    const date = new Date();
-    date.setDate(1);
-    return date.toISOString().split('T')[0];
-  }
-  
-  function getDefaultEndDate() {
-    const date = new Date();
-    date.setMonth(date.getMonth() + 1);
-    date.setDate(0);
-    return date.toISOString().split('T')[0];
-  }
-
   useEffect(() => {
     fetchData();
-  }, [startDate, endDate]);
+  }, [currentDate, viewMode]);
 
-  useEffect(() => {
-    let filtered = appointments;
-
-    if (searchTerm) {
-      filtered = filtered.filter(apt =>
-        apt.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        apt.service_name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+  const getDateRange = () => {
+    switch (viewMode) {
+      case 'month':
+        return {
+          start: format(startOfMonth(currentDate), 'yyyy-MM-dd'),
+          end: format(endOfMonth(currentDate), 'yyyy-MM-dd')
+        };
+      case 'week':
+        return {
+          start: format(startOfWeek(currentDate, { locale: ptBR }), 'yyyy-MM-dd'),
+          end: format(endOfWeek(currentDate, { locale: ptBR }), 'yyyy-MM-dd')
+        };
+      case 'day':
+        return {
+          start: format(currentDate, 'yyyy-MM-dd'),
+          end: format(currentDate, 'yyyy-MM-dd')
+        };
     }
-
-    if (statusFilter) {
-      filtered = filtered.filter(apt => apt.status === statusFilter);
-    }
-
-    setFilteredAppointments(filtered);
-  }, [appointments, searchTerm, statusFilter]);
+  };
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
+      const dateRange = getDateRange();
 
       // Fetch appointments
       const appointmentsResponse = await fetch(
-        `${apiUrl}/api/scheduling/appointments?start_date=${startDate}&end_date=${endDate}`,
+        `${apiUrl}/api/scheduling/appointments?start_date=${dateRange.start}&end_date=${dateRange.end}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -178,12 +169,61 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
-  const openCreateModal = () => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'scheduled':
+        return 'bg-blue-500 border-blue-600 text-white';
+      case 'completed':
+        return 'bg-green-500 border-green-600 text-white';
+      case 'cancelled':
+        return 'bg-red-500 border-red-600 text-white';
+      case 'no_show':
+        return 'bg-yellow-500 border-yellow-600 text-white';
+      default:
+        return 'bg-gray-500 border-gray-600 text-white';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'scheduled':
+        return 'Agendado';
+      case 'completed':
+        return 'Realizado';
+      case 'cancelled':
+        return 'Cancelado';
+      case 'no_show':
+        return 'Faltou';
+      default:
+        return status;
+    }
+  };
+
+  const getAppointmentsForDate = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return appointments.filter(apt => apt.appointment_date === dateStr);
+  };
+
+  const navigateCalendar = (direction: 'prev' | 'next') => {
+    switch (viewMode) {
+      case 'month':
+        setCurrentDate(direction === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1));
+        break;
+      case 'week':
+        setCurrentDate(direction === 'next' ? addWeeks(currentDate, 1) : subWeeks(currentDate, 1));
+        break;
+      case 'day':
+        setCurrentDate(direction === 'next' ? addDays(currentDate, 1) : addDays(currentDate, -1));
+        break;
+    }
+  };
+
+  const openCreateModal = (date?: Date) => {
     setModalMode('create');
     setFormData({
       private_patient_id: '',
       service_id: '',
-      appointment_date: '',
+      appointment_date: date ? format(date, 'yyyy-MM-dd') : '',
       appointment_time: '',
       location_id: locations.find(loc => loc.is_default)?.id.toString() || '',
       notes: '',
@@ -197,10 +237,10 @@ const SchedulingPage: React.FC = () => {
     setModalMode('edit');
     setFormData({
       private_patient_id: appointment.private_patient_id?.toString() || '',
-      service_id: '', // Would need to be determined from the appointment
+      service_id: '',
       appointment_date: appointment.appointment_date,
       appointment_time: appointment.appointment_time,
-      location_id: '', // Would need to be determined from the appointment
+      location_id: '',
       notes: appointment.notes || '',
       value: appointment.value.toString()
     });
@@ -208,8 +248,14 @@ const SchedulingPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const openDetailModal = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setIsDetailModalOpen(true);
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
+    setIsDetailModalOpen(false);
     setError('');
     setSuccess('');
   };
@@ -223,7 +269,6 @@ const SchedulingPage: React.FC = () => {
     const serviceId = e.target.value;
     setFormData(prev => ({ ...prev, service_id: serviceId }));
     
-    // Auto-fill value based on service
     const selectedService = services.find(s => s.id.toString() === serviceId);
     if (selectedService) {
       setFormData(prev => ({ ...prev, value: selectedService.base_price.toString() }));
@@ -313,15 +358,6 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR');
-  };
-
-  const formatTime = (timeString: string) => {
-    return timeString.slice(0, 5); // HH:MM
-  };
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -329,18 +365,250 @@ const SchedulingPage: React.FC = () => {
     }).format(value);
   };
 
-  const getStatusDisplay = (status: string) => {
-    switch (status) {
-      case 'scheduled':
-        return { text: 'Agendado', className: 'bg-blue-100 text-blue-800' };
-      case 'completed':
-        return { text: 'Realizado', className: 'bg-green-100 text-green-800' };
-      case 'cancelled':
-        return { text: 'Cancelado', className: 'bg-red-100 text-red-800' };
-      case 'no_show':
-        return { text: 'Faltou', className: 'bg-yellow-100 text-yellow-800' };
-      default:
-        return { text: status, className: 'bg-gray-100 text-gray-800' };
+  const formatTime = (timeString: string) => {
+    return timeString.slice(0, 5);
+  };
+
+  // Render Month View
+  const renderMonthView = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart, { locale: ptBR });
+    const endDate = endOfWeek(monthEnd, { locale: ptBR });
+
+    const dateFormat = 'd';
+    const rows = [];
+    let days = [];
+    let day = startDate;
+
+    // Create calendar grid
+    while (day <= endDate) {
+      for (let i = 0; i < 7; i++) {
+        const cloneDay = day;
+        const dayAppointments = getAppointmentsForDate(day);
+        
+        days.push(
+          <div
+            key={day.toString()}
+            className={`min-h-[120px] border border-gray-200 p-2 cursor-pointer hover:bg-gray-50 transition-colors ${
+              !isSameMonth(day, monthStart) ? 'bg-gray-100 text-gray-400' : 'bg-white'
+            } ${isSameDay(day, new Date()) ? 'bg-blue-50 border-blue-300' : ''}`}
+            onClick={() => openCreateModal(cloneDay)}
+          >
+            <div className="flex justify-between items-start mb-2">
+              <span className={`text-sm font-medium ${
+                isSameDay(day, new Date()) ? 'text-blue-600' : 'text-gray-900'
+              }`}>
+                {format(day, dateFormat)}
+              </span>
+              {dayAppointments.length > 0 && (
+                <span className="bg-red-100 text-red-800 text-xs px-1.5 py-0.5 rounded-full">
+                  {dayAppointments.length}
+                </span>
+              )}
+            </div>
+            
+            <div className="space-y-1">
+              {dayAppointments.slice(0, 3).map((appointment) => (
+                <div
+                  key={appointment.id}
+                  className={`text-xs p-1.5 rounded border-l-2 cursor-pointer hover:opacity-80 ${getStatusColor(appointment.status)}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDetailModal(appointment);
+                  }}
+                >
+                  <div className="font-medium truncate">
+                    {formatTime(appointment.appointment_time)} - {appointment.patient_name}
+                  </div>
+                  <div className="truncate opacity-90">
+                    {appointment.service_name}
+                  </div>
+                </div>
+              ))}
+              {dayAppointments.length > 3 && (
+                <div className="text-xs text-gray-500 text-center">
+                  +{dayAppointments.length - 3} mais
+                </div>
+              )}
+            </div>
+          </div>
+        );
+        day = addDays(day, 1);
+      }
+      rows.push(
+        <div key={day.toString()} className="grid grid-cols-7">
+          {days}
+        </div>
+      );
+      days = [];
+    }
+
+    return (
+      <div>
+        {/* Days of week header */}
+        <div className="grid grid-cols-7 bg-gray-50 border border-gray-200">
+          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
+            <div key={day} className="p-3 text-center text-sm font-medium text-gray-700 border-r border-gray-200 last:border-r-0">
+              {day}
+            </div>
+          ))}
+        </div>
+        {rows}
+      </div>
+    );
+  };
+
+  // Render Week View
+  const renderWeekView = () => {
+    const weekStart = startOfWeek(currentDate, { locale: ptBR });
+    const weekDays = [];
+    
+    for (let i = 0; i < 7; i++) {
+      const day = addDays(weekStart, i);
+      const dayAppointments = getAppointmentsForDate(day);
+      
+      weekDays.push(
+        <div key={day.toString()} className="border border-gray-200 bg-white">
+          <div className={`p-3 text-center border-b border-gray-200 ${
+            isSameDay(day, new Date()) ? 'bg-blue-50 text-blue-600 font-semibold' : 'bg-gray-50'
+          }`}>
+            <div className="text-sm font-medium">
+              {format(day, 'EEE', { locale: ptBR })}
+            </div>
+            <div className="text-lg">
+              {format(day, 'd')}
+            </div>
+          </div>
+          
+          <div className="p-2 min-h-[400px] space-y-2">
+            {dayAppointments.map((appointment) => (
+              <div
+                key={appointment.id}
+                className={`p-2 rounded border-l-4 cursor-pointer hover:opacity-80 ${getStatusColor(appointment.status)}`}
+                onClick={() => openDetailModal(appointment)}
+              >
+                <div className="font-medium text-sm">
+                  {formatTime(appointment.appointment_time)}
+                </div>
+                <div className="text-xs opacity-90 truncate">
+                  {appointment.patient_name}
+                </div>
+                <div className="text-xs opacity-75 truncate">
+                  {appointment.service_name}
+                </div>
+              </div>
+            ))}
+            
+            <button
+              onClick={() => openCreateModal(day)}
+              className="w-full p-2 border-2 border-dashed border-gray-300 rounded text-gray-500 hover:border-red-300 hover:text-red-600 transition-colors text-sm"
+            >
+              + Novo agendamento
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-7 gap-0 border border-gray-200 rounded-lg overflow-hidden">
+        {weekDays}
+      </div>
+    );
+  };
+
+  // Render Day View
+  const renderDayView = () => {
+    const dayAppointments = getAppointmentsForDate(currentDate);
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className={`p-4 text-center border-b border-gray-200 ${
+          isSameDay(currentDate, new Date()) ? 'bg-blue-50 text-blue-600' : 'bg-gray-50'
+        }`}>
+          <h3 className="text-lg font-semibold">
+            {format(currentDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+          </h3>
+          <p className="text-sm text-gray-600">
+            {dayAppointments.length} agendamento(s)
+          </p>
+        </div>
+        
+        <div className="max-h-[600px] overflow-y-auto">
+          {hours.map((hour) => {
+            const hourAppointments = dayAppointments.filter(apt => {
+              const aptHour = parseInt(apt.appointment_time.split(':')[0]);
+              return aptHour === hour;
+            });
+
+            return (
+              <div key={hour} className="border-b border-gray-100 last:border-b-0">
+                <div className="flex">
+                  <div className="w-16 p-3 text-sm text-gray-500 bg-gray-50 border-r border-gray-200 text-center">
+                    {hour.toString().padStart(2, '0')}:00
+                  </div>
+                  <div className="flex-1 p-2 min-h-[60px]">
+                    {hourAppointments.length > 0 ? (
+                      <div className="space-y-1">
+                        {hourAppointments.map((appointment) => (
+                          <div
+                            key={appointment.id}
+                            className={`p-2 rounded border-l-4 cursor-pointer hover:opacity-80 ${getStatusColor(appointment.status)}`}
+                            onClick={() => openDetailModal(appointment)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="font-medium text-sm">
+                                  {formatTime(appointment.appointment_time)} - {appointment.patient_name}
+                                </div>
+                                <div className="text-xs opacity-90">
+                                  {appointment.service_name}
+                                </div>
+                                <div className="text-xs opacity-75">
+                                  {formatCurrency(appointment.value)}
+                                </div>
+                              </div>
+                              <div className="text-xs opacity-75">
+                                {getStatusText(appointment.status)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const appointmentDate = new Date(currentDate);
+                          appointmentDate.setHours(hour, 0, 0, 0);
+                          openCreateModal(appointmentDate);
+                        }}
+                        className="w-full h-full text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors text-sm"
+                      >
+                        + Novo agendamento
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const getViewTitle = () => {
+    switch (viewMode) {
+      case 'month':
+        return format(currentDate, "MMMM 'de' yyyy", { locale: ptBR });
+      case 'week':
+        const weekStart = startOfWeek(currentDate, { locale: ptBR });
+        const weekEnd = endOfWeek(currentDate, { locale: ptBR });
+        return `${format(weekStart, 'd MMM', { locale: ptBR })} - ${format(weekEnd, 'd MMM yyyy', { locale: ptBR })}`;
+      case 'day':
+        return format(currentDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
     }
   };
 
@@ -349,11 +617,11 @@ const SchedulingPage: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Agenda de Atendimentos</h1>
-          <p className="text-gray-600">Gerencie seus agendamentos de pacientes particulares</p>
+          <p className="text-gray-600">Visualize e gerencie seus agendamentos</p>
         </div>
         
         <button
-          onClick={openCreateModal}
+          onClick={() => openCreateModal()}
           className="btn btn-primary flex items-center"
         >
           <Plus className="h-5 w-5 mr-2" />
@@ -361,76 +629,73 @@ const SchedulingPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Date Range and Filters */}
+      {/* Calendar Controls */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Data Inicial
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="input"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Data Final
-            </label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="input"
-            />
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          {/* View Mode Selector */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            {(['month', 'week', 'day'] as ViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === mode
+                    ? 'bg-white text-red-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {mode === 'month' ? 'Mês' : mode === 'week' ? 'Semana' : 'Dia'}
+              </button>
+            ))}
           </div>
 
-          <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Buscar
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Paciente ou serviço..."
-                className="input pl-10"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Status
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="input"
-            >
-              <option value="">Todos</option>
-              <option value="scheduled">Agendado</option>
-              <option value="completed">Realizado</option>
-              <option value="cancelled">Cancelado</option>
-              <option value="no_show">Faltou</option>
-            </select>
-          </div>
-
-          <div className="flex items-end">
+          {/* Navigation */}
+          <div className="flex items-center space-x-4">
             <button
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('');
-              }}
-              className="btn btn-secondary w-full"
+              onClick={() => navigateCalendar('prev')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              Limpar Filtros
+              <ChevronLeft className="h-5 w-5 text-gray-600" />
             </button>
+            
+            <h2 className="text-lg font-semibold text-gray-900 min-w-[200px] text-center">
+              {getViewTitle()}
+            </h2>
+            
+            <button
+              onClick={() => navigateCalendar('next')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ChevronRight className="h-5 w-5 text-gray-600" />
+            </button>
+          </div>
+
+          {/* Today Button */}
+          <button
+            onClick={() => setCurrentDate(new Date())}
+            className="btn btn-outline"
+          >
+            Hoje
+          </button>
+        </div>
+
+        {/* Status Legend */}
+        <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t border-gray-200">
+          <div className="flex items-center">
+            <div className="w-3 h-3 bg-blue-500 rounded mr-2"></div>
+            <span className="text-sm text-gray-600">Agendado</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 bg-green-500 rounded mr-2"></div>
+            <span className="text-sm text-gray-600">Realizado</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 bg-red-500 rounded mr-2"></div>
+            <span className="text-sm text-gray-600">Cancelado</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 bg-yellow-500 rounded mr-2"></div>
+            <span className="text-sm text-gray-600">Faltou</span>
           </div>
         </div>
       </div>
@@ -447,138 +712,119 @@ const SchedulingPage: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      {/* Calendar View */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {isLoading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Carregando agendamentos...</p>
-          </div>
-        ) : filteredAppointments.length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm || statusFilter ? 'Nenhum agendamento encontrado' : 'Nenhum agendamento cadastrado'}
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {searchTerm || statusFilter
-                ? 'Tente ajustar os filtros de busca.'
-                : 'Comece criando seu primeiro agendamento de paciente particular.'
-              }
-            </p>
-            {!searchTerm && !statusFilter && (
-              <button
-                onClick={openCreateModal}
-                className="btn btn-primary inline-flex items-center"
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                Criar Primeiro Agendamento
-              </button>
-            )}
+            <p className="text-gray-600">Carregando agenda...</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Paciente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Data/Hora
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Serviço
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Local
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Valor
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredAppointments.map((appointment) => {
-                  const statusInfo = getStatusDisplay(appointment.status);
-                  return (
-                    <tr key={appointment.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                              <User className="h-5 w-5 text-red-600" />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {appointment.patient_name}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              CPF: {appointment.patient_cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {formatDate(appointment.appointment_date)}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {formatTime(appointment.appointment_time)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {appointment.service_name}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {appointment.location_name || 'Não informado'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatCurrency(appointment.value)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}>
-                          {statusInfo.text}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => openEditModal(appointment)}
-                            className="text-blue-600 hover:text-blue-900"
-                            title="Editar"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => confirmDelete(appointment)}
-                            className="text-red-600 hover:text-red-900"
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {viewMode === 'month' && renderMonthView()}
+            {viewMode === 'week' && renderWeekView()}
+            {viewMode === 'day' && renderDayView()}
+          </>
         )}
       </div>
+
+      {/* Appointment Detail Modal */}
+      {isDetailModalOpen && selectedAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold">Detalhes do Agendamento</h2>
+              <button
+                onClick={closeModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-700">Status:</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedAppointment.status)}`}>
+                  {getStatusText(selectedAppointment.status)}
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <User className="h-4 w-4 text-gray-400 mr-3" />
+                  <div>
+                    <div className="font-medium">{selectedAppointment.patient_name}</div>
+                    <div className="text-sm text-gray-500">
+                      CPF: {selectedAppointment.patient_cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 text-gray-400 mr-3" />
+                  <div>
+                    <div className="font-medium">
+                      {format(new Date(selectedAppointment.appointment_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {formatTime(selectedAppointment.appointment_time)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center">
+                  <Clock className="h-4 w-4 text-gray-400 mr-3" />
+                  <div>
+                    <div className="font-medium">{selectedAppointment.service_name}</div>
+                    <div className="text-sm text-gray-500">
+                      {formatCurrency(selectedAppointment.value)}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedAppointment.location_name && (
+                  <div className="flex items-start">
+                    <MapPin className="h-4 w-4 text-gray-400 mr-3 mt-0.5" />
+                    <div>
+                      <div className="font-medium">{selectedAppointment.location_name}</div>
+                      {selectedAppointment.location_address && (
+                        <div className="text-sm text-gray-500">
+                          {selectedAppointment.location_address}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {selectedAppointment.notes && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <div className="font-medium text-gray-700 mb-1">Observações:</div>
+                    <div className="text-sm text-gray-600">{selectedAppointment.notes}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={() => openEditModal(selectedAppointment)}
+                className="btn btn-secondary flex items-center"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Editar
+              </button>
+              <button
+                onClick={() => confirmDelete(selectedAppointment)}
+                className="btn bg-red-600 text-white hover:bg-red-700 flex items-center"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Appointment form modal */}
       {isModalOpen && (
