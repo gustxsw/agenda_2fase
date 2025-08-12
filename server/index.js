@@ -2122,7 +2122,6 @@ app.get('/api/consultations', authenticate, async (req, res) => {
         LEFT JOIN dependents d ON c.dependent_id = d.id
         LEFT JOIN services s ON c.service_id = s.id
         LEFT JOIN users prof ON c.professional_id = prof.id
-        LEFT JOIN users u ON c.professional_id = u.id
         WHERE c.professional_id = $1
         ORDER BY c.date DESC
       `;
@@ -2414,29 +2413,17 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
 
     const professionalRevenueResult = await pool.query(
       `SELECT 
-         u.name as professional_name,
-         COALESCE(u.percentage, 50) as professional_percentage,
+         p.name as professional_name,
+         p.percentage as professional_percentage,
          COALESCE(SUM(c.value), 0) as revenue,
          COUNT(c.id) as consultation_count,
-         COALESCE(SUM(
-           CASE 
-             WHEN c.private_patient_id IS NOT NULL THEN c.value
-             ELSE c.value * COALESCE(u.percentage, 50)::decimal / 100.0
-           END
-         ), 0) as professional_payment,
-         COALESCE(SUM(
-           CASE 
-             WHEN c.private_patient_id IS NOT NULL THEN 0
-             ELSE c.value * (100 - COALESCE(u.percentage, 50)::decimal) / 100.0
-           END
-         ), 0) as clinic_revenue
-       FROM users u
-       LEFT JOIN consultations c ON u.id = c.professional_id 
-         AND c.date >= $1 
-         AND c.date <= $2
-       WHERE u.roles @> '["professional"]'::jsonb
-       GROUP BY u.id, u.name, u.percentage
-       HAVING COUNT(c.id) > 0
+         COALESCE(SUM(c.value * (p.percentage / 100.0)), 0) as professional_payment,
+         COALESCE(SUM(c.value * ((100 - p.percentage) / 100.0)), 0) as clinic_revenue
+       FROM users p
+       LEFT JOIN consultations c ON c.professional_id = p.id 
+         AND c.date >= $1 AND c.date <= $2
+       WHERE p.roles::jsonb ? 'professional'
+       GROUP BY p.id, p.name, p.percentage
        ORDER BY revenue DESC`,
       [start_date, end_date]
     );
@@ -2449,6 +2436,7 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
        FROM services s
        LEFT JOIN consultations c ON c.service_id = s.id 
          AND c.date >= $1 AND c.date <= $2
+       WHERE c.id IS NOT NULL
        GROUP BY s.id, s.name
        HAVING COUNT(c.id) > 0
        ORDER BY revenue DESC`,
@@ -2656,11 +2644,12 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
        ORDER BY total_professionals DESC, u.city`
     );
 
+    // Process the categories to group them properly
     const processedData = result.rows.map(row => {
       const categoryMap = new Map();
       
-      row.categories_raw.forEach(item => {
-        const name = item.category_name;
+      row.categories_raw.forEach(cat => {
+        const name = cat.category_name;
         if (categoryMap.has(name)) {
           categoryMap.set(name, categoryMap.get(name) + 1);
         } else {
