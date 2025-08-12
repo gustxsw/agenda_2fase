@@ -2088,6 +2088,14 @@ app.get('/api/consultations', authenticate, async (req, res) => {
                prof.name as professional_name
         FROM consultations c
         LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
+        LEFT JOIN users u ON c.client_id = u.id
+        LEFT JOIN dependents d ON c.dependent_id = d.id
+        LEFT JOIN services s ON c.service_id = s.id
+        LEFT JOIN users prof ON c.professional_id = prof.id
+        WHERE c.client_id = $1 OR c.dependent_id IN (
+          SELECT id FROM dependents WHERE client_id = $1
+        )
+        ORDER BY c.date DESC
       `;
       params = [req.user.id];
     } else if (req.user.currentRole === 'professional') {
@@ -2099,15 +2107,16 @@ app.get('/api/consultations', authenticate, async (req, res) => {
                  ELSE false 
                END as is_dependent,
                s.name as service_name,
-          u.percentage,
-          CASE 
-            WHEN c.private_patient_id IS NOT NULL THEN c.value
-            ELSE (c.value * COALESCE(u.percentage, 50)::decimal / 100.0)
-          END as professional_amount,
-          CASE 
-            WHEN c.private_patient_id IS NOT NULL THEN 0
-            ELSE (c.value * (100 - COALESCE(u.percentage, 50)::decimal) / 100.0)
-          END as amount_to_pay
+               u.percentage,
+               CASE 
+                 WHEN c.private_patient_id IS NOT NULL THEN c.value
+                 ELSE (c.value * COALESCE(u.percentage, 50)::decimal / 100.0)
+               END as professional_amount,
+               CASE 
+                 WHEN c.private_patient_id IS NOT NULL THEN 0
+                 ELSE (c.value * (100 - COALESCE(u.percentage, 50)::decimal) / 100.0)
+               END as amount_to_pay
+        FROM consultations c
         LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
         LEFT JOIN users u ON c.client_id = u.id
         LEFT JOIN dependents d ON c.dependent_id = d.id
@@ -2405,17 +2414,29 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
 
     const professionalRevenueResult = await pool.query(
       `SELECT 
-         p.name as professional_name,
-         p.percentage as professional_percentage,
+         u.name as professional_name,
+         COALESCE(u.percentage, 50) as professional_percentage,
          COALESCE(SUM(c.value), 0) as revenue,
          COUNT(c.id) as consultation_count,
-         COALESCE(SUM(c.value * (p.percentage / 100.0)), 0) as professional_payment,
-         COALESCE(SUM(c.value * ((100 - p.percentage) / 100.0)), 0) as clinic_revenue
-       FROM users p
-       LEFT JOIN consultations c ON c.professional_id = p.id 
-         AND c.date >= $1 AND c.date <= $2
-       WHERE p.roles::jsonb ? 'professional'
-       GROUP BY p.id, p.name, p.percentage
+         COALESCE(SUM(
+           CASE 
+             WHEN c.private_patient_id IS NOT NULL THEN c.value
+             ELSE c.value * COALESCE(u.percentage, 50)::decimal / 100.0
+           END
+         ), 0) as professional_payment,
+         COALESCE(SUM(
+           CASE 
+             WHEN c.private_patient_id IS NOT NULL THEN 0
+             ELSE c.value * (100 - COALESCE(u.percentage, 50)::decimal) / 100.0
+           END
+         ), 0) as clinic_revenue
+       FROM users u
+       LEFT JOIN consultations c ON u.id = c.professional_id 
+         AND c.date >= $1 
+         AND c.date <= $2
+       WHERE u.roles @> '["professional"]'::jsonb
+       GROUP BY u.id, u.name, u.percentage
+       HAVING COUNT(c.id) > 0
        ORDER BY revenue DESC`,
       [start_date, end_date]
     );
@@ -2626,44 +2647,36 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
              'count', 1
            )
          ) as categories_raw
-        end_date
+       FROM users u
+       LEFT JOIN service_categories sc ON u.category_id = sc.id
        WHERE u.roles::jsonb ? 'professional' 
        AND u.city IS NOT NULL 
        AND u.city != ''
        GROUP BY u.city, u.state
        ORDER BY total_professionals DESC, u.city`
-      const totalRevenue = consultations.reduce((sum, c) => sum + Number(c.value), 0);
-      const convenioConsultations = consultations.filter(c => c.private_patient_id === null);
-      const privateConsultations = consultations.filter(c => c.private_patient_id !== null);
+    );
+
+    const processedData = result.rows.map(row => {
+      const categoryMap = new Map();
       
-      const convenioRevenue = convenioConsultations.reduce((sum, c) => sum + Number(c.value), 0);
-      const privateRevenue = privateConsultations.reduce((sum, c) => sum + Number(c.value), 0);
-      const amountToPay = consultations.reduce((sum, c) => sum + Number(c.amount_to_pay), 0);
-      
-      // Get professional percentage (use first consultation's percentage or default)
-      const professionalPercentage = consultations.length > 0 
-        ? (consultations[0].percentage || 50)
-        : 50;
+      row.categories_raw.forEach(item => {
+        const name = item.category_name;
+        if (categoryMap.has(name)) {
+          categoryMap.set(name, categoryMap.get(name) + 1);
         } else {
           categoryMap.set(name, 1);
         }
-          professional_percentage: Number(professionalPercentage),
+      });
 
-          convenio_revenue: convenioRevenue,
-          private_revenue: privateRevenue,
-          consultation_count: Number(consultations.length),
-          convenio_consultations: convenioConsultations.length,
-          private_consultations: privateConsultations.length,
+      const categories = Array.from(categoryMap.entries()).map(([name, count]) => ({
         category_name: name,
         count: count
       }));
 
       return {
         city: row.city,
-          total_value: Number(c.value),
-          professional_amount: Number(c.professional_amount),
-          amount_to_pay: Number(c.amount_to_pay),
-          is_private: c.private_patient_id !== null
+        state: row.state,
+        total_professionals: row.total_professionals,
         categories: categories
       };
     });
