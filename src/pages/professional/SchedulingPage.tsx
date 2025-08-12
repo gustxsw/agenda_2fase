@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Edit, Trash2, Clock, MapPin, User, Users, Search, Filter, X, Check, ChevronLeft, ChevronRight, MessageCircle, Phone, AlertCircle } from 'lucide-react';
+import { Calendar, Plus, Edit, Trash2, Clock, MapPin, User, Users, Search, Filter, X, Check, ChevronLeft, ChevronRight, MessageCircle, Phone, AlertCircle, Eye } from 'lucide-react';
 
 type Appointment = {
   id: number;
@@ -230,6 +230,7 @@ const SchedulingPage: React.FC = () => {
 
   const goToToday = () => {
     setCurrentDate(new Date());
+    setSelectedDate(new Date());
   };
 
   const openCreateModal = (date?: Date) => {
@@ -546,7 +547,8 @@ Obrigado! 🙏`;
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
           {error}
         </div>
       )}
@@ -602,7 +604,7 @@ Obrigado! 🙏`;
           <div className="grid grid-cols-7 gap-1">
             {days.map((day, index) => {
               if (!day) {
-                return <div key={index} className="h-24 p-1"></div>;
+                return <div key={index} className="h-32 p-1"></div>;
               }
 
               const dayAppointments = getAppointmentsForDate(day);
@@ -612,34 +614,42 @@ Obrigado! 🙏`;
               return (
                 <div
                   key={index}
-                  className={`h-24 p-1 border border-gray-100 rounded-lg cursor-pointer transition-colors hover:bg-gray-50 ${
-                    isToday ? 'bg-red-50 border-red-200' : ''
-                  } ${isSelected ? 'bg-blue-50 border-blue-200' : ''}`}
+                  className={`h-32 p-2 border border-gray-100 rounded-lg cursor-pointer transition-all duration-200 hover:bg-gray-50 hover:shadow-md ${
+                    isToday ? 'bg-red-50 border-red-200 shadow-sm' : ''
+                  } ${isSelected ? 'bg-blue-50 border-blue-300 shadow-md' : ''}`}
                   onClick={() => setSelectedDate(day)}
                   onDoubleClick={() => openCreateModal(day)}
                 >
-                  <div className={`text-sm font-medium mb-1 ${
+                  <div className={`text-sm font-medium mb-2 ${
                     isToday ? 'text-red-600' : 'text-gray-900'
                   }`}>
                     {day.getDate()}
                   </div>
                   
                   <div className="space-y-1">
-                    {dayAppointments.slice(0, 2).map((apt) => {
+                    {dayAppointments.slice(0, 3).map((apt) => {
                       const statusInfo = getStatusInfo(apt.status);
                       return (
                         <div
                           key={apt.id}
-                          className={`text-xs p-1 rounded truncate ${statusInfo.bgColor} ${statusInfo.textColor}`}
-                          title={`${apt.patient_name} - ${formatTime(apt.appointment_time)}`}
+                          className={`text-xs p-1.5 rounded-md truncate cursor-pointer transition-all duration-200 hover:scale-105 ${statusInfo.bgColor} ${statusInfo.textColor} border border-opacity-20`}
+                          title={`${apt.patient_name} - ${formatTime(apt.appointment_time)} - ${apt.service_name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openStatusModal(apt);
+                          }}
                         >
-                          {formatTime(apt.appointment_time)} {apt.patient_name}
+                          <div className="flex items-center space-x-1">
+                            <div className={`w-2 h-2 rounded-full ${statusInfo.color}`}></div>
+                            <span className="font-medium">{formatTime(apt.appointment_time)}</span>
+                          </div>
+                          <div className="truncate">{apt.patient_name}</div>
                         </div>
                       );
                     })}
-                    {dayAppointments.length > 2 && (
-                      <div className="text-xs text-gray-500 text-center">
-                        +{dayAppointments.length - 2} mais
+                    {dayAppointments.length > 3 && (
+                      <div className="text-xs text-gray-500 text-center bg-gray-100 rounded-md p-1">
+                        +{dayAppointments.length - 3} mais
                       </div>
                     )}
                   </div>
@@ -650,78 +660,104 @@ Obrigado! 🙏`;
 
           {/* Selected Date Details */}
           {selectedDate && (
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-              <h3 className="font-semibold text-gray-900 mb-3">
-                Agendamentos para {selectedDate.toLocaleDateString('pt-BR')}
-              </h3>
+            <div className="mt-6 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+                  {selectedDate.toLocaleDateString('pt-BR', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </h3>
+                <button
+                  onClick={() => openCreateModal(selectedDate)}
+                  className="btn btn-primary btn-sm flex items-center"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Agendar
+                </button>
+              </div>
               
               {getAppointmentsForDate(selectedDate).length === 0 ? (
-                <div className="text-center py-4">
+                <div className="text-center py-8">
+                  <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-3" />
                   <p className="text-gray-600 mb-3">Nenhum agendamento para este dia</p>
-                  <button
-                    onClick={() => openCreateModal(selectedDate)}
-                    className="btn btn-primary btn-sm"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Agendar Consulta
-                  </button>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {getAppointmentsForDate(selectedDate).map((apt) => {
-                    const statusInfo = getStatusInfo(apt.status);
-                    return (
-                      <div key={apt.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3">
-                            <span className={`w-3 h-3 rounded-full ${statusInfo.color}`}></span>
-                            <div>
-                              <p className="font-medium text-gray-900">{apt.patient_name}</p>
-                              <p className="text-sm text-gray-600">
-                                {formatTime(apt.appointment_time)} - {apt.service_name}
-                              </p>
+                  {getAppointmentsForDate(selectedDate)
+                    .sort((a, b) => a.appointment_time.localeCompare(b.appointment_time))
+                    .map((apt) => {
+                      const statusInfo = getStatusInfo(apt.status);
+                      return (
+                        <div key={apt.id} className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <div className={`w-4 h-4 rounded-full ${statusInfo.color} flex-shrink-0`}></div>
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-gray-900">{apt.patient_name}</p>
+                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.bgColor} ${statusInfo.textColor}`}>
+                                    {statusInfo.label}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600 flex items-center mt-1">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  {formatTime(apt.appointment_time)} - {apt.service_name}
+                                </p>
+                                {apt.location_name && (
+                                  <p className="text-sm text-gray-500 flex items-center mt-1">
+                                    <MapPin className="h-3 w-3 mr-1" />
+                                    {apt.location_name}
+                                  </p>
+                                )}
+                                <p className="text-sm font-medium text-green-600 mt-1">
+                                  {formatCurrency(apt.value)}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          {apt.patient_phone && (
+                          
+                          <div className="flex items-center space-x-2">
+                            {apt.patient_phone && (
+                              <button
+                                onClick={() => sendWhatsAppMessage(apt)}
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                title="Enviar WhatsApp"
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                              </button>
+                            )}
+                            
                             <button
-                              onClick={() => sendWhatsAppMessage(apt)}
-                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Enviar WhatsApp"
+                              onClick={() => openStatusModal(apt)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Alterar Status"
                             >
-                              <MessageCircle className="h-4 w-4" />
+                              <Clock className="h-4 w-4" />
                             </button>
-                          )}
-                          
-                          <button
-                            onClick={() => openStatusModal(apt)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Alterar Status"
-                          >
-                            <Clock className="h-4 w-4" />
-                          </button>
-                          
-                          <button
-                            onClick={() => openEditModal(apt)}
-                            className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                            title="Editar"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          
-                          <button
-                            onClick={() => confirmDelete(apt)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                            
+                            <button
+                              onClick={() => openEditModal(apt)}
+                              className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            
+                            <button
+                              onClick={() => confirmDelete(apt)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               )}
             </div>
@@ -889,14 +925,22 @@ Obrigado! 🙏`;
 
       {/* Status Legend */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Legenda de Status</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <Eye className="h-5 w-5 text-red-600 mr-2" />
+          Legenda de Status
+        </h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {statusOptions.map((status) => (
-            <div key={status.value} className="flex items-center space-x-2">
-              <div className={`w-3 h-3 rounded-full ${status.color}`}></div>
-              <span className="text-sm text-gray-700">{status.label}</span>
+            <div key={status.value} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+              <div className={`w-4 h-4 rounded-full ${status.color}`}></div>
+              <span className="text-sm text-gray-700 font-medium">{status.label}</span>
             </div>
           ))}
+        </div>
+        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+          <p className="text-sm text-blue-700">
+            💡 <strong>Dica:</strong> Clique nos agendamentos do calendário para alterar o status rapidamente, ou use o WhatsApp para confirmar consultas.
+          </p>
         </div>
       </div>
 
@@ -1069,7 +1113,10 @@ Obrigado! 🙏`;
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Alterar Status</h2>
+              <h2 className="text-xl font-bold flex items-center">
+                <Clock className="h-6 w-6 text-blue-600 mr-2" />
+                Alterar Status
+              </h2>
               <button
                 onClick={closeModal}
                 className="text-gray-500 hover:text-gray-700"
@@ -1078,13 +1125,18 @@ Obrigado! 🙏`;
               </button>
             </div>
             
-            <div className="mb-4">
-              <p className="text-gray-700 mb-2">
-                <span className="font-medium">Paciente:</span> {appointmentToUpdate.patient_name}
-              </p>
-              <p className="text-gray-700 mb-4">
-                <span className="font-medium">Data/Hora:</span> {formatDate(appointmentToUpdate.appointment_date)} às {formatTime(appointmentToUpdate.appointment_time)}
-              </p>
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center mb-2">
+                <User className="h-4 w-4 text-gray-600 mr-2" />
+                <span className="font-medium text-gray-900">{appointmentToUpdate.patient_name}</span>
+              </div>
+              <div className="flex items-center text-sm text-gray-600">
+                <Calendar className="h-3 w-3 mr-1" />
+                {formatDate(appointmentToUpdate.appointment_date)} às {formatTime(appointmentToUpdate.appointment_time)}
+              </div>
+              <div className="text-sm text-gray-600 mt-1">
+                {appointmentToUpdate.service_name} - {formatCurrency(appointmentToUpdate.value)}
+              </div>
             </div>
 
             <div className="mb-6">
@@ -1093,7 +1145,7 @@ Obrigado! 🙏`;
               </label>
               <div className="space-y-2">
                 {statusOptions.map((status) => (
-                  <label key={status.value} className="flex items-center">
+                  <label key={status.value} className="flex items-center p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
                     <input
                       type="radio"
                       name="status"
@@ -1103,8 +1155,8 @@ Obrigado! 🙏`;
                       className="mr-3"
                     />
                     <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full ${status.color} mr-2`}></div>
-                      <span className="text-sm text-gray-700">{status.label}</span>
+                      <div className={`w-4 h-4 rounded-full ${status.color} mr-3`}></div>
+                      <span className="text-sm font-medium text-gray-700">{status.label}</span>
                     </div>
                   </label>
                 ))}
@@ -1134,11 +1186,22 @@ Obrigado! 🙏`;
       {showDeleteConfirm && appointmentToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold mb-4">Confirmar Exclusão</h2>
+            <h2 className="text-xl font-bold mb-4 flex items-center">
+              <AlertCircle className="h-6 w-6 text-red-600 mr-2" />
+              Confirmar Exclusão
+            </h2>
             
-            <p className="mb-6">
-              Tem certeza que deseja excluir este agendamento?
-              Esta ação não pode ser desfeita.
+            <div className="mb-6 p-4 bg-red-50 rounded-lg">
+              <p className="text-red-800 mb-2">
+                <strong>Paciente:</strong> {appointmentToDelete.patient_name}
+              </p>
+              <p className="text-red-800">
+                <strong>Data/Hora:</strong> {formatDate(appointmentToDelete.appointment_date)} às {formatTime(appointmentToDelete.appointment_time)}
+              </p>
+            </div>
+            
+            <p className="mb-6 text-gray-700">
+              Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.
             </p>
             
             <div className="flex justify-end space-x-3">
@@ -1154,7 +1217,7 @@ Obrigado! 🙏`;
                 className="btn bg-red-600 text-white hover:bg-red-700 flex items-center"
               >
                 <Check className="h-4 w-4 mr-2" />
-                Confirmar
+                Confirmar Exclusão
               </button>
             </div>
           </div>
