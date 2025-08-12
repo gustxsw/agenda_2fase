@@ -11,23 +11,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { pool } from "./db.js";
 import { generateDocumentPDF } from './utils/documentGenerator.js';
-import authRoutes from './routes/auth.js';
-import userRoutes from './routes/users.js';
-import consultationRoutes from './routes/consultations.js';
-import serviceRoutes from './routes/services.js';
-import serviceCategoryRoutes from './routes/serviceCategories.js';
-import dependentRoutes from './routes/dependents.js';
-import professionalRoutes from './routes/professionals.js';
-import reportRoutes from './routes/reports.js';
-import paymentRoutes from './routes/payments.js';
-import privatePatientRoutes from './routes/privatePatients.js';
-import medicalRecordRoutes from './routes/medicalRecords.js';
-import medicalDocumentRoutes from './routes/medicalDocuments.js';
-import attendanceLocationRoutes from './routes/attendanceLocations.js';
-import adminRoutes from './routes/admin.js';
-import schedulingRoutes from './routes/scheduling.js';
-import appointmentRoutes from './routes/appointments.js';
-import uploadRoutes from './routes/upload.js';
+import createUpload from './middleware/upload.js';
 
 // Load environment variables
 dotenv.config();
@@ -707,28 +691,6 @@ app.use(
     maxAge: process.env.NODE_ENV === "production" ? "1y" : "0",
   })
 );
-
-// =============================================================================
-// ROUTE HANDLERS
-// =============================================================================
-
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/consultations', consultationRoutes);
-app.use('/api/services', serviceRoutes);
-app.use('/api/service-categories', serviceCategoryRoutes);
-app.use('/api/dependents', dependentRoutes);
-app.use('/api/professionals', professionalRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/private-patients', privatePatientRoutes);
-app.use('/api/medical-records', medicalRecordRoutes);
-app.use('/api/medical-documents', medicalDocumentRoutes);
-app.use('/api/attendance-locations', attendanceLocationRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/scheduling', schedulingRoutes);
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api', uploadRoutes);
 
 // =============================================================================
 // AUTHENTICATION ROUTES
@@ -2970,87 +2932,6 @@ app.delete(
       res.json({ message: "Prontuário excluído com sucesso" });
     } catch (error) {
       console.error("Error deleting medical record:", error);
-      res.status(500).json({ message: "Erro interno do servidor" });
-    }
-  }
-);
-
-// =============================================================================
-// MEDICAL DOCUMENTS ROUTES
-// =============================================================================
-
-// Get medical documents for current professional
-app.get(
-  "/api/medical-documents",
-  authenticate,
-  authorize(["professional"]),
-  async (req, res) => {
-    try {
-      const result = await pool.query(
-        `SELECT md.*, 
-              COALESCE(pp.name, c.name, d.name) as patient_name
-       FROM medical_documents md
-       LEFT JOIN private_patients pp ON md.private_patient_id = pp.id
-       LEFT JOIN users c ON md.client_id = c.id
-       LEFT JOIN dependents d ON md.dependent_id = d.id
-       WHERE md.professional_id = $1
-       ORDER BY md.created_at DESC`,
-        [req.user.id]
-      );
-
-      res.json(result.rows);
-    } catch (error) {
-      console.error("Error fetching medical documents:", error);
-      res.status(500).json({ message: "Erro interno do servidor" });
-    }
-  }
-);
-
-// Create medical document
-app.post(
-  "/api/medical-documents",
-  authenticate,
-  authorize(["professional"]),
-  async (req, res) => {
-    try {
-      const {
-        private_patient_id,
-        client_id,
-        dependent_id,
-        document_type,
-        title,
-        template_data,
-      } = req.body;
-
-      if (!document_type || !title) {
-        return res
-          .status(400)
-          .json({ message: "Tipo de documento e título são obrigatórios" });
-      }
-
-      const documentUrl = `${
-        process.env.API_URL || "http://localhost:3001"
-      }/documents/${Date.now()}_${title.replace(/\s+/g, "_")}.pdf`;
-
-      const result = await pool.query(
-        `INSERT INTO medical_documents 
-       (professional_id, private_patient_id, client_id, dependent_id, document_type, title, document_url, template_data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [
-          req.user.id,
-          private_patient_id,
-          client_id,
-          dependent_id,
-          document_type,
-          title,
-          documentUrl,
-          JSON.stringify(template_data),
-        ]
-      );
-
-      res.status(201).json(result.rows[0]);
-    } catch (error) {
-      console.error("Error creating medical document:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
     }
   }
