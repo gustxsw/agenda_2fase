@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileImage, FileText, Upload, Download, Eye, Plus, Search, Calendar, X, Check, User } from 'lucide-react';
+import { FileImage, FileText, Upload, Download, Eye, Plus, Search, Calendar, X, Check, User, Trash2 } from 'lucide-react';
 
 type DocumentType = 
   | 'certificate' 
