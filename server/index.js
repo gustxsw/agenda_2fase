@@ -1944,7 +1944,7 @@ app.put('/api/scheduling/settings', authenticate, authorize(['professional']), a
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating schedule settings:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
+            'SELECT COALESCE(percentage, 50) as percentage FROM users WHERE id = $1',
   }
 });
 
@@ -2551,7 +2551,7 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
         total_revenue: parseFloat(summary.total_revenue),
         convenio_revenue: parseFloat(summary.convenio_revenue),
         private_revenue: parseFloat(summary.private_revenue),
-        professional_percentage: professionalPercentage,
+            'SELECT COALESCE(percentage, 50) as percentage FROM users WHERE id = $1',
         amount_to_pay: amountToPay,
       }
     });
@@ -2568,8 +2568,8 @@ app.get('/api/reports/clients-by-city', authenticate, authorize(['admin']), asyn
       `SELECT 
          city,
          state,
-         COUNT(*) as client_count,
-         COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active_clients,
+              (c.value * $3::decimal / 100) as professional_amount,
+              (c.value * (100 - $3::decimal) / 100) as clinic_amount
          COUNT(CASE WHEN subscription_status = 'pending' THEN 1 END) as pending_clients,
          COUNT(CASE WHEN subscription_status = 'expired' THEN 1 END) as expired_clients
        FROM users 
@@ -2597,7 +2597,7 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
          COUNT(*) as total_professionals,
          json_agg(
            json_build_object(
-             'category_name', COALESCE(sc.name, 'Sem categoria'),
+          const amountToPay = convenioRevenue * (100 - professionalPercentage) / 100.0;
              'count', 1
            )
          ) as categories_raw
