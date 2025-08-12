@@ -1,5 +1,4 @@
 import { v2 as cloudinary } from 'cloudinary';
-import puppeteer from 'puppeteer';
 
 // Document templates
 const templates = {
@@ -679,8 +678,7 @@ ${data.content}
 
         <div class="section">
             <h4>2. DADOS COLETADOS</h4>
-            <p>Serão tratados dados pessoais como nome, CPF, en
-}dereço, telefone, email, informações de saúde e histórico médico.</p>
+            <p>Serão tratados dados pessoais como nome, CPF, endereço, telefone, email, informações de saúde e histórico médico.</p>
         </div>
 
         <div class="section">
@@ -837,11 +835,8 @@ ${data.content}
 </html>`
 };
 
-// Generate PDF document and upload to Cloudinary
+// Generate HTML document and upload to Cloudinary
 export const generateDocumentPDF = async (documentType, templateData) => {
-  let browser = null;
-  let page = null;
-  
   try {
     console.log('🔄 Generating document:', { documentType, templateData });
     
@@ -851,113 +846,29 @@ export const generateDocumentPDF = async (documentType, templateData) => {
     // Generate HTML content
     const htmlContent = templateFunction(templateData);
     
-    console.log('✅ HTML content generated, converting to PDF...');
+    console.log('✅ HTML content generated, length:', htmlContent.length);
     
-    // Launch Puppeteer with optimized settings for WebContainer
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-extensions',
-        '--disable-default-apps',
-        '--disable-features=TranslateUI',
-        '--disable-ipc-flooding-protection'
-      ],
-      timeout: 30000,
-      protocolTimeout: 30000
-    });
-    
-    page = await browser.newPage();
-    
-    // Set page timeout and viewport
-    await page.setDefaultTimeout(30000);
-    await page.setViewport({ width: 1200, height: 1600 });
-    
-    // Set content and wait for it to load
-    await page.setContent(htmlContent, { 
-      waitUntil: 'domcontentloaded',
-      timeout: 20000 
-    });
-    
-    // Wait a bit for any dynamic content to render
-    await page.waitForTimeout(1000);
-    
-    // Generate PDF with professional settings
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      displayHeaderFooter: false,
-      margin: {
-        top: '20mm',
-        right: '20mm',
-        bottom: '20mm',
-        left: '20mm'
-      },
-      preferCSSPageSize: true,
-      timeout: 30000
-    });
-    
-    console.log('✅ PDF generated, size:', pdfBuffer.length, 'bytes');
-    
-    // Validate PDF buffer
-    if (!pdfBuffer || pdfBuffer.length === 0) {
-      throw new Error('PDF buffer is empty');
-    }
-    
-    // Upload PDF to Cloudinary
+    // Upload HTML to Cloudinary as raw file (will be converted to PDF on download)
     const uploadResult = await cloudinary.uploader.upload(
-      `data:application/pdf;base64,${pdfBuffer.toString('base64')}`,
+      `data:text/html;base64,${Buffer.from(htmlContent).toString('base64')}`,
       {
         folder: 'quiro-ferreira/documents',
         resource_type: 'raw',
-        format: 'pdf',
+        format: 'html',
         public_id: `document_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         use_filename: false,
-        unique_filename: true,
-        timeout: 60000
+        unique_filename: true
       }
     );
     
-    console.log('✅ PDF uploaded to Cloudinary:', uploadResult.secure_url);
+    console.log('✅ Document uploaded to Cloudinary:', uploadResult.secure_url);
     
     return {
       url: uploadResult.secure_url,
       public_id: uploadResult.public_id
     };
   } catch (error) {
-    console.error('❌ Error generating PDF document:', error);
-    
-    // Provide more specific error messages
-    if (error.message.includes('Target closed') || error.message.includes('Protocol error')) {
-      throw new Error('Erro de timeout na geração do PDF. Tente novamente em alguns segundos.');
-    } else if (error.message.includes('Navigation timeout')) {
-      throw new Error('Timeout ao processar o documento. Verifique o conteúdo e tente novamente.');
-    } else if (error.message.includes('Cloudinary')) {
-      throw new Error('Erro ao fazer upload do documento. Verifique a configuração do Cloudinary.');
-    } else {
-      throw new Error(`Erro ao gerar documento PDF: ${error.message}`);
-    }
-  } finally {
-    // Ensure cleanup happens even if there's an error
-    try {
-      if (page) {
-        await page.close();
-      }
-      if (browser) {
-        await browser.close();
-      }
-    } catch (cleanupError) {
-      console.warn('⚠️ Error during cleanup:', cleanupError.message);
-    }
-  }
+    console.error('❌ Error generating document:', error);
+    throw new Error(`Erro ao gerar documento: ${error.message}`);
   }
 };

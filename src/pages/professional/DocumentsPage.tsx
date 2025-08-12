@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileImage, FileText, Upload, Download, Eye, Plus, Search, Calendar, X, Check, User, Trash2 } from 'lucide-react';
+import { FileImage, FileText, Upload, Download, Eye, Plus, Search, Calendar, X, Check, User } from 'lucide-react';
 
 type DocumentType = 
   | 'certificate' 
@@ -211,23 +211,25 @@ const DocumentsPage: React.FC = () => {
       const result = await response.json();
       const { title, documentUrl } = result;
 
-      // Clean filename for PDF
+      // Clean filename
       const fileName = title.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
       
-      // Create download link for PDF
+      // Create download link that opens in new tab for mobile compatibility
       const link = document.createElement('a');
       link.href = documentUrl;
-      link.download = `${fileName}.pdf`;
-      
-      // For mobile devices, also open in new tab as fallback
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
+      
+      // For desktop browsers, try to force download
+      if (window.navigator.userAgent.indexOf('Mobile') === -1) {
+        link.download = `${fileName}.html`;
+      }
       
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      setSuccess('Documento PDF gerado e baixado com sucesso!');
+      setSuccess('Documento aberto em nova aba. Use Ctrl+S (ou Cmd+S no Mac) para salvar ou imprimir.');
       await fetchData();
 
       setTimeout(() => {
@@ -527,9 +529,9 @@ const DocumentsPage: React.FC = () => {
                           </a>
                           <a
                             href={document.document_url}
-                            download={`${document.title.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_')}.pdf`}
+                            download
                             className="text-green-600 hover:text-green-900"
-                            title="Download PDF"
+                            title="Download"
                           >
                             <Download className="h-4 w-4" />
                           </a>
