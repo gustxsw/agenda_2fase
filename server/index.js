@@ -2449,87 +2449,13 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
 app.get('/api/reports/professional-revenue', authenticate, authorize(['professional']), async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
-    const professionalId = req.user.id;
-    
-    console.log('🔄 Generating professional revenue report for:', professionalId);
-    console.log('📅 Date range:', { start_date, end_date });
-    
-    // Get professional percentage
-    const professionalQuery = await pool.query(
-      'SELECT percentage FROM users WHERE id = $1',
-      [professionalId]
-    );
-    
-    const professionalPercentage = professionalQuery.rows[0]?.percentage || 50;
-    console.log('💰 Professional percentage:', professionalPercentage);
-    
-    // Get consultations with calculated amounts
-    const consultationsQuery = `
-      SELECT 
-        c.date,
-        COALESCE(cl.name, d.name, pp.name) as client_name,
-        s.name as service_name,
-        c.value as total_value,
-        (c.value * $3::decimal / 100.0) as professional_amount,
-        (c.value - (c.value * $3::decimal / 100.0)) as amount_to_pay
-      FROM consultations c
-      LEFT JOIN users cl ON c.client_id = cl.id
-      LEFT JOIN dependents d ON c.dependent_id = d.id
-      LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
-      LEFT JOIN services s ON c.service_id = s.id
-      WHERE c.professional_id = $1
-        AND c.date >= $2
-        AND c.date <= $4
-      ORDER BY c.date DESC
-    `;
-    
-    const consultationsResult = await pool.query(consultationsQuery, [
-      professionalId,
-      start_date,
-      professionalPercentage,
-      end_date
-    ]);
-    
-    console.log('📊 Consultations found:', consultationsResult.rows.length);
-    
-    // Calculate summary
-    const consultations = consultationsResult.rows;
-    const summary = {
-      professional_percentage: professionalPercentage,
-      total_revenue: consultations.reduce((sum, c) => sum + parseFloat(c.total_value || 0), 0),
-      consultation_count: consultations.length,
-      amount_to_pay: consultations.reduce((sum, c) => sum + parseFloat(c.amount_to_pay || 0), 0)
-    };
-    
-    console.log('📈 Summary calculated:', summary);
-    
-    res.json({
-      summary,
-      consultations: consultations.map(c => ({
-        date: c.date,
-        client_name: c.client_name,
-        service_name: c.service_name,
-        total_value: parseFloat(c.total_value || 0),
-        amount_to_pay: parseFloat(c.amount_to_pay || 0)
-      }))
-    });
-  } catch (error) {
-    console.error('❌ Error generating professional revenue report:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
-  }
-});
-
-// Get detailed professional report
-app.get('/api/reports/professional-detailed', authenticate, authorize(['professional']), async (req, res) => {
-  try {
-    const { start_date, end_date } = req.query;
 
     if (!start_date || !end_date) {
       return res.status(400).json({ message: 'Data inicial e final são obrigatórias' });
     }
 
     const professionalResult = await pool.query(
-      'SELECT COALESCE(percentage, 50) as percentage FROM users WHERE id = $1',
+      'SELECT percentage FROM users WHERE id = $1',
       [req.user.id]
     );
 
@@ -2541,36 +2467,121 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
 
     const consultationsResult = await pool.query(
       `SELECT 
-         COUNT(*) as total_consultations,
-         COUNT(CASE WHEN private_patient_id IS NOT NULL THEN 1 END) as private_consultations,
-         COUNT(CASE WHEN (client_id IS NOT NULL OR dependent_id IS NOT NULL) THEN 1 END) as convenio_consultations,
-         COALESCE(SUM(value), 0) as total_revenue,
-         COALESCE(SUM(CASE WHEN private_patient_id IS NOT NULL THEN value ELSE 0 END), 0) as private_revenue,
-         COALESCE(SUM(CASE WHEN (client_id IS NOT NULL OR dependent_id IS NOT NULL) THEN value ELSE 0 END), 0) as convenio_revenue
-       FROM consultations 
-       WHERE professional_id = $1 
-       AND date >= $2 AND date <= $3`,
-      [req.user.id, start_date, end_date]
+         c.date,
+         COALESCE(u.name, d.name, pp.name) as client_name,
+         s.name as service_name,
+         c.value as total_value,
+         CASE 
+           WHEN pp.id IS NOT NULL THEN c.value
+           ELSE c.value * ((100 - $3) / 100.0)
+         END as amount_to_pay
+       FROM consultations c
+       LEFT JOIN users u ON c.client_id = u.id
+       LEFT JOIN dependents d ON c.dependent_id = d.id
+       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
+       LEFT JOIN services s ON c.service_id = s.id
+       WHERE c.professional_id = $1 
+       AND c.date >= $2 AND c.date <= $4
+       ORDER BY c.date DESC`,
+      [req.user.id, start_date, professionalPercentage, end_date]
     );
 
-    const summary = consultationsResult.rows[0];
-    
-    const amountToPay = parseFloat(summary.convenio_revenue) * ((100 - professionalPercentage) / 100.0);
+    const consultations = consultationsResult.rows;
+    const totalRevenue = consultations.reduce((sum, c) => sum + parseFloat(c.total_value), 0);
+    const totalAmountToPay = consultations.reduce((sum, c) => sum + parseFloat(c.amount_to_pay), 0);
 
     res.json({
       summary: {
-        total_consultations: parseInt(summary.total_consultations),
-        convenio_consultations: parseInt(summary.convenio_consultations),
-        private_consultations: parseInt(summary.private_consultations),
-        total_revenue: parseFloat(summary.total_revenue),
-        convenio_revenue: parseFloat(summary.convenio_revenue),
-        private_revenue: parseFloat(summary.private_revenue),
         professional_percentage: professionalPercentage,
-        amount_to_pay: amountToPay,
-      }
+        total_revenue: totalRevenue,
+        consultation_count: consultations.length,
+        amount_to_pay: totalAmountToPay,
+      },
+      consultations: consultations,
     });
   } catch (error) {
-    console.error('Error generating detailed professional report:', error);
+    console.error('Error generating professional revenue report:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Get detailed professional report
+app.get('/api/reports/professional-detailed', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    const professionalId = req.user.id;
+    
+    console.log('🔄 Generating detailed professional report for:', professionalId);
+    
+    // Get professional percentage
+    const professionalQuery = await pool.query(
+      'SELECT percentage FROM users WHERE id = $1',
+      [professionalId]
+    );
+    
+    const professionalPercentage = professionalQuery.rows[0]?.percentage || 50;
+    
+    // Get convenio consultations (from consultations table)
+    const convenioQuery = `
+      SELECT 
+        COUNT(*) as count,
+        COALESCE(SUM(c.value), 0)::decimal as revenue
+      FROM consultations c
+      WHERE c.professional_id = $1
+        AND c.date >= $2
+        AND c.date <= $3
+        AND (c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL)
+    `;
+    
+    const convenioResult = await pool.query(convenioQuery, [
+      professionalId,
+      start_date,
+      end_date
+    ]);
+    
+    // Get private consultations (from appointments table)
+    const privateQuery = `
+      SELECT 
+        COUNT(*) as count,
+        COALESCE(SUM(a.value), 0)::decimal as revenue
+      FROM appointments a
+      WHERE a.professional_id = $1
+        AND a.appointment_date >= $2
+        AND a.appointment_date <= $3
+        AND a.private_patient_id IS NOT NULL
+    `;
+    
+    const privateResult = await pool.query(privateQuery, [
+      professionalId,
+      start_date,
+      end_date
+    ]);
+    
+    const convenioData = convenioResult.rows[0];
+    const privateData = privateResult.rows[0];
+    
+    const convenioConsultations = parseInt(convenioData.count) || 0;
+    const convenioRevenue = parseFloat(convenioData.revenue) || 0;
+    const privateConsultations = parseInt(privateData.count) || 0;
+    const privateRevenue = parseFloat(privateData.revenue) || 0;
+    
+    const totalRevenue = convenioRevenue + privateRevenue;
+    const amountToPay = convenioRevenue * (100 - professionalPercentage) / 100.0;
+    
+    const summary = {
+      total_consultations: convenioConsultations + privateConsultations,
+      convenio_consultations: convenioConsultations,
+      private_consultations: privateConsultations,
+      total_revenue: totalRevenue,
+      convenio_revenue: convenioRevenue,
+      private_revenue: privateRevenue,
+      professional_percentage: professionalPercentage,
+      amount_to_pay: amountToPay
+    };
+    
+    res.json({ summary });
+  } catch (error) {
+    console.error('❌ Error generating detailed professional report:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
