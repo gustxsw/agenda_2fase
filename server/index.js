@@ -4,22 +4,8 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-// Import routes
-import authRoutes from './routes/auth.js';
-import userRoutes from './routes/users.js';
-import serviceRoutes from './routes/services.js';
-import consultationRoutes from './routes/consultations.js';
-import dependentRoutes from './routes/dependents.js';
-import professionalRoutes from './routes/professionals.js';
-import appointmentRoutes from './routes/appointments.js';
-import privatePatientRoutes from './routes/privatePatients.js';
-import medicalRecordRoutes from './routes/medicalRecords.js';
-import medicalDocumentRoutes from './routes/medicalDocuments.js';
-import attendanceLocationRoutes from './routes/attendanceLocations.js';
-import adminRoutes from './routes/admin.js';
-import paymentRoutes from './routes/payments.js';
-import uploadRoutes from './routes/upload.js';
+import { pool } from './db.js';
+import { authenticate, authorize } from './middleware/auth.js';
 
 dotenv.config();
 
@@ -47,23 +33,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/services', serviceRoutes);
-app.use('/api/service-categories', serviceRoutes);
-app.use('/api/consultations', consultationRoutes);
-app.use('/api/dependents', dependentRoutes);
-app.use('/api/professionals', professionalRoutes);
-app.use('/api/clients', professionalRoutes);
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api/private-patients', privatePatientRoutes);
-app.use('/api/medical-records', medicalRecordRoutes);
-app.use('/api/medical-documents', medicalDocumentRoutes);
-app.use('/api/attendance-locations', attendanceLocationRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api', paymentRoutes);
-app.use('/api', uploadRoutes);
+// TODO: Add your API routes here inline
 
 // Professional revenue report
 app.get('/api/reports/professional-revenue', authenticate, authorize(['professional']), async (req, res) => {
