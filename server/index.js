@@ -2937,87 +2937,6 @@ app.delete(
 );
 
 // =============================================================================
-// MEDICAL DOCUMENTS ROUTES
-// =============================================================================
-
-// Get medical documents for current professional
-app.get(
-  "/api/medical-documents",
-  authenticate,
-  authorize(["professional"]),
-  async (req, res) => {
-    try {
-      const result = await pool.query(
-        `SELECT md.*, 
-              COALESCE(pp.name, c.name, d.name) as patient_name
-       FROM medical_documents md
-       LEFT JOIN private_patients pp ON md.private_patient_id = pp.id
-       LEFT JOIN users c ON md.client_id = c.id
-       LEFT JOIN dependents d ON md.dependent_id = d.id
-       WHERE md.professional_id = $1
-       ORDER BY md.created_at DESC`,
-        [req.user.id]
-      );
-
-      res.json(result.rows);
-    } catch (error) {
-      console.error("Error fetching medical documents:", error);
-      res.status(500).json({ message: "Erro interno do servidor" });
-    }
-  }
-);
-
-// Create medical document
-app.post(
-  "/api/medical-documents",
-  authenticate,
-  authorize(["professional"]),
-  async (req, res) => {
-    try {
-      const {
-        private_patient_id,
-        client_id,
-        dependent_id,
-        document_type,
-        title,
-        template_data,
-      } = req.body;
-
-      if (!document_type || !title) {
-        return res
-          .status(400)
-          .json({ message: "Tipo de documento e título são obrigatórios" });
-      }
-
-      const documentUrl = `${
-        process.env.API_URL || "http://localhost:3001"
-      }/documents/${Date.now()}_${title.replace(/\s+/g, "_")}.pdf`;
-
-      const result = await pool.query(
-        `INSERT INTO medical_documents 
-       (professional_id, private_patient_id, client_id, dependent_id, document_type, title, document_url, template_data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [
-          req.user.id,
-          private_patient_id,
-          client_id,
-          dependent_id,
-          document_type,
-          title,
-          documentUrl,
-          JSON.stringify(template_data),
-        ]
-      );
-
-      res.status(201).json(result.rows[0]);
-    } catch (error) {
-      console.error("Error creating medical document:", error);
-      res.status(500).json({ message: "Erro interno do servidor" });
-    }
-  }
-);
-
-// =============================================================================
 // REPORTS ROUTES
 // =============================================================================
 
@@ -3116,43 +3035,51 @@ app.get(
       const professionalPercentage =
         professionalResult.rows[0].percentage || 50;
 
+      const professionalId = req.user.id;
+
+      // Get consultations for the professional in the date range
+      // Include both direct consultations and those from completed appointments
       const consultationsResult = await pool.query(
-        `SELECT 
-         c.date,
-         COALESCE(u.name, d.name, pp.name) as client_name,
-         s.name as service_name,
-         c.value as total_value,
-         CASE 
-           WHEN pp.id IS NOT NULL THEN c.value
-           ELSE c.value * ((100 - $3) / 100.0)
-         END as amount_to_pay
-       FROM consultations c
-       LEFT JOIN users u ON c.client_id = u.id
-       LEFT JOIN dependents d ON c.dependent_id = d.id
-       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
-       LEFT JOIN services s ON c.service_id = s.id
-       WHERE c.professional_id = $1 
-       AND c.date >= $2 AND c.date <= $4
-       ORDER BY c.date DESC`,
-        [req.user.id, start_date, professionalPercentage, end_date]
+      \  `SELECT c.*, s.name as service_name, 
+                COALESCE(u.name, pp.name, d.name) as client_name,
+                CASE 
+                  WHEN c.private_patient_id IS NOT NULL THEN 'private'
+                  ELSE 'convenio'
+                END as consultation_type
+         FROM consultations c
+         LEFT JOIN services s ON c.service_id = s.id
+         LEFT JOIN users u ON c.client_id = u.id
+         LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
+         LEFT JOIN dependents d ON c.dependent_id = d.id
+         WHERE c.professional_id = $1 
+           AND c.date >= $2 
+           AND c.date <= $3
+         ORDER BY c.date DESC`,
+        [professionalId, start_date, end_date]
       );
 
       const consultations = consultationsResult.rows;
-      const totalRevenue = consultations.reduce(
-        (sum, c) => sum + parseFloat(c.total_value),
-        0
-      );
-      const totalAmountToPay = consultations.reduce(
-        (sum, c) => sum + parseFloat(c.amount_to_pay),
-        0
-      );
+
+      // Separate convenio and private consultations
+      const convenioConsultations = consultations.filter(c => c.consultation_type === 'convenio');
+      const privateConsultations = consultations.filter(c => c.consultation_type === 'private');
+      
+      const convenioRevenue = convenioConsultations.reduce((sum, consultation) => sum + parseFloat(consultation.value), 0);
+      const privateRevenue = privateConsultations.reduce((sum, consultation) => sum + parseFloat(consultation.value), 0);
+      
+      // Calculate amount to pay to clinic (clinic's percentage of convenio consultations only)
+      const amountToPay = convenioRevenue * ((100 - professionalPercentage) / 100);
 
       res.json({
         summary: {
           professional_percentage: professionalPercentage,
-          total_revenue: totalRevenue,
+          total_revenue: convenioRevenue + privateRevenue,
+          convenio_revenue: convenioRevenue,
+          private_revenue: privateRevenue,
           consultation_count: consultations.length,
-          amount_to_pay: totalAmountToPay,
+          convenio_consultation_count: convenioConsultations.length,
+          private_consultation_count: privateConsultations.length,
+          amount_to_pay: amountToPay,
         },
         consultations: consultations,
       });
@@ -3191,7 +3118,7 @@ app.get(
         professionalResult.rows[0].percentage || 50;
 
       const consultationsResult = await pool.query(
-        `SELECT 
+        \`SELECT 
          COUNT(*) as total_consultations,
          COUNT(CASE WHEN private_patient_id IS NOT NULL THEN 1 END) as private_consultations,
          COUNT(CASE WHEN (client_id IS NOT NULL OR dependent_id IS NOT NULL) THEN 1 END) as convenio_consultations,
@@ -3237,13 +3164,13 @@ app.get(
   async (req, res) => {
     try {
       const result = await pool.query(
-        `SELECT 
+        \`SELECT 
          city,
          state,
          COUNT(*) as client_count,
-         COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active_clients,
-         COUNT(CASE WHEN subscription_status = 'pending' THEN 1 END) as pending_clients,
-         COUNT(CASE WHEN subscription_status = 'expired' THEN 1 END) as expired_clients
+         COUNT(CASE WHEN subscription_status = 'active\' THEN 1 END) as active_clients,
+         COUNT(CASE WHEN subscription_status = 'pending\' THEN 1 END) as pending_clients,
+         COUNT(CASE WHEN subscription_status = 'expired\' THEN 1 END) as expired_clients
        FROM users 
        WHERE roles::jsonb ? 'client' 
        AND city IS NOT NULL 
@@ -3268,7 +3195,7 @@ app.get(
   async (req, res) => {
     try {
       const result = await pool.query(
-        `SELECT 
+        \`SELECT 
          u.city,
          u.state,
          COUNT(*) as total_professionals,
@@ -3334,13 +3261,13 @@ app.get(
   async (req, res) => {
     try {
       const result = await pool.query(
-        `SELECT 
+        \`SELECT 
          u.id,
          u.name,
          u.email,
          u.phone,
          sc.name as category_name,
-         COALESCE(pss.status = 'active' AND pss.expires_at > NOW(), false) as has_scheduling_access,
+         COALESCE(pss.status = 'active\' AND pss.expires_at > NOW(), false) as has_scheduling_access,
          pss.expires_at as access_expires_at,
          pss.granted_by as access_granted_by,
          pss.granted_at as access_granted_at,
@@ -3378,7 +3305,7 @@ app.post(
       }
 
       const professionalCheck = await pool.query(
-        `SELECT id FROM users WHERE id = $1 AND roles::jsonb ? 'professional'`,
+        \`SELECT id FROM users WHERE id = $1 AND roles::jsonb ? 'professional'`,
         [professional_id]
       );
 
@@ -3387,7 +3314,7 @@ app.post(
       }
 
       const result = await pool.query(
-        `INSERT INTO professional_scheduling_subscriptions 
+        \`INSERT INTO professional_scheduling_subscriptions 
        (professional_id, status, expires_at, granted_by, granted_at, reason, is_admin_granted)
        VALUES ($1, 'active', $2, $3, CURRENT_TIMESTAMP, $4, true)
        ON CONFLICT (professional_id) 
@@ -3430,7 +3357,7 @@ app.post(
       }
 
       await pool.query(
-        `UPDATE professional_scheduling_subscriptions 
+        \`UPDATE professional_scheduling_subscriptions 
        SET status = 'revoked', 
            revoked_by = $1,
            revoked_at = CURRENT_TIMESTAMP,
@@ -3461,8 +3388,8 @@ app.post(
       console.log("🔄 Creating subscription for client:", req.user.id);
 
       const existingSubscription = await pool.query(
-        `SELECT * FROM client_subscriptions 
-       WHERE client_id = $1 AND status = 'active' AND expires_at > NOW()`,
+        \`SELECT * FROM client_subscriptions 
+       WHERE client_id = $1 AND status = 'active\' AND expires_at > NOW()`,
         [req.user.id]
       );
 
@@ -3473,7 +3400,7 @@ app.post(
       }
 
       const dependentsResult = await pool.query(
-        `SELECT COUNT(*) as count FROM dependents WHERE client_id = $1`,
+        \`SELECT COUNT(*) as count FROM dependents WHERE client_id = $1`,
         [req.user.id]
       );
 
@@ -3482,18 +3409,18 @@ app.post(
       const dependentPrice = 50;
       const totalAmount = basePrice + dependentCount * dependentPrice;
 
-      const externalReference = `subscription_${req.user.id}_${Date.now()}`;
+      const externalReference = \`subscription_${req.user.id}_${Date.now()}`;
 
       await pool.query(
-        `INSERT INTO client_payments 
+        \`INSERT INTO client_payments 
        (client_id, amount, status, external_reference, dependent_count)
        VALUES ($1, $2, 'pending', $3, $4)`,
         [req.user.id, totalAmount, externalReference, dependentCount]
       );
 
       res.json({
-        preference_id: `mock_${externalReference}`,
-        init_point: `${
+        preference_id: \`mock_${externalReference}`,
+        init_point: \`${
           process.env.FRONTEND_URL || "http://localhost:5173"
         }/client/payment-success`,
         total_amount: totalAmount,
@@ -3529,18 +3456,18 @@ app.post(
         amount
       );
 
-      const externalReference = `professional_${req.user.id}_${Date.now()}`;
+      const externalReference = \`professional_${req.user.id}_${Date.now()}`;
 
       await pool.query(
-        `INSERT INTO professional_payments 
+        \`INSERT INTO professional_payments 
        (professional_id, amount, status, external_reference)
        VALUES ($1, $2, 'pending', $3)`,
         [req.user.id, amount, externalReference]
       );
 
       res.json({
-        preference_id: `mock_${externalReference}`,
-        init_point: `${
+        preference_id: \`mock_${externalReference}`,
+        init_point: \`${
           process.env.FRONTEND_URL || "http://localhost:5173"
         }/professional/payment-success`,
       });
@@ -3634,18 +3561,18 @@ app.get(
   async (req, res) => {
     try {
       const userStats = await pool.query(
-        `SELECT 
+        \`SELECT 
          COUNT(*) as total_users,
-         COUNT(CASE WHEN roles::jsonb ? 'client' THEN 1 END) as total_clients,
-         COUNT(CASE WHEN roles::jsonb ? 'professional' THEN 1 END) as total_professionals,
-         COUNT(CASE WHEN roles::jsonb ? 'admin' THEN 1 END) as total_admins
+         COUNT(CASE WHEN roles::jsonb ? 'client\' THEN 1 END) as total_clients,
+         COUNT(CASE WHEN roles::jsonb ? 'professional\' THEN 1 END) as total_professionals,
+         COUNT(CASE WHEN roles::jsonb ? 'admin\' THEN 1 END) as total_admins
        FROM users`
       );
 
       const consultationStats = await pool.query(
-        `SELECT 
+        \`SELECT 
          COUNT(*) as total_consultations,
-         COUNT(CASE WHEN date >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as consultations_last_30_days,
+         COUNT(CASE WHEN date >= CURRENT_DATE - INTERVAL '30 days\' THEN 1 END) as consultations_last_30_days,
          COALESCE(SUM(value), 0) as total_revenue
        FROM consultations`
       );
@@ -3666,32 +3593,8 @@ app.get(
         },
       });
     } catch (error) {
-      console.error("Error fetching system info:", error);
+      console.error("Error fetching system info:", err\or);
       res.status(500).json({ message: "Erro interno do servidor" });
-    }
-  }
-);
-
-// Database connection test
-app.get(
-  "/api/db-test",
-  authenticate,
-  authorize(["admin"]),
-  async (req, res) => {
-    try {
-      const result = await pool.query(
-        "SELECT NOW() as current_time, version() as postgres_version"
-      );
-      res.json({
-        status: "connected",
-        ...result.rows[0],
-      });
-    } catch (error) {
-      console.error("Database connection error:", error);
-      res.status(500).json({
-        status: "error",
-        message: "Falha na conexão com o banco de dados",
-      });
     }
   }
 );
@@ -3702,7 +3605,7 @@ app.get(
 
 // 404 handler for API routes
 app.use("/api/*", (req, res) => {
-  console.warn(`🚫 API route not found: ${req.method} ${req.path}`);
+  console.warn(\`🚫 API route not found: ${req.method} ${req.path}`);
   res.status(404).json({
     message: "Endpoint não encontrado",
     path: req.path,
@@ -3773,7 +3676,7 @@ app.use((err, req, res, next) => {
 // =============================================================================
 
 const gracefulShutdown = (signal) => {
-  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  console.log(\`\n🛑 Received ${signal}. Starting graceful shutdown...`);
 
   pool.end(() => {
     console.log("📊 Database connections closed");
@@ -3811,7 +3714,7 @@ const startServer = async () => {
     // Start server
     app.listen(PORT, () => {
       console.log("\n🚀 ===== CONVÊNIO QUIRO FERREIRA SERVER =====");
-      console.log(`📱 Frontend: http://localhost:5173`);
+      console.log(\`📱 Frontend: http://localhost:5173`);
       console.log(`🔗 API: http://localhost:${PORT}/api`);
       console.log(`🏥 Environment: ${process.env.NODE_ENV || "development"}`);
       console.log(
