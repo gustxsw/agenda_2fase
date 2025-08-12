@@ -115,26 +115,45 @@ const SchedulingPage: React.FC = () => {
   const fetchData = async () => {
     try {
       setIsLoading(true);
+      setError('');
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
       const dateRange = getDateRange();
+
+      console.log('🔄 Fetching appointments with date range:', dateRange);
+      console.log('🔄 API URL:', apiUrl);
 
       // Fetch appointments
       const appointmentsResponse = await fetch(
         `${apiUrl}/api/scheduling/appointments?start_date=${dateRange.start}&end_date=${dateRange.end}`,
         {
-          headers: { 'Authorization': `Bearer ${token}` }
+          method: 'GET',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
       );
 
+      console.log('📡 Appointments response status:', appointmentsResponse.status);
+
       if (appointmentsResponse.ok) {
         const appointmentsData = await appointmentsResponse.json();
+        console.log('✅ Appointments data received:', appointmentsData);
         setAppointments(appointmentsData);
+      } else {
+        const errorData = await appointmentsResponse.json();
+        console.error('❌ Error fetching appointments:', errorData);
+        throw new Error(errorData.message || 'Erro ao carregar agendamentos');
       }
 
       // Fetch private patients
       const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (patientsResponse.ok) {
@@ -144,7 +163,11 @@ const SchedulingPage: React.FC = () => {
 
       // Fetch services
       const servicesResponse = await fetch(`${apiUrl}/api/services`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (servicesResponse.ok) {
@@ -154,7 +177,11 @@ const SchedulingPage: React.FC = () => {
 
       // Fetch locations
       const locationsResponse = await fetch(`${apiUrl}/api/attendance-locations`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (locationsResponse.ok) {
@@ -163,7 +190,7 @@ const SchedulingPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching data:', error);
-      setError('Não foi possível carregar os dados');
+      setError(error instanceof Error ? error.message : 'Não foi possível carregar os dados da agenda');
     } finally {
       setIsLoading(false);
     }
@@ -280,6 +307,8 @@ const SchedulingPage: React.FC = () => {
     setError('');
     setSuccess('');
 
+    console.log('🔄 Submitting appointment form:', formData);
+
     try {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
@@ -290,25 +319,35 @@ const SchedulingPage: React.FC = () => {
 
       const method = modalMode === 'create' ? 'POST' : 'PUT';
 
+      const requestBody = {
+        ...formData,
+        private_patient_id: formData.private_patient_id ? parseInt(formData.private_patient_id) : null,
+        service_id: parseInt(formData.service_id),
+        location_id: formData.location_id ? parseInt(formData.location_id) : null,
+        value: parseFloat(formData.value)
+      };
+
+      console.log('📡 Sending request:', { method, url, body: requestBody });
+
       const response = await fetch(url, {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...formData,
-          private_patient_id: formData.private_patient_id ? parseInt(formData.private_patient_id) : null,
-          service_id: parseInt(formData.service_id),
-          location_id: formData.location_id ? parseInt(formData.location_id) : null,
-          value: parseFloat(formData.value)
-        })
+        body: JSON.stringify(requestBody)
       });
+
+      console.log('📡 Response status:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Error response:', errorData);
         throw new Error(errorData.message || 'Erro ao salvar agendamento');
       }
+
+      const responseData = await response.json();
+      console.log('✅ Appointment saved:', responseData);
 
       setSuccess(modalMode === 'create' ? 'Agendamento criado com sucesso!' : 'Agendamento atualizado com sucesso!');
       await fetchData();
@@ -317,6 +356,7 @@ const SchedulingPage: React.FC = () => {
         closeModal();
       }, 1500);
     } catch (error) {
+      console.error('❌ Error in handleSubmit:', error);
       setError(error instanceof Error ? error.message : 'Erro ao salvar agendamento');
     }
   };
@@ -335,22 +375,32 @@ const SchedulingPage: React.FC = () => {
     if (!appointmentToDelete) return;
 
     try {
+      console.log('🗑️ Deleting appointment:', appointmentToDelete.id);
+      
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
       const response = await fetch(`${apiUrl}/api/scheduling/appointments/${appointmentToDelete.id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
+
+      console.log('📡 Delete response status:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Delete error:', errorData);
         throw new Error(errorData.message || 'Erro ao excluir agendamento');
       }
 
+      console.log('✅ Appointment deleted successfully');
       await fetchData();
       setSuccess('Agendamento excluído com sucesso!');
     } catch (error) {
+      console.error('❌ Error in deleteAppointment:', error);
       setError(error instanceof Error ? error.message : 'Erro ao excluir agendamento');
     } finally {
       setAppointmentToDelete(null);
