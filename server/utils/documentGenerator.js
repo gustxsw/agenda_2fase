@@ -679,7 +679,8 @@ ${data.content}
 
         <div class="section">
             <h4>2. DADOS COLETADOS</h4>
-            <p>Serão tratados dados pessoais como nome, CPF, endereço, telefone, email, informações de saúde e histórico médico.</p>
+            <p>Serão tratados dados pessoais como nome, CPF, en
+}dereço, telefone, email, informações de saúde e histórico médico.</p>
         </div>
 
         <div class="section">

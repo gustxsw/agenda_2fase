@@ -1,31 +1,373 @@
-:",
-        amount
-      );
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { pool } from "./db.js";
+import { authenticate, authorize } from "./middleware/auth.js";
+import createUpload from "./middleware/upload.js";
+import { generateDocumentPDF } from "./utils/documentGenerator.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
-      const externalReference = `professional_${req.user.id}_${Date.now()}`;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-      await pool.query(
-        `INSERT INTO professional_payments 
-       (professional_id, amount, status, external_reference)
-       VALUES ($1, $2, 'pending', $3)`,
-        [req.user.id, amount, externalReference]
-      );
+const app = express();
+const PORT = process.env.PORT || 3001;
 
-      res.json({
-        preference_id: `mock_${externalReference}`,
-        init_point: `${
-          process.env.FRONTEND_URL || "http://localhost:5173"
-        }/professional/payment-success`,
-      });
-    } catch (error) {
-      console.error("❌ Error creating professional payment:", error);
-      res.status(500).json({
-        message: "Erro ao criar pagamento",
-        error: error.message,
-      });
-    }
-  }
+// =============================================================================
+// MIDDLEWARE SETUP
+// =============================================================================
+
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "https://cartaoquiroferreira.com.br",
+      "https://www.cartaoquiroferreira.com.br",
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
 );
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
+
+// Serve static files from dist directory
+app.use(express.static(path.join(__dirname, "../dist")));
+
+// =============================================================================
+// UPLOAD MIDDLEWARE SETUP
+// =============================================================================
+
+let upload;
+let isCloudinaryConfigured = false;
+
+try {
+  upload = createUpload();
+  isCloudinaryConfigured = true;
+  console.log("✅ Cloudinary upload middleware configured successfully");
+} catch (error) {
+  console.error("❌ Failed to configure upload middleware:", error.message);
+  console.warn("⚠️ Image upload will not be available");
+
+  // Create a dummy upload middleware that returns an error
+  upload = {
+    single: () => (req, res, next) => {
+      return res.status(500).json({
+        message: "Serviço de upload não está configurado",
+        error: "Cloudinary credentials missing",
+      });
+    },
+  };
+}
+
+// =============================================================================
+// DATABASE INITIALIZATION
+// =============================================================================
+
+const initializeDatabase = async () => {
+  try {
+    console.log("🔄 Initializing database schema...");
+
+    // Create medical_documents table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS medical_documents (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER REFERENCES private_patients(id) ON DELETE CASCADE,
+        client_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        dependent_id INTEGER REFERENCES dependents(id) ON DELETE CASCADE,
+        document_type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        document_url TEXT NOT NULL,
+        cloudinary_public_id VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        
+        CONSTRAINT check_patient_reference CHECK (
+          (private_patient_id IS NOT NULL AND client_id IS NULL AND dependent_id IS NULL) OR
+          (private_patient_id IS NULL AND client_id IS NOT NULL AND dependent_id IS NULL) OR
+          (private_patient_id IS NULL AND client_id IS NULL AND dependent_id IS NOT NULL)
+        )
+      )
+    `);
+
+    // Create indexes for better performance
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_medical_documents_professional 
+      ON medical_documents(professional_id)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_medical_documents_created_at 
+      ON medical_documents(created_at DESC)
+    `);
+
+    console.log("✅ Database schema initialized successfully");
+  } catch (error) {
+    console.error("❌ Error initializing database:", error);
+    throw error;
+  }
+};
+
+// =============================================================================
+// AUTHENTICATION ROUTES
+// =============================================================================
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { cpf, password } = req.body;
+
+    if (!cpf || !password) {
+      return res.status(400).json({ message: "CPF e senha são obrigatórios" });
+    }
+
+    const cleanCpf = cpf.replace(/\D/g, "");
+
+    const result = await pool.query(
+      "SELECT id, name, cpf, password_hash, roles FROM users WHERE cpf = $1",
+      [cleanCpf]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ message: "Credenciais inválidas" });
+    }
+
+    const user = result.rows[0];
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!isValidPassword) {
+      return res.status(401).json({ message: "Credenciais inválidas" });
+    }
+
+    const userData = {
+      id: user.id,
+      name: user.name,
+      cpf: user.cpf,
+      roles: user.roles || [],
+    };
+
+    res.json({
+      message: "Login realizado com sucesso",
+      user: userData,
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
+
+app.post("/api/auth/select-role", async (req, res) => {
+  try {
+    const { userId, role } = req.body;
+
+    if (!userId || !role) {
+      return res
+        .status(400)
+        .json({ message: "ID do usuário e role são obrigatórios" });
+    }
+
+    const result = await pool.query(
+      "SELECT id, name, cpf, roles FROM users WHERE id = $1",
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Usuário não encontrado" });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.roles || !user.roles.includes(role)) {
+      return res
+        .status(403)
+        .json({ message: "Usuário não possui esta role" });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, currentRole: role },
+      process.env.JWT_SECRET || "your-secret-key",
+      { expiresIn: "24h" }
+    );
+
+    const userData = {
+      id: user.id,
+      name: user.name,
+      cpf: user.cpf,
+      roles: user.roles,
+      currentRole: role,
+    };
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    res.json({
+      message: "Role selecionada com sucesso",
+      token,
+      user: userData,
+    });
+  } catch (error) {
+    console.error("Role selection error:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
+
+app.post("/api/auth/switch-role", authenticate, async (req, res) => {
+  try {
+    const { role } = req.body;
+
+    if (!role) {
+      return res.status(400).json({ message: "Role é obrigatória" });
+    }
+
+    const result = await pool.query(
+      "SELECT id, name, cpf, roles FROM users WHERE id = $1",
+      [req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Usuário não encontrado" });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.roles || !user.roles.includes(role)) {
+      return res
+        .status(403)
+        .json({ message: "Usuário não possui esta role" });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, currentRole: role },
+      process.env.JWT_SECRET || "your-secret-key",
+      { expiresIn: "24h" }
+    );
+
+    const userData = {
+      id: user.id,
+      name: user.name,
+      cpf: user.cpf,
+      roles: user.roles,
+      currentRole: role,
+    };
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    res.json({
+      message: "Role alterada com sucesso",
+      token,
+      user: userData,
+    });
+  } catch (error) {
+    console.error("Role switch error:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie("token");
+  res.json({ message: "Logout realizado com sucesso" });
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const {
+      name,
+      cpf,
+      email,
+      phone,
+      birth_date,
+      address,
+      address_number,
+      address_complement,
+      neighborhood,
+      city,
+      state,
+      password,
+    } = req.body;
+
+    if (!name || !cpf || !password) {
+      return res
+        .status(400)
+        .json({ message: "Nome, CPF e senha são obrigatórios" });
+    }
+
+    const cleanCpf = cpf.replace(/\D/g, "");
+
+    if (!/^\d{11}$/.test(cleanCpf)) {
+      return res
+        .status(400)
+        .json({ message: "CPF deve conter 11 dígitos numéricos" });
+    }
+
+    const existingUser = await pool.query(
+      "SELECT id FROM users WHERE cpf = $1",
+      [cleanCpf]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ message: "CPF já está cadastrado" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      `INSERT INTO users (
+        name, cpf, email, phone, birth_date, address, address_number, 
+        address_complement, neighborhood, city, state, password_hash, roles,
+        subscription_status, subscription_expiry
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+      RETURNING id, name, cpf, roles`,
+      [
+        name,
+        cleanCpf,
+        email || null,
+        phone || null,
+        birth_date || null,
+        address || null,
+        address_number || null,
+        address_complement || null,
+        neighborhood || null,
+        city || null,
+        state || null,
+        hashedPassword,
+        JSON.stringify(["client"]),
+        "pending",
+        null,
+      ]
+    );
+
+    const user = result.rows[0];
+
+    res.status(201).json({
+      message: "Usuário criado com sucesso",
+      user: {
+        id: user.id,
+        name: user.name,
+        cpf: user.cpf,
+        roles: user.roles,
+      },
+    });
+  } catch (error) {
+    console.error("Registration error:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
 
 // =============================================================================
 // MEDICAL DOCUMENTS ROUTES
@@ -185,10 +527,162 @@ app.delete('/api/medical-documents/:id', authenticate, authorize(['professional'
 });
 
 // =============================================================================
+// USER MANAGEMENT ROUTES
+// =============================================================================
+
+app.get("/api/users", authenticate, authorize(["admin"]), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        u.id, u.name, u.cpf, u.email, u.phone, u.birth_date,
+        u.address, u.address_number, u.address_complement, 
+        u.neighborhood, u.city, u.state, u.roles, u.percentage,
+        u.category_id, u.subscription_status, u.subscription_expiry,
+        u.created_at, sc.name as category_name
+      FROM users u
+      LEFT JOIN service_categories sc ON u.category_id = sc.id
+      ORDER BY u.created_at DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
+
+app.get("/api/users/:id", authenticate, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    if (
+      req.user.currentRole !== "admin" &&
+      req.user.id !== userId
+    ) {
+      return res.status(403).json({ message: "Acesso não autorizado" });
+    }
+
+    const result = await pool.query(
+      `SELECT 
+        u.id, u.name, u.cpf, u.email, u.phone, u.birth_date,
+        u.address, u.address_number, u.address_complement, 
+        u.neighborhood, u.city, u.state, u.roles, u.percentage,
+        u.category_id, u.subscription_status, u.subscription_expiry,
+        u.photo_url, u.created_at, sc.name as category_name
+      FROM users u
+      LEFT JOIN service_categories sc ON u.category_id = sc.id
+      WHERE u.id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Usuário não encontrado" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
+
+// =============================================================================
+// PRIVATE PATIENTS ROUTES
+// =============================================================================
+
+app.get("/api/private-patients", authenticate, authorize(["professional"]), async (req, res) => {
+  try {
+    const professionalId = req.user.id;
+
+    const result = await pool.query(
+      `SELECT * FROM private_patients 
+       WHERE professional_id = $1 
+       ORDER BY created_at DESC`,
+      [professionalId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error fetching private patients:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
+
+app.post("/api/private-patients", authenticate, authorize(["professional"]), async (req, res) => {
+  try {
+    const professionalId = req.user.id;
+    const {
+      name,
+      cpf,
+      email,
+      phone,
+      birth_date,
+      address,
+      address_number,
+      address_complement,
+      neighborhood,
+      city,
+      state,
+      zip_code,
+    } = req.body;
+
+    if (!name || !cpf) {
+      return res.status(400).json({ message: "Nome e CPF são obrigatórios" });
+    }
+
+    const cleanCpf = cpf.replace(/\D/g, "");
+
+    if (!/^\d{11}$/.test(cleanCpf)) {
+      return res.status(400).json({ message: "CPF deve conter 11 dígitos numéricos" });
+    }
+
+    const existingPatient = await pool.query(
+      "SELECT id FROM private_patients WHERE cpf = $1 AND professional_id = $2",
+      [cleanCpf, professionalId]
+    );
+
+    if (existingPatient.rows.length > 0) {
+      return res.status(400).json({ message: "Paciente já cadastrado" });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO private_patients (
+        professional_id, name, cpf, email, phone, birth_date,
+        address, address_number, address_complement, neighborhood,
+        city, state, zip_code
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *`,
+      [
+        professionalId,
+        name,
+        cleanCpf,
+        email || null,
+        phone || null,
+        birth_date || null,
+        address || null,
+        address_number || null,
+        address_complement || null,
+        neighborhood || null,
+        city || null,
+        state || null,
+        zip_code || null,
+      ]
+    );
+
+    res.status(201).json({
+      message: "Paciente criado com sucesso",
+      patient: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error creating private patient:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
+
+// =============================================================================
 // IMAGE UPLOAD ROUTES
 // =============================================================================
 
-// Upload professional image
 app.post(
   "/api/upload-image",
   authenticate,
@@ -239,10 +733,9 @@ app.post(
 );
 
 // =============================================================================
-// HEALTH CHECK AND SYSTEM INFO
+// HEALTH CHECK
 // =============================================================================
 
-// Health check endpoint
 app.get("/api/health", (req, res) => {
   res.json({
     status: "OK",
@@ -255,76 +748,6 @@ app.get("/api/health", (req, res) => {
     },
   });
 });
-
-// System info endpoint
-app.get(
-  "/api/system-info",
-  authenticate,
-  authorize(["admin"]),
-  async (req, res) => {
-    try {
-      const userStats = await pool.query(
-        `SELECT 
-         COUNT(*) as total_users,
-         COUNT(CASE WHEN roles::jsonb ? 'client' THEN 1 END) as total_clients,
-         COUNT(CASE WHEN roles::jsonb ? 'professional' THEN 1 END) as total_professionals,
-         COUNT(CASE WHEN roles::jsonb ? 'admin' THEN 1 END) as total_admins
-       FROM users`
-      );
-
-      const consultationStats = await pool.query(
-        `SELECT 
-         COUNT(*) as total_consultations,
-         COUNT(CASE WHEN date >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as consultations_last_30_days,
-         COALESCE(SUM(value), 0) as total_revenue
-       FROM consultations`
-      );
-
-      res.json({
-        system: {
-          uptime: process.uptime(),
-          memory: process.memoryUsage(),
-          node_version: process.version,
-          environment: process.env.NODE_ENV || "development",
-        },
-        database: {
-          users: userStats.rows[0],
-          consultations: consultationStats.rows[0],
-        },
-        services: {
-          cloudinary: isCloudinaryConfigured,
-        },
-      });
-    } catch (error) {
-      console.error("Error fetching system info:", error);
-      res.status(500).json({ message: "Erro interno do servidor" });
-    }
-  }
-);
-
-// Database connection test
-app.get(
-  "/api/db-test",
-  authenticate,
-  authorize(["admin"]),
-  async (req, res) => {
-    try {
-      const result = await pool.query(
-        "SELECT NOW() as current_time, version() as postgres_version"
-      );
-      res.json({
-        status: "connected",
-        ...result.rows[0],
-      });
-    } catch (error) {
-      console.error("Database connection error:", error);
-      res.status(500).json({
-        status: "error",
-        message: "Falha na conexão com o banco de dados",
-      });
-    }
-  }
-);
 
 // =============================================================================
 // ERROR HANDLING
@@ -361,31 +784,6 @@ app.use((err, req, res, next) => {
     timestamp: new Date().toISOString(),
   });
 
-  if (err.name === "ValidationError") {
-    return res.status(400).json({
-      message: "Dados inválidos",
-      details: err.message,
-    });
-  }
-
-  if (err.name === "UnauthorizedError" || err.name === "JsonWebTokenError") {
-    return res.status(401).json({
-      message: "Token inválido ou expirado",
-    });
-  }
-
-  if (err.code === "23505") {
-    return res.status(400).json({
-      message: "Dados duplicados - registro já existe",
-    });
-  }
-
-  if (err.code === "23503") {
-    return res.status(400).json({
-      message: "Referência inválida - dados relacionados não encontrados",
-    });
-  }
-
   res.status(err.status || 500).json({
     message: err.message || "Erro interno do servidor",
     error:
@@ -396,33 +794,6 @@ app.use((err, req, res, next) => {
           }
         : undefined,
   });
-});
-
-// =============================================================================
-// GRACEFUL SHUTDOWN
-// =============================================================================
-
-const gracefulShutdown = (signal) => {
-  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
-
-  pool.end(() => {
-    console.log("📊 Database connections closed");
-  });
-
-  process.exit(0);
-};
-
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-
-process.on("uncaughtException", (err) => {
-  console.error("🚨 Uncaught Exception:", err);
-  gracefulShutdown("uncaughtException");
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("🚨 Unhandled Rejection at:", promise, "reason:", reason);
-  gracefulShutdown("unhandledRejection");
 });
 
 // =============================================================================
@@ -452,28 +823,7 @@ const startServer = async () => {
           isCloudinaryConfigured ? "Configured" : "Not configured"
         }`
       );
-      console.log(
-        `🔐 JWT Secret: ${process.env.JWT_SECRET ? "Set" : "Using default"}`
-      );
       console.log("============================================\n");
-
-      console.log("📋 Available API routes:");
-      console.log("  🔐 /api/auth/* - Authentication");
-      console.log("  👥 /api/users/* - User management");
-      console.log("  🏥 /api/clients/* - Client operations");
-      console.log("  👨‍⚕️ /api/professionals/* - Professional operations");
-      console.log("  📅 /api/consultations/* - Consultation management");
-      console.log("  🗓️ /api/scheduling/* - Appointment scheduling");
-      console.log("  📋 /api/medical-records/* - Medical records");
-      console.log("  👤 /api/private-patients/* - Private patients");
-      console.log("  📍 /api/attendance-locations/* - Attendance locations");
-      console.log("  📊 /api/reports/* - Reports and analytics");
-      console.log("  🏗️ /api/services/* - Service management");
-      console.log("  📂 /api/service-categories/* - Service categories");
-      console.log("  👶 /api/dependents/* - Dependent management");
-      console.log("  🖼️ /api/upload-image - Image upload");
-      console.log("  ❤️ /api/health - Health check");
-      console.log("");
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
