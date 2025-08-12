@@ -10,6 +10,7 @@ import { CloudinaryStorage } from "multer-storage-cloudinary";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { pool } from "./db.js";
+import { generateDocumentPDF } from './utils/documentGenerator.js';
 
 // Load environment variables
 dotenv.config();
@@ -2586,6 +2587,182 @@ app.post(
     }
   }
 );
+
+// =============================================================================
+// MEDICAL DOCUMENTS ROUTES
+// =============================================================================
+
+// Get all medical documents for the authenticated professional
+app.get('/api/medical-documents', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const professionalId = req.user.id;
+    
+    const result = await pool.query(`
+      SELECT 
+        md.*,
+        COALESCE(pp.name, c.name, d.name) as patient_name,
+        COALESCE(pp.cpf, c.cpf, d.cpf) as patient_cpf
+      FROM medical_documents md
+      LEFT JOIN private_patients pp ON md.private_patient_id = pp.id
+      LEFT JOIN users c ON md.client_id = c.id
+      LEFT JOIN dependents d ON md.dependent_id = d.id
+      WHERE md.professional_id = $1
+      ORDER BY md.created_at DESC
+    `, [professionalId]);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching medical documents:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Create a new medical document
+app.post('/api/medical-documents', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const professionalId = req.user.id;
+    const {
+      private_patient_id,
+      client_id,
+      dependent_id,
+      document_type,
+      title,
+      template_data
+    } = req.body;
+
+    console.log('🔄 Creating medical document:', {
+      professionalId,
+      document_type,
+      title,
+      template_data
+    });
+
+    // Validate required fields
+    if (!document_type || !title || !template_data) {
+      return res.status(400).json({ 
+        message: 'Tipo de documento, título e dados do template são obrigatórios' 
+      });
+    }
+
+    // Validate that at least one patient type is provided
+    if (!private_patient_id && !client_id && !dependent_id) {
+      return res.status(400).json({ 
+        message: 'É necessário especificar um paciente' 
+      });
+    }
+
+    // Get patient information for the template
+    let patientInfo = {};
+    
+    if (private_patient_id) {
+      const patientResult = await pool.query(
+        'SELECT name, cpf FROM private_patients WHERE id = $1 AND professional_id = $2',
+        [private_patient_id, professionalId]
+      );
+      
+      if (patientResult.rows.length === 0) {
+        return res.status(404).json({ message: 'Paciente particular não encontrado' });
+      }
+      
+      patientInfo = patientResult.rows[0];
+    } else if (client_id) {
+      const clientResult = await pool.query(
+        'SELECT name, cpf FROM users WHERE id = $1',
+        [client_id]
+      );
+      
+      if (clientResult.rows.length === 0) {
+        return res.status(404).json({ message: 'Cliente não encontrado' });
+      }
+      
+      patientInfo = clientResult.rows[0];
+    } else if (dependent_id) {
+      const dependentResult = await pool.query(
+        'SELECT name, cpf FROM dependents WHERE id = $1',
+        [dependent_id]
+      );
+      
+      if (dependentResult.rows.length === 0) {
+        return res.status(404).json({ message: 'Dependente não encontrado' });
+      }
+      
+      patientInfo = dependentResult.rows[0];
+    }
+
+    // Prepare template data with patient info
+    const completeTemplateData = {
+      ...template_data,
+      patientName: patientInfo.name,
+      patientCpf: patientInfo.cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') || 'Não informado'
+    };
+
+    console.log('🔄 Complete template data:', completeTemplateData);
+
+    // Generate document and upload to Cloudinary
+    const documentResult = await generateDocumentPDF(document_type, completeTemplateData);
+    
+    console.log('✅ Document generated:', documentResult);
+
+    // Save document record to database
+    const insertResult = await pool.query(`
+      INSERT INTO medical_documents (
+        professional_id, private_patient_id, client_id, dependent_id,
+        document_type, title, document_url, template_data
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [
+      professionalId,
+      private_patient_id || null,
+      client_id || null,
+      dependent_id || null,
+      document_type,
+      title,
+      documentResult.url,
+      JSON.stringify(completeTemplateData)
+    ]);
+
+    console.log('✅ Document saved to database:', insertResult.rows[0]);
+
+    res.status(201).json({
+      message: 'Documento criado com sucesso',
+      document: insertResult.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ Error creating medical document:', error);
+    res.status(500).json({ 
+      message: error.message || 'Erro interno do servidor' 
+    });
+  }
+});
+
+// Delete a medical document
+app.delete('/api/medical-documents/:id', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const professionalId = req.user.id;
+    const documentId = req.params.id;
+
+    // Check if document exists and belongs to the professional
+    const checkResult = await pool.query(
+      'SELECT * FROM medical_documents WHERE id = $1 AND professional_id = $2',
+      [documentId, professionalId]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Documento não encontrado' });
+    }
+
+    // Delete from database
+    await pool.query(
+      'DELETE FROM medical_documents WHERE id = $1 AND professional_id = $2',
+      [documentId, professionalId]
+    );
+
+    res.json({ message: 'Documento excluído com sucesso' });
+  } catch (error) {
+    console.error('Error deleting medical document:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
 
 // =============================================================================
 // MEDICAL RECORDS ROUTES

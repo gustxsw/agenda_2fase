@@ -599,10 +599,18 @@ const DocumentsPage: React.FC = () => {
                     <option value="">Selecione um paciente</option>
                     {patients.map((patient) => (
                       <option key={patient.id} value={patient.id}>
-                        {patient.name} - CPF: {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                        {patient.name} - {patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
                       </option>
                     ))}
                   </select>
+                  {patients.length === 0 && (
+                    <p className="text-sm text-red-600 mt-1">
+                      Nenhum paciente particular cadastrado. 
+                      <a href="/professional/private-patients" className="underline ml-1">
+                        Cadastre um paciente primeiro.
+                      </a>
+                    </p>
+                  )}
                 </div>
 
                 {/* Professional Information */}

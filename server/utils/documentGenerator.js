@@ -848,7 +848,7 @@ export const generateDocumentPDF = async (documentType, templateData) => {
     
     console.log('✅ HTML content generated, length:', htmlContent.length);
     
-    // Upload HTML to Cloudinary as raw file
+    // Upload HTML to Cloudinary as raw file (will be converted to PDF on download)
     const uploadResult = await cloudinary.uploader.upload(
       `data:text/html;base64,${Buffer.from(htmlContent).toString('base64')}`,
       {
