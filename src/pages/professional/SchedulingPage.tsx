@@ -21,10 +21,17 @@ type Service = {
   base_price: number;
 };
 
+type PrivatePatient = {
+  id: number;
+  name: string;
+  cpf: string;
+};
+
 const SchedulingPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [privatePatients, setPrivatePatients] = useState<PrivatePatient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -35,10 +42,13 @@ const SchedulingPage: React.FC = () => {
   
   // Form state
   const [formData, setFormData] = useState({
+    patient_type: 'convenio', // 'convenio' or 'private'
     client_cpf: '',
+    private_patient_id: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     time: '',
     service_id: '',
+    value: '',
     notes: ''
   });
 
@@ -54,14 +64,10 @@ const SchedulingPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchAppointments();
+    fetchData();
   }, [selectedDate]);
 
-  useEffect(() => {
-    fetchServices();
-  }, []);
-
-  const fetchAppointments = async () => {
+  const fetchData = async () => {
     try {
       setIsLoading(true);
       setError('');
@@ -70,66 +76,63 @@ const SchedulingPage: React.FC = () => {
       const apiUrl = getApiUrl();
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       
-      const response = await fetch(`${apiUrl}/api/appointments?date=${dateStr}`, {
+      console.log('🔄 Fetching appointments for date:', dateStr);
+      
+      // Fetch appointments - usando endpoint simples
+      const appointmentsResponse = await fetch(`${apiUrl}/api/consultations`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
-      if (!response.ok) {
-        throw new Error('Falha ao carregar agendamentos');
+      if (appointmentsResponse.ok) {
+        const appointmentsData = await appointmentsResponse.json();
+        console.log('✅ Appointments data:', appointmentsData);
+        
+        // Filter by selected date and convert to appointment format
+        const filteredAppointments = appointmentsData
+          .filter((consultation: any) => {
+            const consultationDate = new Date(consultation.date);
+            return isSameDay(consultationDate, selectedDate);
+          })
+          .map((consultation: any) => ({
+            id: consultation.id,
+            date: consultation.date,
+            time: format(new Date(consultation.date), 'HH:mm'),
+            client_name: consultation.client_name,
+            service_name: consultation.service_name,
+            status: 'completed', // Consultas já registradas são consideradas concluídas
+            value: consultation.value,
+            notes: '',
+            is_dependent: consultation.is_dependent || false
+          }));
+        
+        setAppointments(filteredAppointments);
       }
       
-      const data = await response.json();
-      setAppointments(data);
+      // Fetch services
+      const servicesResponse = await fetch(`${apiUrl}/api/services`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (servicesResponse.ok) {
+        const servicesData = await servicesResponse.json();
+        setServices(servicesData);
+      }
+      
+      // Fetch private patients
+      const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (patientsResponse.ok) {
+        const patientsData = await patientsResponse.json();
+        setPrivatePatients(patientsData);
+      }
+      
     } catch (error) {
-      console.error('Error fetching appointments:', error);
-      setError('Não foi possível carregar os agendamentos');
+      console.error('Error fetching data:', error);
+      setError('Não foi possível carregar os dados da agenda');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const fetchServices = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-      
-      const response = await fetch(`${apiUrl}/api/services`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setServices(data);
-      }
-    } catch (error) {
-      console.error('Error fetching services:', error);
-    }
-  };
-
-  const updateStatus = async (appointmentId: number, newStatus: string) => {
-    try {
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-      
-      const response = await fetch(`${apiUrl}/api/appointments/${appointmentId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Falha ao atualizar status');
-      }
-      
-      await fetchAppointments();
-      setSuccess('Status atualizado com sucesso!');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (error) {
-      setError('Erro ao atualizar status');
-      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -142,35 +145,43 @@ const SchedulingPage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
       
-      // Search for client first
-      const clientResponse = await fetch(`${apiUrl}/api/clients/lookup?cpf=${formData.client_cpf.replace(/\D/g, '')}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      let clientData = null;
       
-      if (!clientResponse.ok) {
-        throw new Error('Cliente não encontrado');
+      // Se for convênio, buscar cliente por CPF
+      if (formData.patient_type === 'convenio') {
+        const clientResponse = await fetch(`${apiUrl}/api/clients/lookup?cpf=${formData.client_cpf.replace(/\D/g, '')}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!clientResponse.ok) {
+          throw new Error('Cliente não encontrado');
+        }
+        
+        clientData = await clientResponse.json();
+        
+        if (clientData.subscription_status !== 'active') {
+          throw new Error('Cliente não possui assinatura ativa');
+        }
       }
       
-      const clientData = await clientResponse.json();
+      // Criar consulta diretamente
+      const consultationData = {
+        client_id: formData.patient_type === 'convenio' ? clientData.id : null,
+        private_patient_id: formData.patient_type === 'private' ? parseInt(formData.private_patient_id) : null,
+        service_id: parseInt(formData.service_id),
+        value: parseFloat(formData.value),
+        date: new Date(`${formData.date}T${formData.time}`).toISOString()
+      };
       
-      if (clientData.subscription_status !== 'active') {
-        throw new Error('Cliente não possui assinatura ativa');
-      }
+      console.log('🔄 Creating consultation:', consultationData);
       
-      // Create appointment
-      const response = await fetch(`${apiUrl}/api/appointments`, {
+      const response = await fetch(`${apiUrl}/api/consultations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          client_id: clientData.id,
-          service_id: parseInt(formData.service_id),
-          date: formData.date,
-          time: formData.time,
-          notes: formData.notes
-        })
+        body: JSON.stringify(consultationData)
       });
       
       if (!response.ok) {
@@ -178,46 +189,24 @@ const SchedulingPage: React.FC = () => {
         throw new Error(errorData.message || 'Falha ao criar agendamento');
       }
       
-      await fetchAppointments();
+      await fetchData();
       setShowNewModal(false);
       setFormData({
+        patient_type: 'convenio',
         client_cpf: '',
+        private_patient_id: '',
         date: format(selectedDate, 'yyyy-MM-dd'),
         time: '',
         service_id: '',
+        value: '',
         notes: ''
       });
-      setSuccess('Agendamento criado com sucesso!');
+      setSuccess('Consulta registrada com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Erro ao criar agendamento');
     } finally {
       setIsCreating(false);
-    }
-  };
-
-  const deleteAppointment = async (appointmentId: number) => {
-    if (!confirm('Tem certeza que deseja excluir este agendamento?')) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-      
-      const response = await fetch(`${apiUrl}/api/appointments/${appointmentId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Falha ao excluir agendamento');
-      }
-      
-      await fetchAppointments();
-      setSuccess('Agendamento excluído com sucesso!');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (error) {
-      setError('Erro ao excluir agendamento');
-      setTimeout(() => setError(''), 3000);
     }
   };
 
@@ -245,8 +234,18 @@ const SchedulingPage: React.FC = () => {
 
   const formatCpf = (value: string) => {
     const numericValue = value.replace(/\D/g, '');
-    const limitedValue = numericValue.slice(0, 11);
-    return limitedValue.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    return numericValue.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  };
+
+  const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const serviceId = e.target.value;
+    setFormData(prev => ({ ...prev, service_id: serviceId }));
+    
+    // Auto-fill value based on service
+    const service = services.find(s => s.id.toString() === serviceId);
+    if (service) {
+      setFormData(prev => ({ ...prev, value: service.base_price.toString() }));
+    }
   };
 
   const generateTimeSlots = () => {
@@ -261,9 +260,7 @@ const SchedulingPage: React.FC = () => {
   };
 
   const timeSlots = generateTimeSlots();
-  const dailyAppointments = appointments.filter(apt => 
-    isSameDay(new Date(apt.date), selectedDate)
-  ).sort((a, b) => a.time.localeCompare(b.time));
+  const dailyAppointments = appointments.sort((a, b) => a.time.localeCompare(b.time));
 
   return (
     <div>
@@ -278,7 +275,7 @@ const SchedulingPage: React.FC = () => {
           className="btn btn-primary flex items-center"
         >
           <Plus className="h-5 w-5 mr-2" />
-          Novo Agendamento
+          Nova Consulta
         </button>
       </div>
 
@@ -404,71 +401,11 @@ const SchedulingPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Status e Ações */}
+                    {/* Status */}
                     <div className="flex items-center space-x-3">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.className}`}>
                         {statusInfo.text}
                       </span>
-                      
-                      <div className="flex items-center space-x-1">
-                        {/* Botões de ação baseados no status */}
-                        {appointment.status === 'scheduled' && (
-                          <>
-                            <button
-                              onClick={() => updateStatus(appointment.id, 'confirmed')}
-                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Confirmar"
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => updateStatus(appointment.id, 'cancelled')}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Cancelar"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                        
-                        {appointment.status === 'confirmed' && (
-                          <>
-                            <button
-                              onClick={() => updateStatus(appointment.id, 'completed')}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Concluir"
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => updateStatus(appointment.id, 'cancelled')}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Cancelar"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                        
-                        {(appointment.status === 'cancelled' || appointment.status === 'completed') && (
-                          <button
-                            onClick={() => updateStatus(appointment.id, 'scheduled')}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Reagendar"
-                          >
-                            <Calendar className="h-4 w-4" />
-                          </button>
-                        )}
-                        
-                        {/* Botão de excluir sempre disponível */}
-                        <button
-                          onClick={() => deleteAppointment(appointment.id)}
-                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                          title="Excluir"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -511,35 +448,87 @@ const SchedulingPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Novo Agendamento */}
+      {/* Modal de Nova Consulta */}
       {showNewModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-bold flex items-center">
                 <Plus className="h-6 w-6 text-red-600 mr-2" />
-                Novo Agendamento
+                Nova Consulta
               </h2>
             </div>
 
+            {error && (
+              <div className="mx-6 mt-4 bg-red-50 text-red-600 p-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={createAppointment} className="p-6">
               <div className="space-y-4">
+                {/* Tipo de Paciente */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    CPF do Cliente *
+                    Tipo de Paciente *
                   </label>
-                  <input
-                    type="text"
-                    value={formatCpf(formData.client_cpf)}
+                  <select
+                    value={formData.patient_type}
                     onChange={(e) => setFormData(prev => ({ 
                       ...prev, 
-                      client_cpf: e.target.value.replace(/\D/g, '') 
+                      patient_type: e.target.value,
+                      client_cpf: '',
+                      private_patient_id: ''
                     }))}
                     className="input"
-                    placeholder="000.000.000-00"
                     required
-                  />
+                  >
+                    <option value="convenio">Cliente do Convênio</option>
+                    <option value="private">Paciente Particular</option>
+                  </select>
                 </div>
+
+                {/* Cliente do Convênio */}
+                {formData.patient_type === 'convenio' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      CPF do Cliente *
+                    </label>
+                    <input
+                      type="text"
+                      value={formatCpf(formData.client_cpf)}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        client_cpf: e.target.value.replace(/\D/g, '') 
+                      }))}
+                      className="input"
+                      placeholder="000.000.000-00"
+                      required
+                    />
+                  </div>
+                )}
+
+                {/* Paciente Particular */}
+                {formData.patient_type === 'private' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Paciente Particular *
+                    </label>
+                    <select
+                      value={formData.private_patient_id}
+                      onChange={(e) => setFormData(prev => ({ ...prev, private_patient_id: e.target.value }))}
+                      className="input"
+                      required
+                    >
+                      <option value="">Selecione um paciente</option>
+                      {privatePatients.map(patient => (
+                        <option key={patient.id} value={patient.id}>
+                          {patient.name} - {formatCpf(patient.cpf)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -577,7 +566,7 @@ const SchedulingPage: React.FC = () => {
                   </label>
                   <select
                     value={formData.service_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, service_id: e.target.value }))}
+                    onChange={handleServiceChange}
                     className="input"
                     required
                   >
@@ -592,13 +581,28 @@ const SchedulingPage: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Valor (R$) *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.value}
+                    onChange={(e) => setFormData(prev => ({ ...prev, value: e.target.value }))}
+                    className="input"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Observações
                   </label>
                   <textarea
                     value={formData.notes}
                     onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                     className="input min-h-[80px]"
-                    placeholder="Observações sobre o agendamento..."
+                    placeholder="Observações sobre a consulta..."
                   />
                 </div>
               </div>
@@ -617,7 +621,7 @@ const SchedulingPage: React.FC = () => {
                   className={`btn btn-primary ${isCreating ? 'opacity-70 cursor-not-allowed' : ''}`}
                   disabled={isCreating}
                 >
-                  {isCreating ? 'Criando...' : 'Criar Agendamento'}
+                  {isCreating ? 'Criando...' : 'Registrar Consulta'}
                 </button>
               </div>
             </form>
