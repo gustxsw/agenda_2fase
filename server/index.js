@@ -166,6 +166,10 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
 // Payment routes
 app.post('/api/create-subscription', authenticate, async (req, res) => {
   try {
+    if (!mercadopagoEnabled || !preferenceClient) {
+      return res.status(503).json({ message: 'Serviço de pagamento temporariamente indisponível' });
+    }
+    
     const { user_id, dependent_ids } = req.body;
 
     if (!user_id) {
@@ -177,68 +181,198 @@ app.post('/api/create-subscription', authenticate, async (req, res) => {
     const dependentAmount = (dependent_ids?.length || 0) * 50; // R$50 per dependent
     const totalAmount = baseAmount + dependentAmount;
 
-    const preference = {
+    console.log('🔄 Creating subscription payment preference...');
+    console.log('💰 Total amount:', totalAmount);
+    
+    const preferenceData = {
       items: [
         {
           title: 'Assinatura Cartão Quiro Ferreira Saúde',
           unit_price: totalAmount,
           quantity: 1,
+          currency_id: 'BRL'
         }
       ],
       payer: {
-        email: 'cliente@quiroferreira.com.br'
+        email: 'cliente@quiroferreira.com.br',
+        name: 'Cliente Quiro Ferreira'
       },
       back_urls: {
-        success: \`${req.protocol}://${req.get('host')}/payment/success`,
-        failure: \`${req.protocol}://${req.get('host')}/payment/failure`,
-        pending: \`${req.protocol}://${req.get('host')}/payment/pending`
+        success: `${req.protocol}://${req.get('host')}/payment/success`,
+        failure: `${req.protocol}://${req.get('host')}/payment/failure`,
+        pending: `${req.protocol}://${req.get('host')}/payment/pending`
       },
       auto_return: 'approved',
-      external_reference: \`subscription_${user_id}_${Date.now()}`
+      external_reference: `subscription_${user_id}_${Date.now()}`,
+      notification_url: `${req.protocol}://${req.get('host')}/api/webhooks/mercadopago`,
+      statement_descriptor: 'QUIRO FERREIRA'
     };
 
-    const response = await mercadopago.preferences.create(preference);
-    res.json({ init_point: response.body.init_point });
+    const response = await preferenceClient.create({ body: preferenceData });
+    
+    console.log('✅ Payment preference created successfully');
+    console.log('🔗 Init point:', response.init_point);
+    
+    res.json({ 
+      init_point: response.init_point,
+      preference_id: response.id 
+    });
   } catch (error) {
     console.error('Error creating subscription payment:', error);
-    res.status(500).json({ message: 'Erro ao criar pagamento' });
+    res.status(500).json({ 
+      message: 'Erro ao criar pagamento',
+      details: error.message 
+    });
   }
 });
 
 app.post('/api/professional/create-payment', authenticate, authorize(['professional']), async (req, res) => {
   try {
+    if (!mercadopagoEnabled || !preferenceClient) {
+      return res.status(503).json({ message: 'Serviço de pagamento temporariamente indisponível' });
+    }
+    
     const { amount } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ message: 'Valor deve ser maior que zero' });
     }
 
-    const preference = {
+    console.log('🔄 Creating professional payment preference...');
+    console.log('💰 Amount:', amount);
+    console.log('👤 Professional:', req.user.name);
+    
+    const preferenceData = {
       items: [
         {
-          title: \`Repasse ao Convênio Quiro Ferreira - ${req.user.name}`,
+          title: `Repasse ao Convênio Quiro Ferreira - ${req.user.name}`,
           unit_price: parseFloat(amount),
           quantity: 1,
+          currency_id: 'BRL'
         }
       ],
       payer: {
-        email: 'profissional@quiroferreira.com.br'
+        email: 'profissional@quiroferreira.com.br',
+        name: req.user.name || 'Profissional Quiro Ferreira'
       },
       back_urls: {
-        success: \`${req.protocol}://${req.get('host')}/payment/success`,
-        failure: \`${req.protocol}://${req.get('host')}/payment/failure`,
-        pending: \`${req.protocol}://${req.get('host')}/payment/pending`
+        success: `${req.protocol}://${req.get('host')}/payment/success`,
+        failure: `${req.protocol}://${req.get('host')}/payment/failure`,
+        pending: `${req.protocol}://${req.get('host')}/payment/pending`
       },
       auto_return: 'approved',
-      external_reference: \`professional_payment_${req.user.id}_${Date.now()}`
+      external_reference: `professional_payment_${req.user.id}_${Date.now()}`,
+      notification_url: `${req.protocol}://${req.get('host')}/api/webhooks/mercadopago`,
+      statement_descriptor: 'QUIRO FERREIRA'
     };
 
-    const response = await mercadopago.preferences.create(preference);
-    res.json({ init_point: response.body.init_point });
+    const response = await preferenceClient.create({ body: preferenceData });
+    
+    console.log('✅ Professional payment preference created successfully');
+    console.log('🔗 Init point:', response.init_point);
+    
+    res.json({ 
+      init_point: response.init_point,
+      preference_id: response.id 
+    });
   } catch (error) {
     console.error('Error creating professional payment:', error);
-    res.status(500).json({ message: 'Erro ao criar pagamento' });
+    res.status(500).json({ 
+      message: 'Erro ao criar pagamento',
+      details: error.message 
+    });
   }
+});
+
+// 🔥 NEW: MercadoPago webhook endpoint for payment notifications
+app.post('/api/webhooks/mercadopago', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    console.log('🔔 MercadoPago webhook received');
+    console.log('📦 Webhook data:', req.body);
+    
+    // For now, just acknowledge the webhook
+    // In the future, you can process payment status updates here
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('❌ Error processing MercadoPago webhook:', error);
+    res.status(500).send('Error');
+  }
+});
+
+// Payment result pages
+app.get('/payment/success', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Pagamento Aprovado</title>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f0f9ff; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .success { color: #059669; font-size: 24px; margin-bottom: 20px; }
+        .button { background: #c11c22; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="success">✅ Pagamento Aprovado!</div>
+        <p>Seu pagamento foi processado com sucesso.</p>
+        <a href="/" class="button">Voltar ao Sistema</a>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+app.get('/payment/failure', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Pagamento Rejeitado</title>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #fef2f2; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .error { color: #dc2626; font-size: 24px; margin-bottom: 20px; }
+        .button { background: #c11c22; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="error">❌ Pagamento Rejeitado</div>
+        <p>Houve um problema com seu pagamento. Tente novamente.</p>
+        <a href="/" class="button">Voltar ao Sistema</a>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+app.get('/payment/pending', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Pagamento Pendente</title>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #fffbeb; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .pending { color: #d97706; font-size: 24px; margin-bottom: 20px; }
+        .button { background: #c11c22; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="pending">⏳ Pagamento Pendente</div>
+        <p>Seu pagamento está sendo processado. Aguarde a confirmação.</p>
+        <a href="/" class="button">Voltar ao Sistema</a>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 // Catch-all route for SPA
@@ -262,10 +396,10 @@ const startServer = async () => {
     
     // Start server
     app.listen(PORT, () => {
-      console.log(\`✅ Server running on port ${PORT}`);
-      console.log(\`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(\`📊 Database: Connected and configured`);
-      console.log(\`🔒 CORS enabled for production domains`);
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`📊 Database: Connected and configured`);
+      console.log(`🔒 CORS enabled for production domains`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
