@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Plus, Edit, Check, X, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, addDays, subDays, startOfDay, isSameDay } from 'date-fns';
+import { Calendar, Clock, User, Plus, Check, X, AlertCircle, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { format, addDays, subDays, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 type Appointment = {
@@ -13,14 +13,6 @@ type Appointment = {
   value: number;
   notes?: string;
   is_dependent: boolean;
-};
-
-type NewAppointment = {
-  client_cpf: string;
-  date: string;
-  time: string;
-  service_id: number;
-  notes: string;
 };
 
 type Service = {
@@ -37,17 +29,16 @@ const SchedulingPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
-  // Modal states
-  const [showNewAppointmentModal, setShowNewAppointmentModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  // New appointment modal
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   
   // Form state
-  const [newAppointment, setNewAppointment] = useState<NewAppointment>({
+  const [formData, setFormData] = useState({
     client_cpf: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     time: '',
-    service_id: 0,
+    service_id: '',
     notes: ''
   });
 
@@ -63,14 +54,14 @@ const SchedulingPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchAppointments();
   }, [selectedDate]);
 
   useEffect(() => {
     fetchServices();
   }, []);
 
-  const fetchData = async () => {
+  const fetchAppointments = async () => {
     try {
       setIsLoading(true);
       setError('');
@@ -115,7 +106,7 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
-  const updateAppointmentStatus = async (appointmentId: number, newStatus: string) => {
+  const updateStatus = async (appointmentId: number, newStatus: string) => {
     try {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
@@ -133,7 +124,7 @@ const SchedulingPage: React.FC = () => {
         throw new Error('Falha ao atualizar status');
       }
       
-      await fetchData();
+      await fetchAppointments();
       setSuccess('Status atualizado com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
@@ -147,11 +138,12 @@ const SchedulingPage: React.FC = () => {
     setError('');
     
     try {
+      setIsCreating(true);
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
       
-      // First, search for client by CPF
-      const clientResponse = await fetch(`${apiUrl}/api/clients/lookup?cpf=${newAppointment.client_cpf.replace(/\D/g, '')}`, {
+      // Search for client first
+      const clientResponse = await fetch(`${apiUrl}/api/clients/lookup?cpf=${formData.client_cpf.replace(/\D/g, '')}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -166,7 +158,7 @@ const SchedulingPage: React.FC = () => {
       }
       
       // Create appointment
-      const appointmentResponse = await fetch(`${apiUrl}/api/appointments`, {
+      const response = await fetch(`${apiUrl}/api/appointments`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -174,31 +166,33 @@ const SchedulingPage: React.FC = () => {
         },
         body: JSON.stringify({
           client_id: clientData.id,
-          service_id: newAppointment.service_id,
-          date: newAppointment.date,
-          time: newAppointment.time,
-          notes: newAppointment.notes
+          service_id: parseInt(formData.service_id),
+          date: formData.date,
+          time: formData.time,
+          notes: formData.notes
         })
       });
       
-      if (!appointmentResponse.ok) {
-        const errorData = await appointmentResponse.json();
+      if (!response.ok) {
+        const errorData = await response.json();
         throw new Error(errorData.message || 'Falha ao criar agendamento');
       }
       
-      await fetchData();
-      setShowNewAppointmentModal(false);
-      setNewAppointment({
+      await fetchAppointments();
+      setShowNewModal(false);
+      setFormData({
         client_cpf: '',
         date: format(selectedDate, 'yyyy-MM-dd'),
         time: '',
-        service_id: 0,
+        service_id: '',
         notes: ''
       });
       setSuccess('Agendamento criado com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Erro ao criar agendamento');
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -218,7 +212,7 @@ const SchedulingPage: React.FC = () => {
         throw new Error('Falha ao excluir agendamento');
       }
       
-      await fetchData();
+      await fetchAppointments();
       setSuccess('Agendamento excluído com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error) {
@@ -230,15 +224,15 @@ const SchedulingPage: React.FC = () => {
   const getStatusInfo = (status: string) => {
     switch (status) {
       case 'scheduled':
-        return { text: 'Agendado', className: 'bg-blue-100 text-blue-800', color: 'blue' };
+        return { text: 'Agendado', className: 'bg-blue-100 text-blue-800' };
       case 'confirmed':
-        return { text: 'Confirmado', className: 'bg-green-100 text-green-800', color: 'green' };
+        return { text: 'Confirmado', className: 'bg-green-100 text-green-800' };
       case 'completed':
-        return { text: 'Concluído', className: 'bg-gray-100 text-gray-800', color: 'gray' };
+        return { text: 'Concluído', className: 'bg-gray-100 text-gray-800' };
       case 'cancelled':
-        return { text: 'Cancelado', className: 'bg-red-100 text-red-800', color: 'red' };
+        return { text: 'Cancelado', className: 'bg-red-100 text-red-800' };
       default:
-        return { text: status, className: 'bg-gray-100 text-gray-800', color: 'gray' };
+        return { text: status, className: 'bg-gray-100 text-gray-800' };
     }
   };
 
@@ -276,11 +270,11 @@ const SchedulingPage: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Agenda</h1>
-          <p className="text-gray-600">Gerencie seus agendamentos diários</p>
+          <p className="text-gray-600">Visualize e gerencie seus agendamentos</p>
         </div>
         
         <button
-          onClick={() => setShowNewAppointmentModal(true)}
+          onClick={() => setShowNewModal(true)}
           className="btn btn-primary flex items-center"
         >
           <Plus className="h-5 w-5 mr-2" />
@@ -302,7 +296,7 @@ const SchedulingPage: React.FC = () => {
         </div>
       )}
 
-      {/* Date Navigation */}
+      {/* Navegação de Data */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
         <div className="flex items-center justify-between">
           <button
@@ -314,7 +308,7 @@ const SchedulingPage: React.FC = () => {
           
           <div className="text-center">
             <h2 className="text-xl font-semibold text-gray-900">
-              {format(selectedDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              {format(selectedDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
             </h2>
             <p className="text-sm text-gray-600">
               {dailyAppointments.length} agendamento(s)
@@ -339,7 +333,7 @@ const SchedulingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Appointments List */}
+      {/* Lista de Agendamentos */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         {isLoading ? (
           <div className="text-center py-12">
@@ -353,14 +347,14 @@ const SchedulingPage: React.FC = () => {
               Nenhum agendamento para este dia
             </h3>
             <p className="text-gray-600 mb-4">
-              Que tal criar um novo agendamento?
+              Sua agenda está livre para {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
             </p>
             <button
-              onClick={() => setShowNewAppointmentModal(true)}
+              onClick={() => setShowNewModal(true)}
               className="btn btn-primary inline-flex items-center"
             >
               <Plus className="h-5 w-5 mr-2" />
-              Novo Agendamento
+              Criar Agendamento
             </button>
           </div>
         ) : (
@@ -371,16 +365,22 @@ const SchedulingPage: React.FC = () => {
                 <div key={appointment.id} className="p-6 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
-                      <div className="text-center">
+                      {/* Horário */}
+                      <div className="text-center min-w-[80px]">
                         <div className="text-lg font-bold text-gray-900">
                           {appointment.time}
                         </div>
                         <Clock className="h-4 w-4 text-gray-400 mx-auto" />
                       </div>
                       
+                      {/* Informações do paciente */}
                       <div className="flex-1">
                         <div className="flex items-center mb-1">
-                          <User className="h-4 w-4 text-gray-400 mr-2" />
+                          {appointment.is_dependent ? (
+                            <Users className="h-4 w-4 text-blue-600 mr-2" />
+                          ) : (
+                            <User className="h-4 w-4 text-green-600 mr-2" />
+                          )}
                           <span className="font-medium text-gray-900">
                             {appointment.client_name}
                           </span>
@@ -397,52 +397,73 @@ const SchedulingPage: React.FC = () => {
                           {formatCurrency(appointment.value)}
                         </p>
                         {appointment.notes && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            {appointment.notes}
+                          <p className="text-sm text-gray-500 mt-1 italic">
+                            "{appointment.notes}"
                           </p>
                         )}
                       </div>
                     </div>
                     
+                    {/* Status e Ações */}
                     <div className="flex items-center space-x-3">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.className}`}>
                         {statusInfo.text}
                       </span>
                       
                       <div className="flex items-center space-x-1">
+                        {/* Botões de ação baseados no status */}
                         {appointment.status === 'scheduled' && (
+                          <>
+                            <button
+                              onClick={() => updateStatus(appointment.id, 'confirmed')}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Confirmar"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => updateStatus(appointment.id, 'cancelled')}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Cancelar"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                        
+                        {appointment.status === 'confirmed' && (
+                          <>
+                            <button
+                              onClick={() => updateStatus(appointment.id, 'completed')}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Concluir"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => updateStatus(appointment.id, 'cancelled')}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Cancelar"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                        
+                        {(appointment.status === 'cancelled' || appointment.status === 'completed') && (
                           <button
-                            onClick={() => updateAppointmentStatus(appointment.id, 'confirmed')}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
-                            title="Confirmar"
+                            onClick={() => updateStatus(appointment.id, 'scheduled')}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Reagendar"
                           >
-                            <Check className="h-4 w-4" />
+                            <Calendar className="h-4 w-4" />
                           </button>
                         )}
                         
-                        {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
-                          <button
-                            onClick={() => updateAppointmentStatus(appointment.id, 'completed')}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                            title="Marcar como concluído"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                        )}
-                        
-                        {appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
-                          <button
-                            onClick={() => updateAppointmentStatus(appointment.id, 'cancelled')}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                            title="Cancelar"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                        
+                        {/* Botão de excluir sempre disponível */}
                         <button
                           onClick={() => deleteAppointment(appointment.id)}
-                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
                           title="Excluir"
                         >
                           <X className="h-4 w-4" />
@@ -457,7 +478,7 @@ const SchedulingPage: React.FC = () => {
         )}
       </div>
 
-      {/* Statistics */}
+      {/* Estatísticas do Dia */}
       {dailyAppointments.length > 0 && (
         <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg text-center">
@@ -490,12 +511,15 @@ const SchedulingPage: React.FC = () => {
         </div>
       )}
 
-      {/* New Appointment Modal */}
-      {showNewAppointmentModal && (
+      {/* Modal de Novo Agendamento */}
+      {showNewModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold">Novo Agendamento</h2>
+              <h2 className="text-xl font-bold flex items-center">
+                <Plus className="h-6 w-6 text-red-600 mr-2" />
+                Novo Agendamento
+              </h2>
             </div>
 
             <form onSubmit={createAppointment} className="p-6">
@@ -506,8 +530,8 @@ const SchedulingPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={formatCpf(newAppointment.client_cpf)}
-                    onChange={(e) => setNewAppointment(prev => ({ 
+                    value={formatCpf(formData.client_cpf)}
+                    onChange={(e) => setFormData(prev => ({ 
                       ...prev, 
                       client_cpf: e.target.value.replace(/\D/g, '') 
                     }))}
@@ -523,8 +547,8 @@ const SchedulingPage: React.FC = () => {
                   </label>
                   <input
                     type="date"
-                    value={newAppointment.date}
-                    onChange={(e) => setNewAppointment(prev => ({ ...prev, date: e.target.value }))}
+                    value={formData.date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
                     className="input"
                     required
                   />
@@ -535,8 +559,8 @@ const SchedulingPage: React.FC = () => {
                     Horário *
                   </label>
                   <select
-                    value={newAppointment.time}
-                    onChange={(e) => setNewAppointment(prev => ({ ...prev, time: e.target.value }))}
+                    value={formData.time}
+                    onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
                     className="input"
                     required
                   >
@@ -552,8 +576,8 @@ const SchedulingPage: React.FC = () => {
                     Serviço *
                   </label>
                   <select
-                    value={newAppointment.service_id}
-                    onChange={(e) => setNewAppointment(prev => ({ ...prev, service_id: Number(e.target.value) }))}
+                    value={formData.service_id}
+                    onChange={(e) => setFormData(prev => ({ ...prev, service_id: e.target.value }))}
                     className="input"
                     required
                   >
@@ -571,8 +595,8 @@ const SchedulingPage: React.FC = () => {
                     Observações
                   </label>
                   <textarea
-                    value={newAppointment.notes}
-                    onChange={(e) => setNewAppointment(prev => ({ ...prev, notes: e.target.value }))}
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                     className="input min-h-[80px]"
                     placeholder="Observações sobre o agendamento..."
                   />
@@ -582,13 +606,18 @@ const SchedulingPage: React.FC = () => {
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   type="button"
-                  onClick={() => setShowNewAppointmentModal(false)}
+                  onClick={() => setShowNewModal(false)}
                   className="btn btn-secondary"
+                  disabled={isCreating}
                 >
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Criar Agendamento
+                <button 
+                  type="submit" 
+                  className={`btn btn-primary ${isCreating ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  disabled={isCreating}
+                >
+                  {isCreating ? 'Criando...' : 'Criar Agendamento'}
                 </button>
               </div>
             </form>
