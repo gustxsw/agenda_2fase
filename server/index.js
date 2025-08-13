@@ -140,7 +140,7 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
     const processedData = result.rows.map(row => {
       const categoryMap = new Map();
       
-      row.categories.forEach((cat: any) => {
+      row.categories.forEach((cat) => {
         const name = cat.category_name;
         categoryMap.set(name, (categoryMap.get(name) || 0) + 1);
       });
