@@ -2139,8 +2139,15 @@ app.put('/api/consultations/:id/status', authenticate, async (req, res) => {
        SET status = $1, updated_at = NOW()
        WHERE id = $2 AND professional_id = $3
        RETURNING *`,
-      [status, id, req.user.id]
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      status VARCHAR(20) DEFAULT 'completed' CHECK (status IN ('scheduled', 'confirmed', 'completed', 'cancelled'))
     );
+    
+    -- Add index for better performance on status queries
+    CREATE INDEX IF NOT EXISTS idx_consultations_status ON consultations(status);
+    
+    -- Update existing consultations to have 'completed' status if they don't have one
+    UPDATE consultations SET status = 'completed' WHERE status IS NULL;
     
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Consulta não encontrada' });
