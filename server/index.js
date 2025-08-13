@@ -2122,6 +2122,40 @@ app.post(
   }
 );
 
+// Update consultation status
+app.put('/api/consultations/:id/status', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    // Validate status
+    const validStatuses = ['scheduled', 'confirmed', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Status inválido' });
+    }
+    
+    const result = await pool.query(
+      `UPDATE consultations 
+       SET status = $1, updated_at = NOW()
+       WHERE id = $2 AND professional_id = $3
+       RETURNING *`,
+      [status, id, req.user.id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Consulta não encontrada' });
+    }
+    
+    res.json({ 
+      message: 'Status atualizado com sucesso',
+      consultation: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error updating consultation status:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
 // Medical records routes
 app.get(
   "/api/medical-records",
