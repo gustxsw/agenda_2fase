@@ -267,6 +267,50 @@ const setupDatabase = async () => {
       )
     `);
 
+    // 🔥 ALWAYS ensure private_patient_id column exists in consultations table
+    console.log('🔄 Checking if private_patient_id column exists in consultations...');
+    
+    const columnCheckResult = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'consultations' 
+      AND column_name = 'private_patient_id'
+    `);
+    
+    if (columnCheckResult.rows.length === 0) {
+      console.log('➕ Adding private_patient_id column to consultations table...');
+      
+      await pool.query(`
+        ALTER TABLE consultations 
+        ADD COLUMN private_patient_id INTEGER REFERENCES private_patients(id)
+      `);
+      
+      console.log('✅ private_patient_id column added successfully');
+    } else {
+      console.log('✅ private_patient_id column already exists');
+    }
+    
+    // 🔥 Update the constraint to include private_patient_id
+    console.log('🔄 Updating consultation patient constraint...');
+    
+    // Drop existing constraint if it exists
+    await pool.query(`
+      ALTER TABLE consultations 
+      DROP CONSTRAINT IF EXISTS consultation_patient_check
+    `);
+    
+    // Add updated constraint
+    await pool.query(`
+      ALTER TABLE consultations 
+      ADD CONSTRAINT consultation_patient_check CHECK (
+        (client_id IS NOT NULL AND dependent_id IS NULL AND private_patient_id IS NULL) OR
+        (client_id IS NULL AND dependent_id IS NOT NULL AND private_patient_id IS NULL) OR
+        (client_id IS NULL AND dependent_id IS NULL AND private_patient_id IS NOT NULL)
+      )
+    `);
+    
+    console.log('✅ Consultation patient constraint updated successfully');
+
     // Handle duplicates and create unique constraints
     console.log('🔄 Checking for duplicates and creating constraints...');
 
