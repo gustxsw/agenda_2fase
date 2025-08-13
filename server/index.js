@@ -311,6 +311,29 @@ const setupDatabase = async () => {
     
     console.log('✅ Consultation patient constraint updated successfully');
 
+    // 🔥 ALWAYS ensure notes column exists in consultations table
+    console.log('🔄 Checking if notes column exists in consultations...');
+    
+    const notesColumnCheckResult = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'consultations' 
+      AND column_name = 'notes'
+    `);
+    
+    if (notesColumnCheckResult.rows.length === 0) {
+      console.log('➕ Adding notes column to consultations table...');
+      
+      await pool.query(`
+        ALTER TABLE consultations 
+        ADD COLUMN notes TEXT
+      `);
+      
+      console.log('✅ notes column added successfully');
+    } else {
+      console.log('✅ notes column already exists');
+    }
+
     // Handle duplicates and create unique constraints
     console.log('🔄 Checking for duplicates and creating constraints...');
 
