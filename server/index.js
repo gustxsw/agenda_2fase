@@ -1901,7 +1901,7 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
 
     // Get total revenue
     const totalResult = await pool.query(
-      'SELECT SUM(value) as total_revenue FROM consultations WHERE date >= $1 AND date <= $2',
+      'SELECT SUM(CASE WHEN private_patient_id IS NULL THEN value ELSE 0 END) as total_revenue FROM consultations WHERE date >= $1 AND date <= $2',
       [start_date, end_date]
     );
 
@@ -1910,10 +1910,10 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
       SELECT 
         u.name as professional_name,
         u.percentage as professional_percentage,
-        SUM(c.value) as revenue,
+        SUM(CASE WHEN c.private_patient_id IS NULL THEN c.value ELSE 0 END) as revenue,
         COUNT(c.id) as consultation_count,
-        SUM(c.value * (u.percentage / 100)) as professional_payment,
-        SUM(c.value * ((100 - u.percentage) / 100)) as clinic_revenue
+        SUM(CASE WHEN c.private_patient_id IS NULL THEN c.value * (u.percentage / 100) ELSE 0 END) as professional_payment,
+        SUM(CASE WHEN c.private_patient_id IS NULL THEN c.value * ((100 - u.percentage) / 100) ELSE 0 END) as clinic_revenue
       FROM consultations c
       JOIN users u ON c.professional_id = u.id
       WHERE c.date >= $1 AND c.date <= $2
@@ -1926,7 +1926,7 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
     const serviceResult = await pool.query(`
       SELECT 
         s.name as service_name,
-        SUM(c.value) as revenue,
+        SUM(CASE WHEN c.private_patient_id IS NULL THEN c.value ELSE 0 END) as revenue,
         COUNT(c.id) as consultation_count
       FROM consultations c
       JOIN services s ON c.service_id = s.id
@@ -1991,7 +1991,7 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
         COUNT(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN 1 END) as convenio_consultations,
         COUNT(CASE WHEN c.private_patient_id IS NOT NULL THEN 1 END) as private_consultations,
         SUM(c.value) as total_revenue,
-        SUM(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN c.value ELSE 0 END) as convenio_revenue,
+        SUM(CASE WHEN c.private_patient_id IS NULL THEN c.value ELSE 0 END) as convenio_revenue,
         SUM(CASE WHEN c.private_patient_id IS NOT NULL THEN c.value ELSE 0 END) as private_revenue,
         SUM(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN c.value * ((100 - $2) / 100) ELSE 0 END) as amount_to_pay
       FROM consultations c
@@ -2040,13 +2040,14 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
     const summaryResult = await pool.query(`
       SELECT 
         COUNT(*) as total_consultations,
-        COUNT(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN 1 END) as convenio_consultations,
+        COUNT(CASE WHEN c.private_patient_id IS NULL THEN 1 END) as convenio_consultations,
         COUNT(CASE WHEN c.private_patient_id IS NOT NULL THEN 1 END) as private_consultations,
         SUM(c.value) as total_revenue,
-        SUM(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN c.value ELSE 0 END) as convenio_revenue,
+        SUM(CASE WHEN c.private_patient_id IS NULL THEN c.value ELSE 0 END) as convenio_revenue,
         SUM(CASE WHEN c.private_patient_id IS NOT NULL THEN c.value ELSE 0 END) as private_revenue,
-        SUM(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN c.value * ((100 - $2) / 100) ELSE 0 END) as amount_to_pay
+        SUM(CASE WHEN c.private_patient_id IS NULL THEN c.value * ((100 - $2) / 100) ELSE 0 END) as amount_to_pay
       FROM consultations c
+      JOIN users u ON c.professional_id = u.id
       WHERE c.professional_id = $1 
         AND c.date >= $3 AND c.date <= $4
     `, [req.user.id, professionalPercentage, start_date, end_date]);
