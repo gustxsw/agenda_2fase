@@ -96,9 +96,9 @@ app.get('/api/reports/clients-by-city', authenticate, authorize(['admin']), asyn
         city,
         state,
         COUNT(*) as client_count,
-        COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active_clients,
-        COUNT(CASE WHEN subscription_status = 'pending' THEN 1 END) as pending_clients,
-        COUNT(CASE WHEN subscription_status = 'expired' THEN 1 END) as expired_clients
+        COUNT(CASE WHEN subscription_status = 'active\' THEN 1 END) as active_clients,
+        COUNT(CASE WHEN subscription_status = 'pending\' THEN 1 END) as pending_clients,
+        COUNT(CASE WHEN subscription_status = 'expired\' THEN 1 END) as expired_clients
       FROM users 
       WHERE 'client' = ANY(roles) 
         AND city IS NOT NULL 
@@ -189,12 +189,12 @@ app.post('/api/create-subscription', authenticate, async (req, res) => {
         email: 'cliente@quiroferreira.com.br'
       },
       back_urls: {
-        success: `${req.protocol}://${req.get('host')}/payment/success`,
-        failure: `${req.protocol}://${req.get('host')}/payment/failure`,
-        pending: `${req.protocol}://${req.get('host')}/payment/pending`
+        success: \`${req.protocol}://${req.get('host')}/payment/success`,
+        failure: \`${req.protocol}://${req.get('host')}/payment/failure`,
+        pending: \`${req.protocol}://${req.get('host')}/payment/pending`
       },
       auto_return: 'approved',
-      external_reference: `subscription_${user_id}_${Date.now()}`
+      external_reference: \`subscription_${user_id}_${Date.now()}`
     };
 
     const response = await mercadopago.preferences.create(preference);
@@ -216,7 +216,7 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
     const preference = {
       items: [
         {
-          title: `Repasse ao Convênio Quiro Ferreira - ${req.user.name}`,
+          title: \`Repasse ao Convênio Quiro Ferreira - ${req.user.name}`,
           unit_price: parseFloat(amount),
           quantity: 1,
         }
@@ -225,12 +225,12 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
         email: 'profissional@quiroferreira.com.br'
       },
       back_urls: {
-        success: `${req.protocol}://${req.get('host')}/payment/success`,
-        failure: `${req.protocol}://${req.get('host')}/payment/failure`,
-        pending: `${req.protocol}://${req.get('host')}/payment/pending`
+        success: \`${req.protocol}://${req.get('host')}/payment/success`,
+        failure: \`${req.protocol}://${req.get('host')}/payment/failure`,
+        pending: \`${req.protocol}://${req.get('host')}/payment/pending`
       },
       auto_return: 'approved',
-      external_reference: `professional_payment_${req.user.id}_${Date.now()}`
+      external_reference: \`professional_payment_${req.user.id}_${Date.now()}`
     };
 
     const response = await mercadopago.preferences.create(preference);
@@ -262,10 +262,10 @@ const startServer = async () => {
     
     // Start server
     app.listen(PORT, () => {
-      console.log(`✅ Server running on port ${PORT}`);
-      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`📊 Database: Connected and configured`);
-      console.log(`🔒 CORS enabled for production domains`);
+      console.log(\`✅ Server running on port ${PORT}`);
+      console.log(\`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(\`📊 Database: Connected and configured`);
+      console.log(\`🔒 CORS enabled for production domains`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
