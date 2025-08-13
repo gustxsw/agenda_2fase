@@ -105,7 +105,7 @@ const SchedulingPage: React.FC = () => {
             time: format(new Date(consultation.date), 'HH:mm'),
             client_name: consultation.client_name,
             service_name: consultation.service_name,
-            status: consultation.status || 'completed', // Use status from database or default to completed
+            status: 'completed', // Consultas já registradas são consideradas concluídas
             value: consultation.value,
             notes: '',
             is_dependent: consultation.is_dependent || false
