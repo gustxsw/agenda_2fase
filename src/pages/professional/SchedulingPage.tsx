@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Plus, Check, X, AlertCircle, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { Calendar, Clock, User, Plus, Check, X, AlertCircle, ChevronLeft, ChevronRight, Users, Edit2, CheckCircle, XCircle, PlayCircle } from 'lucide-react';
 import { format, addDays, subDays, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -39,6 +39,12 @@ const SchedulingPage: React.FC = () => {
   // New appointment modal
   const [showNewModal, setShowNewModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  
+  // Status change modal
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [newStatus, setNewStatus] = useState<'scheduled' | 'confirmed' | 'completed' | 'cancelled'>('scheduled');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -210,18 +216,67 @@ const SchedulingPage: React.FC = () => {
     }
   };
 
+  const openStatusModal = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setNewStatus(appointment.status);
+    setShowStatusModal(true);
+  };
+
+  const closeStatusModal = () => {
+    setShowStatusModal(false);
+    setSelectedAppointment(null);
+    setError('');
+  };
+
+  const updateAppointmentStatus = async () => {
+    if (!selectedAppointment) return;
+
+    try {
+      setIsUpdatingStatus(true);
+      setError('');
+      
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+      
+      // Como estamos usando consultas como agendamentos, vamos atualizar via endpoint específico
+      const response = await fetch(`${apiUrl}/api/consultations/${selectedAppointment.id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao atualizar status');
+      }
+      
+      await fetchData();
+      setShowStatusModal(false);
+      setSelectedAppointment(null);
+      setSuccess('Status atualizado com sucesso!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Erro ao atualizar status');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   const getStatusInfo = (status: string) => {
     switch (status) {
       case 'scheduled':
-        return { text: 'Agendado', className: 'bg-blue-100 text-blue-800' };
+        return { text: 'Agendado', className: 'bg-blue-100 text-blue-800', icon: <Clock className="h-3 w-3 mr-1" /> };
       case 'confirmed':
-        return { text: 'Confirmado', className: 'bg-green-100 text-green-800' };
+        return { text: 'Confirmado', className: 'bg-green-100 text-green-800', icon: <CheckCircle className="h-3 w-3 mr-1" /> };
       case 'completed':
-        return { text: 'Concluído', className: 'bg-gray-100 text-gray-800' };
+        return { text: 'Concluído', className: 'bg-gray-100 text-gray-800', icon: <Check className="h-3 w-3 mr-1" /> };
       case 'cancelled':
-        return { text: 'Cancelado', className: 'bg-red-100 text-red-800' };
+        return { text: 'Cancelado', className: 'bg-red-100 text-red-800', icon: <XCircle className="h-3 w-3 mr-1" /> };
       default:
-        return { text: status, className: 'bg-gray-100 text-gray-800' };
+        return { text: status, className: 'bg-gray-100 text-gray-800', icon: null };
     }
   };
 
@@ -403,9 +458,19 @@ const SchedulingPage: React.FC = () => {
                     
                     {/* Status */}
                     <div className="flex items-center space-x-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.className}`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center ${statusInfo.className}`}>
+                        {statusInfo.icon}
                         {statusInfo.text}
                       </span>
+                      
+                      {/* Status change button */}
+                      <button
+                        onClick={() => openStatusModal(appointment)}
+                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Alterar status"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -625,6 +690,149 @@ const SchedulingPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Alteração de Status */}
+      {showStatusModal && selectedAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold flex items-center">
+                <Edit2 className="h-6 w-6 text-blue-600 mr-2" />
+                Alterar Status do Agendamento
+              </h2>
+            </div>
+
+            {error && (
+              <div className="mx-6 mt-4 bg-red-50 text-red-600 p-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            <div className="p-6">
+              {/* Informações do agendamento */}
+              <div className="bg-gray-50 p-4 rounded-lg mb-6">
+                <div className="flex items-center mb-2">
+                  {selectedAppointment.is_dependent ? (
+                    <Users className="h-4 w-4 text-blue-600 mr-2" />
+                  ) : (
+                    <User className="h-4 w-4 text-green-600 mr-2" />
+                  )}
+                  <span className="font-medium">{selectedAppointment.client_name}</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-1">
+                  <strong>Serviço:</strong> {selectedAppointment.service_name}
+                </p>
+                <p className="text-sm text-gray-600 mb-1">
+                  <strong>Data/Hora:</strong> {format(new Date(`${selectedAppointment.date}`), "dd/MM/yyyy 'às' HH:mm")}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Valor:</strong> {formatCurrency(selectedAppointment.value)}
+                </p>
+              </div>
+
+              {/* Seleção de novo status */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Novo Status
+                  </label>
+                  <div className="space-y-2">
+                    <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="status"
+                        value="scheduled"
+                        checked={newStatus === 'scheduled'}
+                        onChange={(e) => setNewStatus(e.target.value as any)}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="ml-3 flex items-center">
+                        <Clock className="h-4 w-4 text-blue-600 mr-2" />
+                        <div>
+                          <div className="font-medium text-gray-900">Agendado</div>
+                          <div className="text-sm text-gray-500">Consulta marcada, aguardando confirmação</div>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="status"
+                        value="confirmed"
+                        checked={newStatus === 'confirmed'}
+                        onChange={(e) => setNewStatus(e.target.value as any)}
+                        className="text-green-600 focus:ring-green-500"
+                      />
+                      <div className="ml-3 flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
+                        <div>
+                          <div className="font-medium text-gray-900">Confirmado</div>
+                          <div className="text-sm text-gray-500">Paciente confirmou presença</div>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="status"
+                        value="completed"
+                        checked={newStatus === 'completed'}
+                        onChange={(e) => setNewStatus(e.target.value as any)}
+                        className="text-gray-600 focus:ring-gray-500"
+                      />
+                      <div className="ml-3 flex items-center">
+                        <Check className="h-4 w-4 text-gray-600 mr-2" />
+                        <div>
+                          <div className="font-medium text-gray-900">Concluído</div>
+                          <div className="text-sm text-gray-500">Consulta realizada com sucesso</div>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="status"
+                        value="cancelled"
+                        checked={newStatus === 'cancelled'}
+                        onChange={(e) => setNewStatus(e.target.value as any)}
+                        className="text-red-600 focus:ring-red-500"
+                      />
+                      <div className="ml-3 flex items-center">
+                        <XCircle className="h-4 w-4 text-red-600 mr-2" />
+                        <div>
+                          <div className="font-medium text-gray-900">Cancelado</div>
+                          <div className="text-sm text-gray-500">Consulta foi cancelada</div>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={closeStatusModal}
+                  className="btn btn-secondary"
+                  disabled={isUpdatingStatus}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={updateAppointmentStatus}
+                  className={`btn btn-primary ${isUpdatingStatus ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  disabled={isUpdatingStatus || newStatus === selectedAppointment.status}
+                >
+                  {isUpdatingStatus ? 'Atualizando...' : 'Atualizar Status'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
