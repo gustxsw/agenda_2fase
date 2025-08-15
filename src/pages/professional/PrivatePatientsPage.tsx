@@ -509,7 +509,6 @@ const PrivatePatientsPage: React.FC = () => {
                     className="input"
                     placeholder="000.000.000-00"
                     disabled={modalMode === 'edit'}
-                    required={modalMode === 'create'}
                   />
                 </div>
 
