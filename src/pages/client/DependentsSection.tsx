@@ -11,9 +11,10 @@ type Dependent = {
 
 type DependentsSectionProps = {
   clientId: number;
+  onDependentAdded?: () => void;
 };
 
-const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
+const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId, onDependentAdded }) => {
   const [dependents, setDependents] = useState<Dependent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -143,6 +144,11 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
         }
         
         setSuccess('Dependente adicionado com sucesso!');
+        
+        // 🔥 TRIGGER PAYMENT UPDATE - Always show payment when dependent is added
+        if (onDependentAdded) {
+          onDependentAdded();
+        }
       } else if (modalMode === 'edit' && selectedDependent) {
         // Update dependent
         const response = await fetch(`${apiUrl}/api/dependents/${selectedDependent.id}`, {
@@ -214,6 +220,11 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
       await fetchDependents();
       
       setSuccess('Dependente excluído com sucesso!');
+      
+      // 🔥 TRIGGER PAYMENT UPDATE - Also update payment when dependent is removed
+      if (onDependentAdded) {
+        onDependentAdded();
+      }
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);

@@ -13,12 +13,14 @@ type PaymentSectionProps = {
   userId: number;
   subscriptionStatus: string;
   subscriptionExpiry: string | null;
+  forceShow?: boolean;
 };
 
 const PaymentSection: React.FC<PaymentSectionProps> = ({ 
   userId, 
   subscriptionStatus,
-  subscriptionExpiry 
+  subscriptionExpiry,
+  forceShow = false
 }) => {
   const [dependentCount, setDependentCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -139,6 +141,9 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
     return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   };
   
+  // 🔥 Show payment section if forced or if subscription is not active
+  const shouldShowPayment = forceShow || (subscriptionStatus === 'pending' || subscriptionStatus === 'expired');
+  
   return (
     <div className="card mb-6">
       <div className="flex items-center mb-4">
@@ -161,8 +166,22 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
           </div>
         )}
         
-        {(subscriptionStatus === 'pending' || subscriptionStatus === 'expired') && (
+        {shouldShowPayment && (
           <>
+            {forceShow && subscriptionStatus === 'active' && (
+              <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                <div className="flex items-center mb-2">
+                  <CreditCard className="h-5 w-5 text-blue-600 mr-2" />
+                  <p className="text-blue-700 font-medium">
+                    Atualização de Assinatura
+                  </p>
+                </div>
+                <p className="text-sm text-blue-600">
+                  Você adicionou ou removeu dependentes. Atualize sua assinatura para refletir as mudanças.
+                </p>
+              </div>
+            )}
+            
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="font-medium mb-2">Detalhes da Assinatura</h3>
               <div className="space-y-2">
@@ -188,7 +207,7 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
               className={`btn btn-primary w-full ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
               disabled={isLoading}
             >
-              {isLoading ? 'Processando...' : 'Realizar Pagamento'}
+              {isLoading ? 'Processando...' : (forceShow && subscriptionStatus === 'active' ? 'Atualizar Assinatura' : 'Realizar Pagamento')}
             </button>
             
             <p className="text-sm text-gray-600 text-center">
