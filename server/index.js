@@ -731,16 +731,16 @@ app.post("/api/auth/register", async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!name || !cpf || !password) {
+    const { name, cpf, email, phone, birth_date, address, address_number, address_complement, neighborhood, city, state, zip_code } = req.body;
       return res
-        .status(400)
-        .json({ message: "Nome, CPF e senha são obrigatórios" });
+    if (!name) {
+      return res.status(400).json({ message: 'Nome é obrigatório' });
     }
 
-    // Validate CPF format
-    if (!/^\d{11}$/.test(cpf)) {
-      return res
-        .status(400)
+    // Validate CPF format only if provided
+    if (cpf && !/^\d{11}$/.test(cpf)) {
+      return res.status(400).json({ message: 'CPF deve conter 11 dígitos numéricos' });
+    }
         .json({ message: "CPF deve conter 11 dígitos numéricos" });
     }
 
@@ -1794,14 +1794,16 @@ app.post(
       if (cpf) {
         const existingPatient = await pool.query(
           "SELECT id FROM private_patients WHERE cpf = $1 AND professional_id = $2",
-          [cpf, req.user.id]
-        );
-
-        if (existingPatient.rows.length > 0) {
-          return res
-            .status(400)
-            .json({ message: "Já existe um paciente com este CPF" });
-        }
+    // Check if CPF already exists (only if CPF is provided)
+    if (cpf) {
+      const existingPatient = await pool.query(
+        'SELECT id FROM private_patients WHERE cpf = $1 AND professional_id = $2',
+        [cpf, req.user.id]
+      );
+      
+      if (existingPatient.rows.length > 0) {
+        return res.status(400).json({ message: 'Já existe um paciente com este CPF' });
+      }
       }
 
       const result = await pool.query(
@@ -1809,7 +1811,7 @@ app.post(
         (professional_id, name, cpf, email, phone, birth_date, address, address_number, address_complement, neighborhood, city, state, zip_code)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *`,
-        [
+      [req.user.id, name, cpf || null, email, phone, birth_date, address, address_number, address_complement, neighborhood, city, state, zip_code]
           req.user.id,
           name.trim(),
           cpf || null,
