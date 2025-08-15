@@ -1778,39 +1778,53 @@ app.post(
         zip_code,
       } = req.body;
 
-      if (!name || !cpf) {
-        return res.status(400).json({ message: "Nome e CPF são obrigatórios" });
+      // Validate required fields
+      if (!name || !name.trim()) {
+        return res.status(400).json({ message: "Nome é obrigatório" });
+      }
+
+      // CPF validation only if provided
+      if (cpf && !/^\d{11}$/.test(cpf)) {
+        return res
+          .status(400)
+          .json({ message: "CPF deve conter 11 dígitos numéricos" });
+      }
+
+      // Check if CPF already exists (only if CPF is provided)
+      if (cpf) {
+        const existingPatient = await pool.query(
+          "SELECT id FROM private_patients WHERE cpf = $1 AND professional_id = $2",
+          [cpf, req.user.id]
+        );
+
+        if (existingPatient.rows.length > 0) {
+          return res
+            .status(400)
+            .json({ message: "Já existe um paciente com este CPF" });
+        }
       }
 
       const result = await pool.query(
-        `INSERT INTO private_patients (
-        professional_id, name, cpf, email, phone, birth_date, address,
-        address_number, address_complement, neighborhood, city, state, zip_code
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      ON CONFLICT (cpf, professional_id) DO NOTHING
-      RETURNING *`,
+        `INSERT INTO private_patients 
+        (professional_id, name, cpf, email, phone, birth_date, address, address_number, address_complement, neighborhood, city, state, zip_code)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING *`,
         [
           req.user.id,
-          name,
-          cpf,
-          email,
-          phone,
-          birth_date,
-          address,
-          address_number,
-          address_complement,
-          neighborhood,
-          city,
-          state,
-          zip_code,
+          name.trim(),
+          cpf || null,
+          email?.trim() || null,
+          phone || null,
+          birth_date || null,
+          address?.trim() || null,
+          address_number?.trim() || null,
+          address_complement?.trim() || null,
+          neighborhood?.trim() || null,
+          city?.trim() || null,
+          state || null,
+          zip_code || null,
         ]
       );
-
-      if (result.rows.length === 0) {
-        return res
-          .status(409)
-          .json({ message: "Paciente com este CPF já está cadastrado" });
-      }
 
       res.status(201).json({
         message: "Paciente criado com sucesso",
@@ -2278,38 +2292,6 @@ app.get(
     `,
         [req.user.id]
       );
-// Generate medical record document
-app.post('/api/medical-records/generate-document', authenticate, authorize(['professional']), async (req, res) => {
-  try {
-    const { record_id, template_data } = req.body;
-    
-    // Verify the record belongs to the professional
-    const recordResult = await pool.query(
-      'SELECT * FROM medical_records WHERE id = $1 AND professional_id = $2',
-      [record_id, req.user.id]
-    );
-    
-    if (recordResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Prontuário não encontrado' });
-    }
-    
-    // Generate document using the medical_record template
-    const documentResult = await generateDocumentPDF('medical_record', template_data);
-    
-    res.json({
-      message: 'Prontuário gerado com sucesso',
-      documentUrl: documentResult.url,
-      publicId: documentResult.public_id
-    });
-  } catch (error) {
-    console.error('Error generating medical record document:', error);
-    res.status(500).json({ 
-      message: 'Erro ao gerar prontuário',
-      error: error.message 
-    });
-  }
-});
-
 
       res.json(result.rows);
     } catch (error) {
@@ -2459,6 +2441,46 @@ app.delete(
     } catch (error) {
       console.error("Error deleting medical record:", error);
       res.status(500).json({ message: "Erro ao excluir prontuário" });
+    }
+  }
+);
+
+// Generate medical record document
+app.post(
+  "/api/medical-records/generate-document",
+  authenticate,
+  authorize(["professional"]),
+  async (req, res) => {
+    try {
+      const { record_id, template_data } = req.body;
+
+      // Verify the record belongs to the professional
+      const recordResult = await pool.query(
+        "SELECT * FROM medical_records WHERE id = $1 AND professional_id = $2",
+        [record_id, req.user.id]
+      );
+
+      if (recordResult.rows.length === 0) {
+        return res.status(404).json({ message: "Prontuário não encontrado" });
+      }
+
+      // Generate document using the medical_record template
+      const documentResult = await generateDocumentPDF(
+        "medical_record",
+        template_data
+      );
+
+      res.json({
+        message: "Prontuário gerado com sucesso",
+        documentUrl: documentResult.url,
+        publicId: documentResult.public_id,
+      });
+    } catch (error) {
+      console.error("Error generating medical record document:", error);
+      res.status(500).json({
+        message: "Erro ao gerar prontuário",
+        error: error.message,
+      });
     }
   }
 );
