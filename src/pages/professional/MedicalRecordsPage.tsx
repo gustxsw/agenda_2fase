@@ -11,6 +11,8 @@ import {
   Eye,
   X,
   Check,
+  Download,
+  Printer,
 } from "lucide-react";
 
 type MedicalRecord = {
@@ -82,6 +84,9 @@ const MedicalRecordsPage: React.FC = () => {
   const [recordToDelete, setRecordToDelete] = useState<MedicalRecord | null>(
     null
   );
+
+  // Print state
+  const [isPrinting, setIsPrinting] = useState<number | null>(null);
 
   // Get API URL
   const getApiUrl = () => {
@@ -336,6 +341,101 @@ const MedicalRecordsPage: React.FC = () => {
     }
   };
 
+  const printMedicalRecord = async (record: MedicalRecord) => {
+    try {
+      setIsPrinting(record.id);
+      setError('');
+      setSuccess('');
+
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      // Get current user data for professional info
+      const userResponse = await fetch(`${apiUrl}/api/users/${user?.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      let professionalData = {
+        name: user?.name || 'Profissional',
+        specialty: '',
+        crm: ''
+      };
+
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        professionalData = {
+          name: userData.name || user?.name || 'Profissional',
+          specialty: userData.category_name || '',
+          crm: userData.crm || ''
+        };
+      }
+
+      // Prepare template data
+      const templateData = {
+        patientName: record.patient_name,
+        patientCpf: '', // CPF not stored in medical records
+        date: record.created_at,
+        chief_complaint: record.chief_complaint,
+        history_present_illness: record.history_present_illness,
+        past_medical_history: record.past_medical_history,
+        medications: record.medications,
+        allergies: record.allergies,
+        physical_examination: record.physical_examination,
+        diagnosis: record.diagnosis,
+        treatment_plan: record.treatment_plan,
+        notes: record.notes,
+        vital_signs: record.vital_signs,
+        professionalName: professionalData.name,
+        professionalSpecialty: professionalData.specialty,
+        crm: professionalData.crm
+      };
+
+      const response = await fetch(`${apiUrl}/api/medical-records/generate-document`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          record_id: record.id,
+          template_data: templateData
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao gerar prontuário');
+      }
+
+      const result = await response.json();
+      const { documentUrl } = result;
+
+      // Clean filename
+      const fileName = `Prontuario_${record.patient_name.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+      
+      // Create download link that opens in new tab for mobile compatibility
+      const link = document.createElement('a');
+      link.href = documentUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      
+      // For desktop browsers, try to force download
+      if (window.navigator.userAgent.indexOf('Mobile') === -1) {
+        link.download = `${fileName}.html`;
+      }
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccess('Prontuário aberto em nova aba. Use Ctrl+S (ou Cmd+S no Mac) para salvar ou imprimir.');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Erro ao gerar prontuário');
+    } finally {
+      setIsPrinting(null);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("pt-BR", {
@@ -499,6 +599,20 @@ const MedicalRecordsPage: React.FC = () => {
                           title="Visualizar"
                         >
                           <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => printMedicalRecord(record)}
+                          className={`text-green-600 hover:text-green-900 ${
+                            isPrinting === record.id ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                          title="Imprimir/Baixar Prontuário"
+                          disabled={isPrinting === record.id}
+                        >
+                          {isPrinting === record.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                          ) : (
+                            <Printer className="h-4 w-4" />
+                          )}
                         </button>
                         <button
                           onClick={() => openEditModal(record)}

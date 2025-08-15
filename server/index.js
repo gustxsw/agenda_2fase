@@ -2278,6 +2278,38 @@ app.get(
     `,
         [req.user.id]
       );
+// Generate medical record document
+app.post('/api/medical-records/generate-document', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { record_id, template_data } = req.body;
+    
+    // Verify the record belongs to the professional
+    const recordResult = await pool.query(
+      'SELECT * FROM medical_records WHERE id = $1 AND professional_id = $2',
+      [record_id, req.user.id]
+    );
+    
+    if (recordResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Prontuário não encontrado' });
+    }
+    
+    // Generate document using the medical_record template
+    const documentResult = await generateDocumentPDF('medical_record', template_data);
+    
+    res.json({
+      message: 'Prontuário gerado com sucesso',
+      documentUrl: documentResult.url,
+      publicId: documentResult.public_id
+    });
+  } catch (error) {
+    console.error('Error generating medical record document:', error);
+    res.status(500).json({ 
+      message: 'Erro ao gerar prontuário',
+      error: error.message 
+    });
+  }
+});
+
 
       res.json(result.rows);
     } catch (error) {
