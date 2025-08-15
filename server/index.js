@@ -77,7 +77,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Find user by CPF
     const result = await pool.query(
-      'SELECT id, name, cpf, password_hash, roles FROM users WHERE cpf = $1',
+      'SELECT id, name, cpf, password, roles FROM users WHERE cpf = $1',
       [cleanCpf]
     );
 
@@ -88,7 +88,7 @@ app.post('/api/auth/login', async (req, res) => {
     const user = result.rows[0];
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
@@ -263,7 +263,7 @@ app.post('/api/auth/register', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (
         name, cpf, email, phone, birth_date, address, address_number, 
-        address_complement, neighborhood, city, state, password_hash, 
+        address_complement, neighborhood, city, state, password, 
         roles, subscription_status, created_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW()) 
       RETURNING id, name, cpf, roles`,
@@ -409,7 +409,7 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
     const result = await pool.query(`
       INSERT INTO users (
         name, cpf, email, phone, birth_date, address, address_number,
-        address_complement, neighborhood, city, state, password_hash, roles,
+        address_complement, neighborhood, city, state, password, roles,
         percentage, category_id, subscription_status, created_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
       RETURNING id, name, cpf, roles
@@ -557,14 +557,14 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
       }
 
       // Verify current password
-      const isValidPassword = await bcrypt.compare(currentPassword, currentUser.rows[0].password_hash);
+      const isValidPassword = await bcrypt.compare(currentPassword, currentUser.rows[0].password);
       if (!isValidPassword) {
         return res.status(400).json({ message: 'Senha atual incorreta' });
       }
 
       // Hash new password
       const newPasswordHash = await bcrypt.hash(newPassword, 10);
-      updateFields.push(`password_hash = $${paramCount}`);
+      updateFields.push(`password = $${paramCount}`);
       updateValues.push(newPasswordHash);
       paramCount++;
     }
