@@ -8,6 +8,7 @@ import { pool } from './db.js';
 import { authenticate, authorize } from './middleware/auth.js';
 import createUpload from './middleware/upload.js';
 import { generateDocumentPDF } from './utils/documentGenerator.js';
+import initializeDatabase from './database/init.js';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -20,6 +21,9 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize database on startup
+initializeDatabase().catch(console.error);
 
 // Initialize MercadoPago SDK v2
 const client = new MercadoPagoConfig({
