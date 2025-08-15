@@ -771,8 +771,8 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
       if (!category_id) {
         return res.status(400).json({ message: 'Categoria é obrigatória para profissionais' });
       }
-      if (!percentage || percentage < 0 || percentage > 100) {
-        return res.status(400).json({ message: 'Porcentagem deve estar entre 0 e 100' });
+      if (!percentage || !Number.isInteger(Number(percentage)) || percentage < 0 || percentage > 100) {
+        return res.status(400).json({ message: 'Porcentagem deve ser um número inteiro entre 0 e 100' });
       }
     }
 
@@ -873,8 +873,8 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
       if (!category_id) {
         return res.status(400).json({ message: 'Categoria é obrigatória para profissionais' });
       }
-      if (!percentage || percentage < 0 || percentage > 100) {
-        return res.status(400).json({ message: 'Porcentagem deve estar entre 0 e 100' });
+      if (!percentage || !Number.isInteger(Number(percentage)) || percentage < 0 || percentage > 100) {
+        return res.status(400).json({ message: 'Porcentagem deve ser um número inteiro entre 0 e 100' });
       }
     }
 
@@ -2448,11 +2448,11 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin', 'professional'
       query = `
         SELECT 
           u.name as professional_name,
-          u.percentage as professional_percentage,
+          u.percentage::integer as professional_percentage,
           SUM(c.value) as revenue,
           COUNT(c.id) as consultation_count,
-          SUM(c.value * (u.percentage / 100)) as professional_payment,
-          SUM(c.value * ((100 - u.percentage) / 100)) as clinic_revenue
+          SUM(c.value * (u.percentage::integer / 100.0)) as professional_payment,
+          SUM(c.value * ((100 - u.percentage::integer) / 100.0)) as clinic_revenue
         FROM consultations c
         JOIN users u ON c.professional_id = u.id
         WHERE c.date >= $1 AND c.date <= $2
@@ -2466,11 +2466,11 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin', 'professional'
       query = `
         SELECT 
           u.name as professional_name,
-          u.percentage as professional_percentage,
+          u.percentage::integer as professional_percentage,
           SUM(c.value) as revenue,
           COUNT(c.id) as consultation_count,
-          SUM(c.value * (u.percentage / 100)) as professional_payment,
-          SUM(c.value * ((100 - u.percentage) / 100)) as clinic_revenue
+          SUM(c.value * (u.percentage::integer / 100.0)) as professional_payment,
+          SUM(c.value * ((100 - u.percentage::integer) / 100.0)) as clinic_revenue
         FROM consultations c
         JOIN users u ON c.professional_id = u.id
         WHERE c.date >= $1 AND c.date <= $2 AND c.professional_id = $3
@@ -2537,9 +2537,9 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
       return res.status(400).json({ message: 'Data inicial e final são obrigatórias' });
     }
 
-    // Get professional percentage
+    // Get professional percentage as integer
     const professionalResult = await pool.query(
-      'SELECT percentage FROM users WHERE id = $1',
+      'SELECT percentage::integer as percentage FROM users WHERE id = $1',
       [professional_id]
     );
 
@@ -2551,7 +2551,7 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
         c.date, c.value as total_value,
         s.name as service_name,
         COALESCE(u.name, d.name, pp.name) as client_name,
-        (c.value * ((100 - $1) / 100)) as amount_to_pay,
+        (c.value * ((100 - $1::integer) / 100.0)) as amount_to_pay,
         CASE 
           WHEN pp.id IS NOT NULL THEN 'private'
           ELSE 'convenio'
@@ -2572,7 +2572,7 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
     const convenioRevenue = convenioConsultations.reduce((sum, c) => sum + parseFloat(c.total_value), 0);
     const privateRevenue = privateConsultations.reduce((sum, c) => sum + parseFloat(c.total_value), 0);
     const totalRevenue = convenioRevenue + privateRevenue;
-    const amountToPay = convenioConsultations.reduce((sum, c) => sum + parseFloat(c.amount_to_pay), 0);
+    const amountToPay = convenioRevenue * ((100 - professionalPercentage) / 100.0);
 
     const summary = {
       professional_percentage: professionalPercentage,
@@ -2601,13 +2601,17 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
       return res.status(400).json({ message: 'Data inicial e final são obrigatórias' });
     }
 
-    // Get professional percentage
+    // Get professional's percentage as integer
     const professionalResult = await pool.query(
-      'SELECT percentage FROM users WHERE id = $1',
+      'SELECT percentage::integer as percentage FROM users WHERE id = $1',
       [professional_id]
     );
 
-    const professionalPercentage = professionalResult.rows[0]?.percentage || 50;
+    if (professionalResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Profissional não encontrado' });
+    }
+
+    const professionalPercentage = professionalResult.rows[0].percentage || 50;
 
     // Get consultations breakdown
     const consultationsResult = await pool.query(`
@@ -2618,7 +2622,7 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
         SUM(c.value) as total_revenue,
         SUM(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN c.value ELSE 0 END) as convenio_revenue,
         SUM(CASE WHEN c.private_patient_id IS NOT NULL THEN c.value ELSE 0 END) as private_revenue,
-        SUM(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN c.value * ((100 - $1) / 100) ELSE 0 END) as amount_to_pay
+        SUM(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN c.value * ((100 - $1::integer) / 100.0) ELSE 0 END) as amount_to_pay
       FROM consultations c
       WHERE c.professional_id = $2 AND c.date >= $3 AND c.date <= $4
     `, [professionalPercentage, professional_id, start_date, end_date + ' 23:59:59']);
