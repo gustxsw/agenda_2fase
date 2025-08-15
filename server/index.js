@@ -17,6 +17,97 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// Database migration function to ensure status column exists
+const ensureStatusColumn = async () => {
+  try {
+    console.log(
+      "🔄 Checking if status column exists in consultations table..."
+    );
+
+    // Check if status column exists
+    const checkColumnQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'consultations' AND column_name = 'status'
+    `;
+
+    const columnCheck = await pool.query(checkColumnQuery);
+
+    if (columnCheck.rows.length === 0) {
+      console.log("❌ Status column not found, creating it...");
+
+      // Add status column with default value
+      const addColumnQuery = `
+        ALTER TABLE consultations 
+        ADD COLUMN status VARCHAR(20) DEFAULT 'completed' NOT NULL
+      `;
+
+      await pool.query(addColumnQuery);
+      console.log(
+        '✅ Status column added successfully with default value "completed"'
+      );
+
+      // Update existing records to have 'completed' status
+      const updateExistingQuery = `
+        UPDATE consultations 
+        SET status = 'completed' 
+        WHERE status IS NULL
+      `;
+
+      await pool.query(updateExistingQuery);
+      console.log('✅ Existing consultations updated with "completed" status');
+    } else {
+      console.log("✅ Status column already exists");
+    }
+  } catch (error) {
+    console.error("❌ Error ensuring status column:", error);
+    // Don't throw error to prevent server from crashing
+  }
+};
+
+// Function to ensure updated_at column exists
+const ensureUpdatedAtColumn = async () => {
+  try {
+    console.log(
+      "🔄 Checking if updated_at column exists in consultations table..."
+    );
+
+    // Check if updated_at column exists
+    const checkColumnQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'consultations' 
+      AND column_name = 'updated_at'
+    `;
+
+    const columnResult = await pool.query(checkColumnQuery);
+
+    if (columnResult.rows.length === 0) {
+      console.log("❌ updated_at column does not exist. Creating...");
+
+      // Add updated_at column
+      await pool.query(`
+        ALTER TABLE consultations 
+        ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      `);
+
+      // Update existing records to have current timestamp
+      await pool.query(`
+        UPDATE consultations 
+        SET updated_at = CURRENT_TIMESTAMP 
+        WHERE updated_at IS NULL
+      `);
+
+      console.log("✅ updated_at column created and populated successfully");
+    } else {
+      console.log("✅ updated_at column already exists");
+    }
+  } catch (error) {
+    console.error("❌ Error ensuring updated_at column:", error);
+    throw error;
+  }
+};
+
 // 🔥 CONFIGURE MERCADOPAGO SDK V2
 let mercadopagoClient = null;
 let preferenceClient = null;
@@ -597,6 +688,18 @@ const setupDatabase = async () => {
   } catch (error) {
     console.error("❌ Error setting up database:", error);
     throw error;
+  }
+};
+
+// Function to initialize database
+const initializeDatabase = async () => {
+  try {
+    console.log("🔄 Initializing database...");
+    await ensureStatusColumn();
+    await ensureUpdatedAtColumn();
+    console.log("✅ Database initialization completed");
+  } catch (error) {
+    console.error("❌ Database initialization error:", error);
   }
 };
 
@@ -2123,43 +2226,36 @@ app.post(
 );
 
 // Update consultation status
-app.put('/api/consultations/:id/status', authenticate, async (req, res) => {
+app.put("/api/consultations/:id/status", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    
+
     // Validate status
-    const validStatuses = ['scheduled', 'confirmed', 'completed', 'cancelled'];
+    const validStatuses = ["scheduled", "confirmed", "completed", "cancelled"];
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Status inválido' });
+      return res.status(400).json({ message: "Status inválido" });
     }
-    
+
     const result = await pool.query(
       `UPDATE consultations 
        SET status = $1, updated_at = NOW()
        WHERE id = $2 AND professional_id = $3
        RETURNING *`,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      status VARCHAR(20) DEFAULT 'completed\' CHECK (status IN ('scheduled', 'confirmed', 'completed', 'cancelled'))
+      [status, id, req.user.id]
     );
-    
-    -- Add index for better performance on status queries
-    CREATE INDEX IF NOT EXISTS idx_consultations_status ON consultations(status);
-    
-    -- Update existing consultations to have 'completed\' status if they don't have one
-    UPDATE consultations SET status = 'completed\' WHERE status IS NULL;
-    
+
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Consulta não encontrada' });
+      return res.status(404).json({ message: "Consulta não encontrada" });
     }
-    
-    res.json({ 
-      message: 'Status atualizado com sucesso',
-      consultation: result.rows[0]
+
+    res.json({
+      message: "Status atualizado com sucesso",
+      consultation: result.rows[0],
     });
   } catch (error) {
-    console.error('Error updating consultation status:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
+    console.error("Error updating consultation status:", error);
+    res.status(500).json({ message: "Erro interno do servidor" });
   }
 });
 
@@ -3024,7 +3120,7 @@ const startServer = async () => {
     await setupDatabase();
 
     // Start server
-    app.listen(PORT, () => {
+    app.listen(PORT, async () => {
       console.log(`✅ Server running on port ${PORT}`);
       console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
       console.log(`📊 Database: Connected and configured`);
@@ -3032,6 +3128,9 @@ const startServer = async () => {
         `💳 MercadoPago: ${mercadopagoEnabled ? "Enabled" : "Disabled"}`
       );
       console.log(`🔒 CORS enabled for production domains`);
+
+      // Initialize database schema
+      await initializeDatabase();
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
