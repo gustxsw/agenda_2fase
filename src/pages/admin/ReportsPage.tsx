@@ -516,7 +516,7 @@ const ReportsPage: React.FC = () => {
                     </p>
                     <p className="text-2xl font-bold text-green-700">
                       {clientsReport.reduce(
-                        (sum, city) => sum + city.active_clients,
+                        (sum, city) => sum + Number(city.active_clients),
                         0
                       )}
                     </p>
@@ -529,7 +529,7 @@ const ReportsPage: React.FC = () => {
                     </p>
                     <p className="text-2xl font-bold text-yellow-700">
                       {clientsReport.reduce(
-                        (sum, city) => sum + city.pending_clients,
+                        (sum, city) => sum + Number(city.pending_clients),
                         0
                       )}
                     </p>
@@ -542,7 +542,7 @@ const ReportsPage: React.FC = () => {
                     </p>
                     <p className="text-2xl font-bold text-red-700">
                       {clientsReport.reduce(
-                        (sum, city) => sum + city.expired_clients,
+                        (sum, city) => sum + Number(city.expired_clients),
                         0
                       )}
                     </p>
