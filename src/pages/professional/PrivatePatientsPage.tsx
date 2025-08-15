@@ -500,7 +500,7 @@ const PrivatePatientsPage: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    CPF *
+                    CPF
                   </label>
                   <input
                     type="text"
@@ -509,6 +509,7 @@ const PrivatePatientsPage: React.FC = () => {
                     className="input"
                     placeholder="000.000.000-00"
                     disabled={modalMode === 'edit'}
+                    required={modalMode === 'create'}
                   />
                 </div>
 
