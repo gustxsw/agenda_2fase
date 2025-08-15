@@ -832,7 +832,7 @@ ${data.content}
         <p>Este documento foi gerado eletronicamente em ${new Date().toLocaleString('pt-BR')}</p>
     </div>
 </body>
-</html>`
+</html>`,
 
   medical_record: (data) => `
 <!DOCTYPE html>
