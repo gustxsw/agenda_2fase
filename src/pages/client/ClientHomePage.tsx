@@ -34,9 +34,6 @@ const ClientHomePage: React.FC = () => {
   const [subscriptionExpiry, setSubscriptionExpiry] = useState<string | null>(
     null
   );
-  
-  // 🔥 NEW: State to force show payment section
-  const [forceShowPayment, setForceShowPayment] = useState(false);
 
   // Get API URL with fallback
   const getApiUrl = () => {
@@ -134,16 +131,6 @@ const ClientHomePage: React.FC = () => {
     }
   }, [consultations, selectedFilter, dependents, user?.name]);
 
-  // 🔥 NEW: Function to handle dependent changes
-  const handleDependentChange = () => {
-    console.log('🔄 Dependent added/removed - forcing payment section to show');
-    setForceShowPayment(true);
-    
-    // Auto-hide after 30 seconds to avoid permanent display
-    setTimeout(() => {
-      setForceShowPayment(false);
-    }, 30000);
-  };
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return format(date, "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR });
@@ -208,16 +195,10 @@ const ClientHomePage: React.FC = () => {
           userId={user.id}
           subscriptionStatus={subscriptionStatus}
           subscriptionExpiry={subscriptionExpiry}
-          forceShow={forceShowPayment}
         />
       )}
 
-      {user && (
-        <DependentsSection 
-          clientId={user.id} 
-          onDependentAdded={handleDependentChange}
-        />
-      )}
+      {user && <DependentsSection clientId={user.id} />}
 
       <div className="card mb-6">
         <div className="flex items-center justify-between mb-4">
