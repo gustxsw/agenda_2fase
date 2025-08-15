@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   Stethoscope,
   Plus,
@@ -39,6 +40,7 @@ type PrivatePatient = {
 };
 
 const MedicalRecordsPage: React.FC = () => {
+  const { user } = useAuth();
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [patients, setPatients] = useState<PrivatePatient[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<MedicalRecord[]>([]);
