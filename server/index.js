@@ -128,7 +128,7 @@ const initializeDatabase = async () => {
         neighborhood VARCHAR(100),
         city VARCHAR(100),
         state VARCHAR(2),
-        password_hash VARCHAR(255) NOT NULL,
+        password VARCHAR(255) NOT NULL,
         roles TEXT[] DEFAULT '{}',
         percentage DECIMAL(5,2) DEFAULT 50.00,
         category_id INTEGER REFERENCES service_categories(id),
@@ -379,7 +379,7 @@ const initializeDatabase = async () => {
     if (adminExists.rows.length === 0) {
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await pool.query(`
-        INSERT INTO users (name, cpf, password_hash, roles, subscription_status)
+        INSERT INTO users (name, cpf, password, roles, subscription_status)
         VALUES ('Administrador', '00000000000', $1, ARRAY['admin'], 'active')
       `, [hashedPassword]);
       console.log('✅ Admin user created');
@@ -452,7 +452,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Find user
     const result = await pool.query(
-      'SELECT id, name, cpf, password_hash, roles FROM users WHERE cpf = $1',
+      'SELECT id, name, cpf, password, roles FROM users WHERE cpf = $1',
       [cleanCpf]
     );
 
@@ -463,7 +463,7 @@ app.post('/api/auth/login', async (req, res) => {
     const user = result.rows[0];
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
@@ -637,7 +637,7 @@ app.post('/api/auth/register', async (req, res) => {
     const result = await pool.query(`
       INSERT INTO users (
         name, cpf, email, phone, birth_date, address, address_number,
-        address_complement, neighborhood, city, state, password_hash, roles
+        address_complement, neighborhood, city, state, password, roles
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, ARRAY['client'])
       RETURNING id, name, cpf, roles
     `, [
@@ -783,7 +783,7 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
     const result = await pool.query(`
       INSERT INTO users (
         name, cpf, email, phone, birth_date, address, address_number,
-        address_complement, neighborhood, city, state, password_hash, roles,
+        address_complement, neighborhood, city, state, password, roles,
         percentage, category_id, subscription_status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING id, name, cpf, email, roles
@@ -850,13 +850,13 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
     const currentUser = currentUserResult.rows[0];
 
     // Handle password change
-    let passwordHash = currentUser.password_hash;
+    let passwordHash = currentUser.password;
     if (newPassword) {
       if (!currentPassword) {
         return res.status(400).json({ message: 'Senha atual é obrigatória para alterar a senha' });
       }
 
-      const isValidCurrentPassword = await bcrypt.compare(currentPassword, currentUser.password_hash);
+      const isValidCurrentPassword = await bcrypt.compare(currentPassword, currentUser.password);
       if (!isValidCurrentPassword) {
         return res.status(400).json({ message: 'Senha atual incorreta' });
       }
@@ -883,7 +883,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
       UPDATE users SET
         name = $1, email = $2, phone = $3, birth_date = $4,
         address = $5, address_number = $6, address_complement = $7,
-        neighborhood = $8, city = $9, state = $10, password_hash = $11,
+        neighborhood = $8, city = $9, state = $10, password = $11,
         roles = $12, percentage = $13, category_id = $14, updated_at = CURRENT_TIMESTAMP
       WHERE id = $15
       RETURNING id, name, cpf, email, roles
@@ -891,7 +891,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
       UPDATE users SET
         name = $1, email = $2, phone = $3, birth_date = $4,
         address = $5, address_number = $6, address_complement = $7,
-        neighborhood = $8, city = $9, state = $10, password_hash = $11,
+        neighborhood = $8, city = $9, state = $10, password = $11,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $12
       RETURNING id, name, cpf, email, roles
