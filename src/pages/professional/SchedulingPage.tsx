@@ -104,7 +104,10 @@ const SchedulingPage: React.FC = () => {
 
       // Fetch appointments
       const appointmentsResponse = await fetch(`${apiUrl}/api/consultations`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
       });
 
       if (appointmentsResponse.ok) {
@@ -131,26 +134,40 @@ const SchedulingPage: React.FC = () => {
 
         console.log("✅ Processed appointments:", filteredAppointments);
         setAppointments(filteredAppointments);
+      } else {
+        console.error("Appointments response error:", appointmentsResponse.status);
       }
 
       // Fetch services
       const servicesResponse = await fetch(`${apiUrl}/api/services`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
       });
 
       if (servicesResponse.ok) {
         const servicesData = await servicesResponse.json();
+        console.log("Services loaded:", servicesData.length);
         setServices(servicesData);
+      } else {
+        console.error("Services response error:", servicesResponse.status);
       }
 
       // Fetch private patients
       const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
       });
 
       if (patientsResponse.ok) {
         const patientsData = await patientsResponse.json();
+        console.log("Private patients loaded:", patientsData.length);
         setPrivatePatients(patientsData);
+      } else {
+        console.error("Private patients response error:", patientsResponse.status);
       }
     } catch (error) {
       console.error("Error fetching data:", error);

@@ -76,7 +76,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('📡 Login response status:', response.status);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorText = await response.text();
+        console.error('Login error details:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          throw new Error('Erro de conexão com o servidor');
+        }
         throw new Error(errorData.message || 'Credenciais inválidas');
       }
 

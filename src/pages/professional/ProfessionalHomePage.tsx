@@ -78,7 +78,10 @@ const ProfessionalHomePage: React.FC = () => {
 
       if (userResponse.ok) {
         const userData = await userResponse.json();
+        console.log("User data loaded:", userData);
         setPhotoUrl(userData.photo_url);
+      } else {
+        console.warn("User data not available:", userResponse.status);
       }
       
       // 🔥 LIBERADO: Sempre buscar dados de receita
@@ -98,7 +101,10 @@ const ProfessionalHomePage: React.FC = () => {
       if (!revenueResponse.ok) {
         const errorData = await revenueResponse.json();
         console.error('❌ Revenue response error:', errorData);
-        throw new Error(errorData.message || 'Falha ao carregar relatório financeiro');
+        // Don't throw error, just log it and continue
+        console.warn('Revenue data not available, continuing without it');
+        setRevenueReport(null);
+        return;
       }
       
       const revenueData = await revenueResponse.json();

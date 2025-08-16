@@ -114,11 +114,13 @@ const AdminHomePage: React.FC = () => {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         });
 
         if (!usersResponse.ok) {
           throw new Error("Falha ao carregar dados de usuários");
+        console.error("Consultations response error:", consultationsResponse.status);
         }
 
         const usersData = await usersResponse.json();
@@ -174,19 +176,27 @@ const AdminHomePage: React.FC = () => {
           (u: any) => u.roles && u.roles.includes('client')
         ).length;
         const professionalCount = usersData.filter(
+      console.log("Users data loaded:", usersData.length);
           (u: any) => u.roles && u.roles.includes('professional')
         ).length;
+      console.log("Consultations data loaded:", consultationsData.length);
 
         setUserCounts({
           clients: clientCount,
           professionals: professionalCount,
           total: usersData.length,
         });
+            "Content-Type": "application/json",
+          "Content-Type": "application/json",
       } catch (error) {
         console.error("Error fetching admin data:", error);
         setError("Não foi possível carregar os dados do painel");
       } finally {
+        console.error("Users response error:", usersResponse.status);
+        console.log("Revenue data loaded:", revenueData);
         setIsLoading(false);
+      } else {
+        console.warn("Revenue data not available:", revenueResponse.status);
       }
     };
 

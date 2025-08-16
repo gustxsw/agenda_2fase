@@ -66,14 +66,17 @@ const ClientHomePage: React.FC = () => {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         });
 
         if (!consultationsResponse.ok) {
+          console.error("Consultations response error:", consultationsResponse.status);
           throw new Error("Falha ao carregar consultas");
         }
 
         const consultationsData = await consultationsResponse.json();
+        console.log("Consultations loaded:", consultationsData.length);
         setConsultations(consultationsData);
 
         // Fetch dependents
@@ -81,12 +84,16 @@ const ClientHomePage: React.FC = () => {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         });
 
         if (dependentsResponse.ok) {
           const dependentsData = await dependentsResponse.json();
+          console.log("Dependents loaded:", dependentsData.length);
           setDependents(dependentsData);
+        } else {
+          console.warn("Dependents not available:", dependentsResponse.status);
         }
 
         // Fetch subscription status
@@ -94,13 +101,17 @@ const ClientHomePage: React.FC = () => {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         });
 
         if (userResponse.ok) {
           const userData = await userResponse.json();
+          console.log("User subscription data:", userData);
           setSubscriptionStatus(userData.subscription_status || "pending");
           setSubscriptionExpiry(userData.subscription_expiry);
+        } else {
+          console.warn("User data not available:", userResponse.status);
         }
       } catch (error) {
         console.error("Error fetching data:", error);

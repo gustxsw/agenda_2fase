@@ -103,15 +103,20 @@ const ReportsPage: React.FC = () => {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         }
       );
 
       if (!response.ok) {
+        console.error("Revenue report response error:", response.status);
+        const errorText = await response.text();
+        console.error("Error details:", errorText);
         throw new Error("Falha ao carregar relatório");
       }
 
       const data = await response.json();
+      console.log("Revenue report loaded:", data);
       setReport(data);
     } catch (error) {
       console.error("Error fetching report:", error);
