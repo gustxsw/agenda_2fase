@@ -28,6 +28,7 @@ type PrivatePatient = {
 const DocumentsPage: React.FC = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [patients, setPatients] = useState<PrivatePatient[]>([]);
+  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<DocumentType | ''>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -81,6 +82,24 @@ const DocumentsPage: React.FC = () => {
     fetchData();
   }, []);
 
+  // Filter documents when search term or type changes
+  useEffect(() => {
+    let filtered = documents;
+
+    if (searchTerm) {
+      filtered = filtered.filter(doc =>
+        doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.patient_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (selectedType) {
+      filtered = filtered.filter(doc => doc.document_type === selectedType);
+    }
+
+    setFilteredDocuments(filtered);
+  }, [documents, searchTerm, selectedType]);
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
@@ -95,6 +114,9 @@ const DocumentsPage: React.FC = () => {
       if (documentsResponse.ok) {
         const documentsData = await documentsResponse.json();
         setDocuments(documentsData);
+      } else {
+        console.warn('Documents not available:', documentsResponse.status);
+        setDocuments([]);
       }
 
       // Fetch private patients
@@ -105,6 +127,9 @@ const DocumentsPage: React.FC = () => {
       if (patientsResponse.ok) {
         const patientsData = await patientsResponse.json();
         setPatients(patientsData);
+      } else {
+        console.warn('Private patients not available:', patientsResponse.status);
+        setPatients([]);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -117,24 +142,6 @@ const DocumentsPage: React.FC = () => {
   const getDocumentTypeInfo = (type: DocumentType) => {
     return documentTypes.find(dt => dt.value === type) || documentTypes[documentTypes.length - 1];
   };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const filteredDocuments = documents.filter(doc => {
-    const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         doc.patient_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = !selectedType || doc.document_type === selectedType;
-    return matchesSearch && matchesType;
-  });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -177,6 +184,17 @@ const DocumentsPage: React.FC = () => {
 
   const closeModal = () => {
     setShowCreateModal(false);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
