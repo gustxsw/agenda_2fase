@@ -106,7 +106,6 @@ const ProfessionalProfilePage: React.FC = () => {
           specialty: userData.category_name || ''
         }));
         setSignatureUrl(userData.signature_url);
-        setSignatureUrl(userData.signature_url);
       }
 
       // Fetch attendance locations
@@ -404,99 +403,6 @@ const ProfessionalProfilePage: React.FC = () => {
     }
   };
 
-  const handleSignatureUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setSignatureError('Por favor, selecione apenas arquivos de imagem');
-      return;
-    }
-
-    // Validate file size (2MB for signatures)
-    if (file.size > 2 * 1024 * 1024) {
-      setSignatureError('A imagem da assinatura deve ter no máximo 2MB');
-      return;
-    }
-
-    try {
-      setIsUploadingSignature(true);
-      setSignatureError('');
-      setSignatureSuccess('');
-
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-
-      const formData = new FormData();
-      formData.append('signature', file);
-
-      const response = await fetch(`${apiUrl}/api/upload-signature`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Falha ao fazer upload da assinatura');
-      }
-
-      const data = await response.json();
-      setSignatureUrl(data.signatureUrl);
-      setSignatureSuccess('Assinatura digital atualizada com sucesso!');
-
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSignatureSuccess('');
-      }, 3000);
-
-    } catch (error) {
-      console.error('Error uploading signature:', error);
-      setSignatureError(error instanceof Error ? error.message : 'Erro ao fazer upload da assinatura');
-    } finally {
-      setIsUploadingSignature(false);
-    }
-  };
-
-  const removeSignature = async () => {
-    try {
-      setIsUploadingSignature(true);
-      setSignatureError('');
-      setSignatureSuccess('');
-
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-
-      const response = await fetch(`${apiUrl}/api/remove-signature`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Falha ao remover assinatura');
-      }
-
-      setSignatureUrl(null);
-      setSignatureSuccess('Assinatura digital removida com sucesso!');
-
-      setTimeout(() => {
-        setSignatureSuccess('');
-      }, 3000);
-
-    } catch (error) {
-      console.error('Error removing signature:', error);
-      setSignatureError(error instanceof Error ? error.message : 'Erro ao remover assinatura');
-    } finally {
-      setIsUploadingSignature(false);
-    }
-  };
-
   const formatZipCode = (value: string) => {
     const numericValue = value.replace(/\D/g, '');
     const limitedValue = numericValue.slice(0, 8);
@@ -530,25 +436,6 @@ const ProfessionalProfilePage: React.FC = () => {
       {success && (
         <div className="bg-green-50 text-green-600 p-4 rounded-lg mb-6">
           {success}
-        </div>
-      )}
-
-      {/* Signature upload feedback messages */}
-      {signatureError && (
-        <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-6">
-          <div className="flex items-center">
-            <FileImage className="h-5 w-5 text-red-600 mr-2" />
-            <p className="text-red-700">{signatureError}</p>
-          </div>
-        </div>
-      )}
-
-      {signatureSuccess && (
-        <div className="bg-green-50 border-l-4 border-green-600 p-4 mb-6">
-          <div className="flex items-center">
-            <FileImage className="h-5 w-5 text-green-600 mr-2" />
-            <p className="text-green-700">{signatureSuccess}</p>
-          </div>
         </div>
       )}
 
@@ -616,6 +503,124 @@ const ProfessionalProfilePage: React.FC = () => {
                 className="input"
                 placeholder="(00) 00000-0000"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                CRM
+              </label>
+              <input
+                type="text"
+                value={profileData.crm}
+                onChange={(e) => setProfileData(prev => ({ ...prev, crm: e.target.value }))}
+                className="input"
+                placeholder="Ex: 12345/GO"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Especialidade
+              </label>
+              <input
+                type="text"
+                value={profileData.specialty}
+                onChange={(e) => setProfileData(prev => ({ ...prev, specialty: e.target.value }))}
+                className="input"
+                placeholder="Ex: Fisioterapeuta, Psicólogo, etc."
+              />
+            </div>
+
+            {/* Digital Signature Section */}
+            <div className="border-t border-gray-200 pt-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <FileImage className="h-5 w-5 text-red-600 mr-2" />
+                Assinatura Digital
+              </h3>
+              
+              <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                <p className="text-blue-800 text-sm">
+                  <strong>💡 Dica:</strong> Faça upload da sua assinatura digital para que ela apareça automaticamente 
+                  em todos os documentos médicos e prontuários que você gerar, evitando ter que digitar suas informações repetidamente.
+                </p>
+              </div>
+
+              {signatureUrl ? (
+                <div className="space-y-4">
+                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-gray-900">Assinatura Atual</h4>
+                      <button
+                        type="button"
+                        onClick={removeSignature}
+                        disabled={isUploadingSignature}
+                        className="text-red-600 hover:text-red-800 p-1"
+                        title="Remover assinatura"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="bg-white p-4 rounded border border-gray-200 max-w-md">
+                      <img
+                        src={signatureUrl}
+                        alt="Assinatura digital"
+                        className="max-w-full h-auto max-h-32 object-contain"
+                        style={{ filter: 'contrast(1.2)' }}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Atualizar Assinatura
+                    </label>
+                    <div className="flex items-center space-x-3">
+                      <label className="btn btn-outline cursor-pointer flex items-center">
+                        <Upload className="h-4 w-4 mr-2" />
+                        {isUploadingSignature ? 'Enviando...' : 'Escolher Nova Imagem'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleSignatureUpload}
+                          className="hidden"
+                          disabled={isUploadingSignature}
+                        />
+                      </label>
+                      {isUploadingSignature && (
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fazer Upload da Assinatura
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-red-400 transition-colors">
+                    <FileImage className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                    <div className="space-y-2">
+                      <label className="btn btn-primary cursor-pointer inline-flex items-center">
+                        <Upload className="h-4 w-4 mr-2" />
+                        {isUploadingSignature ? 'Enviando...' : 'Escolher Imagem'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleSignatureUpload}
+                          className="hidden"
+                          disabled={isUploadingSignature}
+                        />
+                      </label>
+                      {isUploadingSignature && (
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 mx-auto mt-2"></div>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-2">
+                      PNG, JPG ou JPEG até 2MB
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-200 pt-4">
@@ -829,123 +834,6 @@ const ProfessionalProfilePage: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    CRM
-                  </label>
-                  <input
-                    type="text"
-                    value={profileData.crm}
-                    onChange={(e) => setProfileData(prev => ({ ...prev, crm: e.target.value }))}
-                    className="input"
-                    placeholder="Ex: 12345/GO"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Especialidade
-                  </label>
-                  <input
-                    type="text"
-                    value={profileData.specialty}
-                    onChange={(e) => setProfileData(prev => ({ ...prev, specialty: e.target.value }))}
-                    className="input"
-                    placeholder="Ex: Fisioterapeuta, Psicólogo, etc."
-                  />
-                </div>
-
-                {/* Digital Signature Section */}
-                <div className="md:col-span-2 border-t border-gray-200 pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <FileImage className="h-5 w-5 text-red-600 mr-2" />
-                    Assinatura Digital
-                  </h3>
-                  
-                  <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                    <p className="text-blue-800 text-sm">
-                      <strong>💡 Dica:</strong> Faça upload da sua assinatura digital para que ela apareça automaticamente 
-                      em todos os documentos médicos e prontuários que você gerar, evitando ter que digitar suas informações repetidamente.
-                    </p>
-                  </div>
-
-                  {signatureUrl ? (
-                    <div className="space-y-4">
-                      <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-medium text-gray-900">Assinatura Atual</h4>
-                          <button
-                            onClick={removeSignature}
-                            disabled={isUploadingSignature}
-                            className="text-red-600 hover:text-red-800 p-1"
-                            title="Remover assinatura"
-                          >
-                            <Trash className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="bg-white p-4 rounded border border-gray-200 max-w-md">
-                          <img
-                            src={signatureUrl}
-                            alt="Assinatura digital"
-                            className="max-w-full h-auto max-h-32 object-contain"
-                            style={{ filter: 'contrast(1.2)' }}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Atualizar Assinatura
-                        </label>
-                        <div className="flex items-center space-x-3">
-                          <label className="btn btn-outline cursor-pointer flex items-center">
-                            <Upload className="h-4 w-4 mr-2" />
-                            {isUploadingSignature ? 'Enviando...' : 'Escolher Nova Imagem'}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleSignatureUpload}
-                              className="hidden"
-                              disabled={isUploadingSignature}
-                            />
-                          </label>
-                          {isUploadingSignature && (
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Fazer Upload da Assinatura
-                      </label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-red-400 transition-colors">
-                        <FileImage className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                        <div className="space-y-2">
-                          <label className="btn btn-primary cursor-pointer inline-flex items-center">
-                            <Upload className="h-4 w-4 mr-2" />
-                            {isUploadingSignature ? 'Enviando...' : 'Escolher Imagem'}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleSignatureUpload}
-                              className="hidden"
-                              disabled={isUploadingSignature}
-                            />
-                          </label>
-                          {isUploadingSignature && (
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 mx-auto mt-2"></div>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-500 mt-2">
-                          PNG, JPG ou JPEG até 2MB
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1087,98 +975,6 @@ const ProfessionalProfilePage: React.FC = () => {
                     </span>
                   </label>
                 </div>
-              </div>
-
-              {/* Digital Signature Section */}
-              <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <FileImage className="h-5 w-5 text-red-600 mr-2" />
-                  Assinatura Digital
-                </h3>
-                
-                <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                  <p className="text-blue-800 text-sm">
-                    <strong>💡 Dica:</strong> Faça upload da sua assinatura digital para que ela apareça automaticamente 
-                    em todos os documentos médicos e prontuários que você gerar, evitando ter que digitar suas informações repetidamente.
-                  </p>
-                </div>
-
-                {signatureUrl ? (
-                  <div className="space-y-4">
-                    <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-medium text-gray-900">Assinatura Atual</h4>
-                        <button
-                          type="button"
-                          onClick={removeSignature}
-                          disabled={isUploadingSignature}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="Remover assinatura"
-                        >
-                          <Trash className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <div className="bg-white p-4 rounded border border-gray-200 max-w-md">
-                        <img
-                          src={signatureUrl}
-                          alt="Assinatura digital"
-                          className="max-w-full h-auto max-h-32 object-contain"
-                          style={{ filter: 'contrast(1.2)' }}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Atualizar Assinatura
-                      </label>
-                      <div className="flex items-center space-x-3">
-                        <label className="btn btn-outline cursor-pointer flex items-center">
-                          <Upload className="h-4 w-4 mr-2" />
-                          {isUploadingSignature ? 'Enviando...' : 'Escolher Nova Imagem'}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleSignatureUpload}
-                            className="hidden"
-                            disabled={isUploadingSignature}
-                          />
-                        </label>
-                        {isUploadingSignature && (
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Fazer Upload da Assinatura
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-red-400 transition-colors">
-                      <FileImage className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                      <div className="space-y-2">
-                        <label className="btn btn-primary cursor-pointer inline-flex items-center">
-                          <Upload className="h-4 w-4 mr-2" />
-                          {isUploadingSignature ? 'Enviando...' : 'Escolher Imagem'}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleSignatureUpload}
-                            className="hidden"
-                            disabled={isUploadingSignature}
-                          />
-                        </label>
-                        {isUploadingSignature && (
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600 mx-auto mt-2"></div>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500 mt-2">
-                        PNG, JPG ou JPEG até 2MB
-                      </p>
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
