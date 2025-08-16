@@ -11,12 +11,18 @@ import { generateDocumentPDF } from './utils/documentGenerator.js';
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { v2 as cloudinary } from 'cloudinary';
 
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Initialize MercadoPago
+const client = new MercadoPagoConfig({
+  accessToken: process.env.MP_ACCESS_TOKEN,
+  options: { timeout: 5000 }
+});
 // =============================================================================
 // MERCADOPAGO CONFIGURATION
 // =============================================================================
@@ -140,6 +146,60 @@ const initializeDatabase = async () => {
         access_granted_by VARCHAR(255),
         access_granted_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    // Create client_payments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS client_payments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        mp_preference_id VARCHAR(255) NOT NULL,
+        mp_payment_id VARCHAR(255),
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        payment_method VARCHAR(100),
+        payment_date TIMESTAMP,
+        subscription_months INTEGER DEFAULT 12,
+        dependent_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create professional_payments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS professional_payments (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        mp_preference_id VARCHAR(255) NOT NULL,
+        mp_payment_id VARCHAR(255),
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        payment_method VARCHAR(100),
+        payment_date TIMESTAMP,
+        period_start DATE NOT NULL,
+        period_end DATE NOT NULL,
+        consultation_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create scheduling_payments table (for future use)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS scheduling_payments (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        mp_preference_id VARCHAR(255) NOT NULL,
+        mp_payment_id VARCHAR(255),
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        payment_method VARCHAR(100),
+        payment_date TIMESTAMP,
+        access_months INTEGER DEFAULT 1,
+        access_expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
