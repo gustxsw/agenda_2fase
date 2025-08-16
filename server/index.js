@@ -2801,12 +2801,12 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
           ELSE c.value * ((100 - $3) / 100.0)
         END as amount_to_pay
       FROM consultations c
-      LEFT JOIN users u ON c.client_id = u.id
+      WHERE c.professional_id = $1 AND c.date >= $2 AND c.date <= $3 AND c.status = 'completed'
       LEFT JOIN dependents d ON c.dependent_id = d.id
       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
       LEFT JOIN services s ON c.service_id = s.id
       WHERE c.professional_id = $1 
-        AND c.date >= $2 AND c.date <= $4
+      WHERE c.date >= $1 AND c.date <= $2 AND c.status = 'completed'
       ORDER BY c.date DESC
     `, [req.user.id, start_date, professionalPercentage, end_date]);
 
