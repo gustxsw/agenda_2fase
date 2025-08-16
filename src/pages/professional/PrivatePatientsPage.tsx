@@ -274,16 +274,6 @@ const PrivatePatientsPage: React.FC = () => {
     return date.toLocaleDateString('pt-BR');
   };
 
-  const formatZipCode = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
-    return numericValue.slice(0, 8);
-  };
-
-  const formatPhone = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
-    return numericValue.slice(0, 11);
-  };
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
