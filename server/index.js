@@ -2855,8 +2855,10 @@ app.get('/api/reports/clients-by-city', authenticate, authorize(['admin']), asyn
 
 // Professionals by city report (admin only)
 app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin']), async (req, res) => {
+    // Create upload middleware instance
+    const upload = createUpload();
+    
   try {
-    const result = await pool.query(`
       SELECT 
         u.city,
         u.state,
@@ -2865,7 +2867,7 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
           json_build_object(
             'category_name', COALESCE(sc.name, 'Sem categoria'),
             'count', 1
-          )
+      if (!req.file) {
         ) as categories
       FROM users u
       LEFT JOIN service_categories sc ON u.category_id = sc.id
@@ -2876,11 +2878,11 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
       ORDER BY total_professionals DESC, u.city
     `);
 
-    // Process the aggregated data
+        [req.file.path, req.user.id]
     const processedResult = result.rows.map(row => {
       const categoryMap = new Map();
       
-      row.categories.forEach(cat => {
+          imageUrl: req.file.path
         const name = cat.category_name;
         if (categoryMap.has(name)) {
           categoryMap.set(name, categoryMap.get(name) + 1);
@@ -2925,7 +2927,6 @@ app.get('*', (req, res) => {
 });
 
 // ==================== ERROR HANDLING ====================
-
 // Global error handler
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
@@ -2934,7 +2935,7 @@ app.use((error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: 'Arquivo muito grande. Tamanho máximo: 5MB' });
     }
-    return res.status(400).json({ message: 'Erro no upload do arquivo' });
+      if (!req.file) {
   }
   
   res.status(500).json({ message: 'Erro interno do servidor' });
@@ -2944,9 +2945,12 @@ app.use((error, req, res, next) => {
 
 const startServer = async () => {
   try {
+    // Create upload middleware instance
+        [req.file.path, req.user.id]
+    
     // Initialize database
     await initializeDatabase();
-    
+          signatureUrl: req.file.path
     // Start server
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
