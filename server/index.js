@@ -21,6 +21,7 @@ import { generateDocumentPDF } from './utils/documentGenerator.js';
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 
 // Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -65,6 +66,7 @@ app.use(express.static('dist'));
 
 // Database initialization
 const initializeDatabase = async () => {
+  try {
     // Create tables if they don't exist
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -3041,9 +3043,9 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
   res.status(500).json({ message: 'Erro interno do servidor' });
-const express = require('express');
 });
-const cors = require('cors');
 
-const dotenv = require('dotenv');
-export default app;
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
