@@ -174,9 +174,10 @@ const SchedulingPage: React.FC = () => {
       if (patientsResponse.ok) {
         const patientsData = await patientsResponse.json();
         console.log("Private patients loaded:", patientsData.length);
-        setPrivatePatients(patientsData);
+        setPrivatePatients(Array.isArray(patientsData) ? patientsData : []);
       } else {
         console.error("Private patients response error:", patientsResponse.status);
+        setPrivatePatients([]);
       }
 
       // Fetch attendance locations
@@ -409,6 +410,7 @@ const SchedulingPage: React.FC = () => {
   };
 
   const formatCpf = (value: string) => {
+    if (!value) return '';
     const numericValue = value.replace(/\D/g, "");
     return numericValue.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
   };
@@ -747,10 +749,15 @@ const SchedulingPage: React.FC = () => {
                       <option value="">Selecione um paciente</option>
                       {privatePatients.map((patient) => (
                         <option key={patient.id} value={patient.id}>
-                          {patient.name} - {formatCpf(patient.cpf)}
+                          {patient.name} - {patient.cpf ? formatCpf(patient.cpf) : 'CPF não informado'}
                         </option>
                       ))}
                     </select>
+                    {privatePatients.length === 0 && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        Nenhum paciente particular cadastrado. Cadastre pacientes na seção "Pacientes Particulares".
+                      </p>
+                    )}
                   </div>
                 )}
 
