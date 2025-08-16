@@ -7,6 +7,36 @@ import cookieParser from 'cookie-parser';
 import { pool } from './db.js';
 import { authenticate, authorize } from './middleware/auth.js';
 import createUpload from './middleware/upload.js';
+
+// Database initialization - Add signature_url column if it doesn't exist
+const initializeDatabase = async () => {
+  try {
+    console.log('🔄 Checking database schema...');
+    
+    // Check if signature_url column exists
+    const columnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'signature_url'
+    `);
+    
+    if (columnCheck.rows.length === 0) {
+      console.log('🔄 Adding signature_url column to users table...');
+      
+      await pool.query(`
+        ALTER TABLE users 
+        ADD COLUMN signature_url TEXT
+      `);
+      
+      console.log('✅ signature_url column added successfully');
+    } else {
+      console.log('✅ signature_url column already exists');
+    }
+  } catch (error) {
+    console.error('❌ Error initializing database:', error);
+    // Don't throw error, just log it - server should continue running
+  }
+};
 import { generateDocumentPDF } from './utils/documentGenerator.js';
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { v2 as cloudinary } from 'cloudinary';
@@ -16,6 +46,9 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize database schema
+initializeDatabase();
 
 // =============================================================================
 // MERCADOPAGO CONFIGURATION
