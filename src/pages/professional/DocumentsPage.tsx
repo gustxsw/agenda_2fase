@@ -1,23 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { 
-  FileText, 
-  Plus, 
-  Search, 
-  User, 
-  Calendar, 
-  Eye, 
-  Download, 
-  X, 
-  Check, 
-  AlertCircle,
-  Printer
-} from 'lucide-react';
+import { FileImage, FileText, Upload, Download, Eye, Plus, Search, Calendar, X, Check, User } from 'lucide-react';
+
+type DocumentType = 
+  | 'certificate' 
+  | 'prescription' 
+  | 'consent_form' 
+  | 'exam_request' 
+  | 'declaration' 
+  | 'lgpd' 
+  | 'other';
 
 type Document = {
   id: number;
   title: string;
-  document_type: string;
+  document_type: DocumentType;
   patient_name: string;
   document_url: string;
   created_at: string;
@@ -30,47 +26,37 @@ type PrivatePatient = {
 };
 
 const DocumentsPage: React.FC = () => {
-  const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [patients, setPatients] = useState<PrivatePatient[]>([]);
-  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState('');
+  const [selectedType, setSelectedType] = useState<DocumentType | ''>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
-  // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
-    document_type: 'certificate',
-    title: '',
+    document_type: 'certificate' as DocumentType,
     patient_id: '',
+    patient_type: 'private',
+    title: '',
     patientName: '',
     patientCpf: '',
-    professionalName: user?.name || '',
-    professionalSpecialty: '',
-    crm: '',
-    // Certificate fields
     description: '',
-    days: '',
     cid: '',
-    // Prescription fields
-    prescription: '',
-    // Consent form fields
+    days: '',
     procedure: '',
     risks: '',
-    // Exam request fields
+    prescription: '',
     content: '',
-    // Declaration fields (uses content)
-    // LGPD uses default content
-    // Other fields
-    // content is used for other types too
+    professionalName: '',
+    professionalSpecialty: '',
+    crm: ''
   });
 
+  // Get API URL
   const getApiUrl = () => {
     if (
       window.location.hostname === "cartaoquiroferreira.com.br" ||
@@ -82,103 +68,44 @@ const DocumentsPage: React.FC = () => {
   };
 
   const documentTypes = [
-    { value: 'certificate', label: 'Atestado Médico' },
-    { value: 'prescription', label: 'Receituário' },
-    { value: 'consent_form', label: 'Termo de Consentimento' },
-    { value: 'exam_request', label: 'Solicitação de Exames' },
-    { value: 'declaration', label: 'Declaração Médica' },
-    { value: 'lgpd', label: 'Termo LGPD' },
-    { value: 'other', label: 'Outro Documento' }
+    { value: 'certificate', label: 'Atestado Médico', icon: '📋' },
+    { value: 'prescription', label: 'Receituário', icon: '💊' },
+    { value: 'consent_form', label: 'Termo de Consentimento', icon: '✍️' },
+    { value: 'exam_request', label: 'Solicitação de Exames', icon: '🔬' },
+    { value: 'declaration', label: 'Declaração', icon: '📄' },
+    { value: 'lgpd', label: 'Termo LGPD', icon: '🔒' },
+    { value: 'other', label: 'Outros', icon: '📁' }
   ];
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    let filtered = documents;
-
-    if (searchTerm) {
-      filtered = filtered.filter(doc =>
-        doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.patient_name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (selectedType) {
-      filtered = filtered.filter(doc => doc.document_type === selectedType);
-    }
-
-    setFilteredDocuments(filtered);
-  }, [documents, searchTerm, selectedType]);
-
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      setError('');
-      
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
-      console.log('🔄 Fetching documents data...');
-
       // Fetch documents
-      try {
-        const documentsResponse = await fetch(`${apiUrl}/api/documents`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+      const documentsResponse = await fetch(`${apiUrl}/api/medical-documents`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
-        if (documentsResponse.ok) {
-          const documentsData = await documentsResponse.json();
-          console.log('✅ Documents loaded:', documentsData.length);
-          setDocuments(documentsData);
-        } else {
-          console.warn('⚠️ Documents not available:', documentsResponse.status);
-          setDocuments([]);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching documents:', error);
-        setDocuments([]);
+      if (documentsResponse.ok) {
+        const documentsData = await documentsResponse.json();
+        setDocuments(documentsData);
       }
 
-      // Fetch patients
-      try {
-        const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+      // Fetch private patients
+      const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
-        if (patientsResponse.ok) {
-          const patientsData = await patientsResponse.json();
-          console.log('✅ Patients loaded:', patientsData.length);
-          setPatients(patientsData);
-        } else {
-          console.warn('⚠️ Patients not available:', patientsResponse.status);
-          setPatients([]);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching patients:', error);
-        setPatients([]);
+      if (patientsResponse.ok) {
+        const patientsData = await patientsResponse.json();
+        setPatients(patientsData);
       }
-
-      // Fetch user data for professional info
-      try {
-        const userResponse = await fetch(`${apiUrl}/api/users/${user?.id}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          setFormData(prev => ({
-            ...prev,
-            professionalName: userData.name || user?.name || '',
-            professionalSpecialty: userData.category_name || '',
-            crm: userData.crm || ''
-          }));
-        }
-      } catch (error) {
-        console.error('❌ Error fetching user data:', error);
-      }
-
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Não foi possível carregar os dados');
@@ -187,19 +114,27 @@ const DocumentsPage: React.FC = () => {
     }
   };
 
-  const openCreateModal = () => {
-    console.log('🔄 Opening create modal...');
-    setShowCreateModal(true);
-    setError('');
-    setSuccess('');
+  const getDocumentTypeInfo = (type: DocumentType) => {
+    return documentTypes.find(dt => dt.value === type) || documentTypes[documentTypes.length - 1];
   };
 
-  const closeModal = () => {
-    console.log('🔄 Closing modal...');
-    setShowCreateModal(false);
-    setError('');
-    setSuccess('');
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
+
+  const filteredDocuments = documents.filter(doc => {
+    const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         doc.patient_name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = !selectedType || doc.document_type === selectedType;
+    return matchesSearch && matchesType;
+  });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -218,139 +153,93 @@ const DocumentsPage: React.FC = () => {
     }));
   };
 
+  const openCreateModal = () => {
+    setFormData({
+      document_type: 'certificate',
+      patient_id: '',
+      patient_type: 'private',
+      title: '',
+      patientName: '',
+      patientCpf: '',
+      description: '',
+      cid: '',
+      days: '',
+      procedure: '',
+      risks: '',
+      prescription: '',
+      content: '',
+      professionalName: '',
+      professionalSpecialty: '',
+      crm: ''
+    });
+    setShowCreateModal(true);
+  };
+
+  const closeModal = () => {
+    setShowCreateModal(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsCreating(true);
     setError('');
     setSuccess('');
 
-    console.log('🔄 Submitting document form...');
-
     try {
-      setIsCreating(true);
-      
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
-      // Prepare template data based on document type
-      let templateData: any = {
-        patientName: formData.patientName,
-        patientCpf: formData.patientCpf,
-        professionalName: formData.professionalName,
-        professionalSpecialty: formData.professionalSpecialty,
-        crm: formData.crm
-      };
-
-      // Add specific fields based on document type
-      switch (formData.document_type) {
-        case 'certificate':
-          templateData = {
-            ...templateData,
-            description: formData.description,
-            days: formData.days,
-            cid: formData.cid
-          };
-          break;
-        case 'prescription':
-          templateData = {
-            ...templateData,
-            prescription: formData.prescription
-          };
-          break;
-        case 'consent_form':
-          templateData = {
-            ...templateData,
-            procedure: formData.procedure,
-            description: formData.description,
-            risks: formData.risks
-          };
-          break;
-        case 'exam_request':
-          templateData = {
-            ...templateData,
-            content: formData.content
-          };
-          break;
-        case 'declaration':
-          templateData = {
-            ...templateData,
-            content: formData.content
-          };
-          break;
-        case 'lgpd':
-          // LGPD uses default template
-          break;
-        case 'other':
-          templateData = {
-            ...templateData,
-            title: formData.title,
-            content: formData.content
-          };
-          break;
-      }
-
-      console.log('🔄 Template data:', templateData);
-
-      const response = await fetch(`${apiUrl}/api/documents`, {
+      const response = await fetch(`${apiUrl}/api/medical-documents`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          document_type: formData.document_type,
           title: formData.title,
-          private_patient_id: parseInt(formData.patient_id),
-          template_data: templateData
+          document_type: formData.document_type,
+          private_patient_id: formData.patient_type === 'private' ? parseInt(formData.patient_id) : null,
+          template_data: formData
         })
       });
 
-      console.log('📡 Document creation response status:', response.status);
-
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ Document creation error:', errorData);
         throw new Error(errorData.message || 'Erro ao criar documento');
       }
 
       const result = await response.json();
-      console.log('✅ Document created:', result);
+      const { title, documentUrl } = result;
 
-      setSuccess('Documento criado com sucesso!');
+      // Clean filename
+      const fileName = title.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+      
+      // Create download link that opens in new tab for mobile compatibility
+      const link = document.createElement('a');
+      link.href = documentUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      
+      // For desktop browsers, try to force download
+      if (window.navigator.userAgent.indexOf('Mobile') === -1) {
+        link.download = `${fileName}.html`;
+      }
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccess('Documento aberto em nova aba. Use Ctrl+S (ou Cmd+S no Mac) para salvar ou imprimir.');
       await fetchData();
 
       setTimeout(() => {
         closeModal();
       }, 1500);
     } catch (error) {
-      console.error('❌ Error creating document:', error);
       setError(error instanceof Error ? error.message : 'Erro ao criar documento');
     } finally {
       setIsCreating(false);
     }
-  };
-
-  const getDocumentTypeInfo = (type: string) => {
-    const typeMap: { [key: string]: { label: string; icon: string } } = {
-      certificate: { label: 'Atestado Médico', icon: '📋' },
-      prescription: { label: 'Receituário', icon: '💊' },
-      consent_form: { label: 'Termo de Consentimento', icon: '📝' },
-      exam_request: { label: 'Solicitação de Exames', icon: '🔬' },
-      declaration: { label: 'Declaração Médica', icon: '📄' },
-      lgpd: { label: 'Termo LGPD', icon: '🔒' },
-      other: { label: 'Outro Documento', icon: '📃' }
-    };
-    return typeMap[type] || { label: 'Documento', icon: '📄' };
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const renderFormFields = () => {
@@ -360,18 +249,31 @@ const DocumentsPage: React.FC = () => {
           <>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Descrição do Problema *
+                Descrição do Atestado *
               </label>
               <textarea
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
                 className="input min-h-[100px]"
-                placeholder="Descreva o problema de saúde que justifica o atestado"
+                placeholder="Descreva o motivo do atestado..."
                 required
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CID (opcional)
+                </label>
+                <input
+                  type="text"
+                  name="cid"
+                  value={formData.cid}
+                  onChange={handleInputChange}
+                  className="input"
+                  placeholder="Ex: M54.5"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Dias de Afastamento *
@@ -384,19 +286,6 @@ const DocumentsPage: React.FC = () => {
                   className="input"
                   min="1"
                   required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  CID (opcional)
-                </label>
-                <input
-                  type="text"
-                  name="cid"
-                  value={formData.cid}
-                  onChange={handleInputChange}
-                  className="input"
-                  placeholder="Ex: M54.5"
                 />
               </div>
             </div>
@@ -446,7 +335,7 @@ const DocumentsPage: React.FC = () => {
                 value={formData.description}
                 onChange={handleInputChange}
                 className="input min-h-[100px]"
-                placeholder="Descreva o procedimento em detalhes"
+                placeholder="Descreva o procedimento..."
                 required
               />
             </div>
@@ -459,57 +348,14 @@ const DocumentsPage: React.FC = () => {
                 value={formData.risks}
                 onChange={handleInputChange}
                 className="input min-h-[100px]"
-                placeholder="Descreva os riscos e benefícios do procedimento"
+                placeholder="Descreva os riscos e benefícios..."
                 required
               />
             </div>
           </>
         );
 
-      case 'exam_request':
-        return (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Exames Solicitados *
-            </label>
-            <textarea
-              name="content"
-              value={formData.content}
-              onChange={handleInputChange}
-              className="input min-h-[200px]"
-              placeholder="Liste os exames solicitados..."
-              required
-            />
-          </div>
-        );
-
-      case 'declaration':
-        return (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Conteúdo da Declaração *
-            </label>
-            <textarea
-              name="content"
-              value={formData.content}
-              onChange={handleInputChange}
-              className="input min-h-[200px]"
-              placeholder="Digite o conteúdo da declaração médica..."
-              required
-            />
-          </div>
-        );
-
-      case 'lgpd':
-        return (
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <p className="text-blue-800 text-sm">
-              O termo LGPD será gerado automaticamente com o conteúdo padrão sobre proteção de dados pessoais.
-            </p>
-          </div>
-        );
-
-      case 'other':
+      default:
         return (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -525,9 +371,6 @@ const DocumentsPage: React.FC = () => {
             />
           </div>
         );
-
-      default:
-        return null;
     }
   };
 
@@ -536,7 +379,7 @@ const DocumentsPage: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Documentos Médicos</h1>
-          <p className="text-gray-600">Crie e gerencie documentos médicos</p>
+          <p className="text-gray-600">Gere e gerencie documentos médicos</p>
         </div>
         
         <button
@@ -563,13 +406,13 @@ const DocumentsPage: React.FC = () => {
 
         <select
           value={selectedType}
-          onChange={(e) => setSelectedType(e.target.value)}
+          onChange={(e) => setSelectedType(e.target.value as DocumentType | '')}
           className="input"
         >
           <option value="">Todos os tipos</option>
           {documentTypes.map((type) => (
             <option key={type.value} value={type.value}>
-              {type.label}
+              {type.icon} {type.label}
             </option>
           ))}
         </select>
@@ -587,7 +430,6 @@ const DocumentsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Documents Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         {isLoading ? (
           <div className="text-center py-12">
@@ -704,38 +546,23 @@ const DocumentsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Create Document Modal */}
+      {/* Create document modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Criar Novo Documento</h2>
-                <button
-                  onClick={closeModal}
-                  className="text-gray-400 hover:text-gray-600"
-                  type="button"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
+              <h2 className="text-xl font-bold">Criar Novo Documento</h2>
             </div>
 
             {error && (
               <div className="mx-6 mt-4 bg-red-50 text-red-600 p-3 rounded-lg">
-                <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 mr-2" />
-                  {error}
-                </div>
+                {error}
               </div>
             )}
 
             {success && (
               <div className="mx-6 mt-4 bg-green-50 text-green-600 p-3 rounded-lg">
-                <div className="flex items-center">
-                  <Check className="h-5 w-5 mr-2" />
-                  {success}
-                </div>
+                {success}
               </div>
             )}
 
@@ -755,7 +582,7 @@ const DocumentsPage: React.FC = () => {
                   >
                     {documentTypes.map((type) => (
                       <option key={type.value} value={type.value}>
-                        {type.label}
+                        {type.icon} {type.label}
                       </option>
                     ))}
                   </select>
@@ -795,11 +622,6 @@ const DocumentsPage: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                  {patients.length === 0 && (
-                    <p className="text-sm text-gray-500 mt-1">
-                      Nenhum paciente particular cadastrado. Cadastre pacientes primeiro na seção "Pacientes Particulares".
-                    </p>
-                  )}
                 </div>
 
                 {/* Professional Information */}
@@ -831,7 +653,7 @@ const DocumentsPage: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      CRM
+                      CRM *
                     </label>
                     <input
                       type="text"
@@ -840,6 +662,7 @@ const DocumentsPage: React.FC = () => {
                       onChange={handleInputChange}
                       className="input"
                       placeholder="Ex: 12345/GO"
+                      required
                     />
                   </div>
                 </div>
