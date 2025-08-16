@@ -49,16 +49,14 @@ const ManageServicesPage: React.FC = () => {
 
   // Get API URL with fallback
   const getApiUrl = () => {
-    if (import.meta.env.VITE_API_URL) {
-      return import.meta.env.VITE_API_URL;
+    if (
+      window.location.hostname === "cartaoquiroferreira.com.br" ||
+      window.location.hostname === "www.cartaoquiroferreira.com.br"
+    ) {
+      return "https://www.cartaoquiroferreira.com.br";
     }
     
-    if (window.location.hostname === 'cartaoquiroferreira.com.br' || 
-        window.location.hostname === 'www.cartaoquiroferreira.com.br') {
-      return 'https://convenioquiroferreira.onrender.com';
-    }
-    
-    return 'http://localhost:3001';
+    return "http://localhost:3001";
   };
   
   useEffect(() => {
@@ -365,17 +363,20 @@ const ManageServicesPage: React.FC = () => {
       <div className="card">
         {isLoading ? (
           <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Carregando serviços...</p>
           </div>
         ) : services.length === 0 ? (
           <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <p className="text-gray-600">Nenhum serviço encontrado.</p>
+            <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum serviço encontrado</h3>
+            <p className="text-gray-600 mb-4">Comece criando o primeiro serviço do sistema.</p>
             <button
               onClick={openCreateModal}
-              className="btn btn-primary mt-4 inline-flex items-center"
+              className="btn btn-primary inline-flex items-center"
             >
               <FilePlus className="h-5 w-5 mr-2" />
-              Adicionar Serviço
+              Adicionar Primeiro Serviço
             </button>
           </div>
         ) : (
