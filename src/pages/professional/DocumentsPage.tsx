@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileImage, FileText, Upload, Download, Eye, Plus, Search, Calendar, X, Check, User, AlertCircle } from 'lucide-react';
+import { FileImage, FileText, Plus, Search, Calendar, X, Check, User, AlertCircle, Eye, Download } from 'lucide-react';
 
 type DocumentType = 
   | 'certificate' 
@@ -41,7 +41,6 @@ const DocumentsPage: React.FC = () => {
   const [formData, setFormData] = useState({
     document_type: 'certificate' as DocumentType,
     patient_id: '',
-    patient_type: 'private',
     title: '',
     patientName: '',
     patientCpf: '',
@@ -57,6 +56,16 @@ const DocumentsPage: React.FC = () => {
     crm: ''
   });
 
+  const documentTypes = [
+    { value: 'certificate', label: 'Atestado Médico', icon: '📋' },
+    { value: 'prescription', label: 'Receituário', icon: '💊' },
+    { value: 'consent_form', label: 'Termo de Consentimento', icon: '✍️' },
+    { value: 'exam_request', label: 'Solicitação de Exames', icon: '🔬' },
+    { value: 'declaration', label: 'Declaração', icon: '📄' },
+    { value: 'lgpd', label: 'Termo LGPD', icon: '🔒' },
+    { value: 'other', label: 'Outros', icon: '📁' }
+  ];
+
   // Get API URL
   const getApiUrl = () => {
     if (
@@ -68,22 +77,14 @@ const DocumentsPage: React.FC = () => {
     return "http://localhost:3001";
   };
 
-  const documentTypes = [
-    { value: 'certificate', label: 'Atestado Médico', icon: '📋' },
-    { value: 'prescription', label: 'Receituário', icon: '💊' },
-    { value: 'consent_form', label: 'Termo de Consentimento', icon: '✍️' },
-    { value: 'exam_request', label: 'Solicitação de Exames', icon: '🔬' },
-    { value: 'declaration', label: 'Declaração', icon: '📄' },
-    { value: 'lgpd', label: 'Termo LGPD', icon: '🔒' },
-    { value: 'other', label: 'Outros', icon: '📁' }
-  ];
-
   useEffect(() => {
+    console.log('🔄 DocumentsPage mounted, fetching data...');
     fetchData();
   }, []);
 
   // Filter documents when search term or type changes
   useEffect(() => {
+    console.log('🔄 Filtering documents...', { searchTerm, selectedType, documentsCount: documents.length });
     let filtered = documents;
 
     if (searchTerm) {
@@ -97,45 +98,71 @@ const DocumentsPage: React.FC = () => {
       filtered = filtered.filter(doc => doc.document_type === selectedType);
     }
 
+    console.log('✅ Filtered documents:', filtered.length);
     setFilteredDocuments(filtered);
   }, [documents, searchTerm, selectedType]);
 
   const fetchData = async () => {
     try {
+      console.log('🔄 Starting fetchData...');
       setIsLoading(true);
+      setError('');
+      
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
-      // Fetch documents
-      const documentsResponse = await fetch(`${apiUrl}/api/medical-documents`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      console.log('🔄 Fetching from API:', apiUrl);
 
-      if (documentsResponse.ok) {
-        const documentsData = await documentsResponse.json();
-        setDocuments(documentsData);
-      } else {
-        console.warn('Documents not available:', documentsResponse.status);
+      // Fetch documents
+      try {
+        console.log('🔄 Fetching documents...');
+        const documentsResponse = await fetch(`${apiUrl}/api/medical-documents`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        console.log('📡 Documents response status:', documentsResponse.status);
+
+        if (documentsResponse.ok) {
+          const documentsData = await documentsResponse.json();
+          console.log('✅ Documents loaded:', documentsData.length);
+          setDocuments(documentsData);
+        } else {
+          console.warn('⚠️ Documents not available:', documentsResponse.status);
+          setDocuments([]);
+        }
+      } catch (docError) {
+        console.error('❌ Error fetching documents:', docError);
         setDocuments([]);
       }
 
       // Fetch private patients
-      const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      try {
+        console.log('🔄 Fetching private patients...');
+        const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
 
-      if (patientsResponse.ok) {
-        const patientsData = await patientsResponse.json();
-        setPatients(patientsData);
-      } else {
-        console.warn('Private patients not available:', patientsResponse.status);
+        console.log('📡 Patients response status:', patientsResponse.status);
+
+        if (patientsResponse.ok) {
+          const patientsData = await patientsResponse.json();
+          console.log('✅ Patients loaded:', patientsData.length);
+          setPatients(Array.isArray(patientsData) ? patientsData : []);
+        } else {
+          console.warn('⚠️ Patients not available:', patientsResponse.status);
+          setPatients([]);
+        }
+      } catch (patError) {
+        console.error('❌ Error fetching patients:', patError);
         setPatients([]);
       }
+
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error in fetchData:', error);
       setError('Não foi possível carregar os dados');
     } finally {
       setIsLoading(false);
+      console.log('✅ fetchData completed');
     }
   };
 
@@ -145,12 +172,16 @@ const DocumentsPage: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    console.log('🔄 Input change:', { name, value });
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handlePatientSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const patientId = e.target.value;
+    console.log('🔄 Patient selected:', patientId);
+    
     const patient = patients.find(p => p.id.toString() === patientId);
+    console.log('🔄 Found patient:', patient);
     
     setFormData(prev => ({
       ...prev,
@@ -165,7 +196,6 @@ const DocumentsPage: React.FC = () => {
     setFormData({
       document_type: 'certificate',
       patient_id: '',
-      patient_type: 'private',
       title: '',
       patientName: '',
       patientCpf: '',
@@ -214,6 +244,8 @@ const DocumentsPage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
+      console.log('🔄 Creating document via API...');
+
       const response = await fetch(`${apiUrl}/api/medical-documents`, {
         method: 'POST',
         headers: {
@@ -223,17 +255,22 @@ const DocumentsPage: React.FC = () => {
         body: JSON.stringify({
           title: formData.title,
           document_type: formData.document_type,
-          private_patient_id: formData.patient_type === 'private' ? parseInt(formData.patient_id) : null,
+          private_patient_id: formData.patient_id ? parseInt(formData.patient_id) : null,
           template_data: formData
         })
       });
 
+      console.log('📡 Document creation response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Document creation error:', errorData);
         throw new Error(errorData.message || 'Erro ao criar documento');
       }
 
       const result = await response.json();
+      console.log('✅ Document created:', result);
+      
       const { title, documentUrl } = result;
 
       // Clean filename
@@ -270,6 +307,7 @@ const DocumentsPage: React.FC = () => {
 
   const renderFormFields = () => {
     console.log('🔄 Rendering form fields for type:', formData.document_type);
+    
     switch (formData.document_type) {
       case 'certificate':
         return (
@@ -382,6 +420,23 @@ const DocumentsPage: React.FC = () => {
           </>
         );
 
+      case 'exam_request':
+        return (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Exames Solicitados *
+            </label>
+            <textarea
+              name="content"
+              value={formData.content}
+              onChange={handleInputChange}
+              className="input min-h-[200px]"
+              placeholder="Liste os exames solicitados..."
+              required
+            />
+          </div>
+        );
+
       default:
         return (
           <div>
@@ -398,6 +453,60 @@ const DocumentsPage: React.FC = () => {
             />
           </div>
         );
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    let filtered = documents;
+
+    if (searchTerm) {
+      filtered = filtered.filter(doc =>
+        doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.patient_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (selectedType) {
+      filtered = filtered.filter(doc => doc.document_type === selectedType);
+    }
+
+    setFilteredDocuments(filtered);
+  }, [documents, searchTerm, selectedType]);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      // Fetch documents
+      const documentsResponse = await fetch(`${apiUrl}/api/medical-documents`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (documentsResponse.ok) {
+        const documentsData = await documentsResponse.json();
+        setDocuments(documentsData);
+      }
+
+      // Fetch patients
+      const patientsResponse = await fetch(`${apiUrl}/api/private-patients`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (patientsResponse.ok) {
+        const patientsData = await patientsResponse.json();
+        setPatients(patientsData);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError('Não foi possível carregar os dados');
+    } finally {
+      setIsLoading(false);
     }
   };
 
