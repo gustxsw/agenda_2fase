@@ -1,6 +1,6 @@
-import { pool } from '../db.js';
+const { pool } = require('../db.js');
 
-export const ensureSignatureColumn = async () => {
+const ensureSignatureColumn = async () => {
   try {
     console.log('🔍 Verificando se a coluna signature_url existe...');
     
@@ -30,3 +30,5 @@ export const ensureSignatureColumn = async () => {
     // Don't throw error to prevent server startup failure
   }
 };
+
+module.exports = { ensureSignatureColumn };

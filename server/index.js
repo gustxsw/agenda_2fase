@@ -1,3 +1,12 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+const { MercadoPagoConfig, Preference } = require('mercadopago');
+const { pool } = require('./db.js');
+const { authenticate, authorize } = require('./middleware/auth.js');
+const createUpload = require('./middleware/upload.js');
+const { generateDocumentPDF } = require('./utils/documentGenerator.js');
+const { ensureSignatureColumn } = require('./database/signatureColumn.js');
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -3036,18 +3045,9 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
   res.status(500).json({ message: 'Erro interno do servidor' });
+const express = require('express');
 });
+const cors = require('cors');
 
-// Catch-all route for SPA
-app.get('*', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💳 MercadoPago configured: ${process.env.MP_ACCESS_TOKEN ? '✅' : '❌'}`);
-});
-
+const dotenv = require('dotenv');
 export default app;

@@ -1,10 +1,10 @@
-import multer from 'multer';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 // 🔥 FIXED: Import cloudinary properly and validate credentials
 const createCloudinaryConfig = async () => {
   try {
-    const { v2: cloudinary } = await import('cloudinary');
+    const { v2: cloudinary } = require('cloudinary');
     
     // Get credentials from environment variables
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
@@ -47,12 +47,11 @@ const createCloudinaryConfig = async () => {
 
 // Initialize cloudinary
 let cloudinary;
-try {
-  cloudinary = await createCloudinaryConfig();
-} catch (error) {
+createCloudinaryConfig().then(result => {
+  cloudinary = result;
+}).catch(error => {
   console.error('❌ Failed to initialize Cloudinary:', error);
-  // Don't throw here, let the route handle the error
-}
+});
 
 // Configure Cloudinary storage for multer
 const createStorage = () => {
@@ -105,4 +104,4 @@ const createUpload = () => {
   }
 };
 
-export default createUpload;
+module.exports = createUpload;

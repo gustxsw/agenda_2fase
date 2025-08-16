@@ -1,7 +1,7 @@
-import jwt from 'jsonwebtoken';
-import { pool } from '../db.js';
+const jwt = require('jsonwebtoken');
+const { pool } = require('../db.js');
 
-export const authenticate = async (req, res, next) => {
+const authenticate = async (req, res, next) => {
   try {
     // Get token from cookie or Authorization header
     const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
@@ -41,7 +41,7 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
-export const authorize = (roles) => {
+const authorize = (roles) => {
   return (req, res, next) => {
     if (!req.user || !req.user.currentRole) {
       return res.status(403).json({ message: 'Acesso não autorizado - role não definida' });
@@ -54,3 +54,5 @@ export const authorize = (roles) => {
     next();
   };
 };
+
+module.exports = { authenticate, authorize };
