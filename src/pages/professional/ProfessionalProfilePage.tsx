@@ -177,6 +177,8 @@ const ProfessionalProfilePage: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    console.log('🔄 Starting signature upload:', file.name, file.type, file.size);
+
     if (!file.type.startsWith('image/')) {
       setSignatureError('Por favor, selecione apenas arquivos de imagem');
       return;
@@ -195,23 +197,43 @@ const ProfessionalProfilePage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
+      console.log('🔄 Making signature upload request to:', `${apiUrl}/api/upload-signature`);
+
       const formData = new FormData();
       formData.append('signature', file);
+
+      console.log('🔄 FormData created with signature field');
 
       const response = await fetch(`${apiUrl}/api/upload-signature`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          // Note: Don't set Content-Type for FormData, let browser set it with boundary
         },
         body: formData,
       });
 
+      console.log('📡 Signature upload response status:', response.status);
+      console.log('📡 Signature upload response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        const errorData = await response.json();
+        const responseText = await response.text();
+        console.error('❌ Signature upload error response:', responseText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('❌ Failed to parse error response as JSON:', parseError);
+          throw new Error(`Erro do servidor (${response.status}): ${responseText.substring(0, 100)}`);
+        }
+        
         throw new Error(errorData.message || 'Falha ao fazer upload da assinatura');
       }
 
       const data = await response.json();
+      console.log('✅ Signature upload successful:', data);
+      
       setSignatureUrl(data.signatureUrl);
       setSignatureSuccess('Assinatura atualizada com sucesso!');
 
