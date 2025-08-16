@@ -373,6 +373,8 @@ const ProfessionalProfilePage: React.FC = () => {
       setSignatureError('');
       setSignatureSuccess('');
 
+      console.log('🔄 Starting signature removal...');
+
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
@@ -380,13 +382,26 @@ const ProfessionalProfilePage: React.FC = () => {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
+
+      console.log('📡 Signature removal response status:', response.status);
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await response.text();
+        console.error('❌ Non-JSON response received:', textResponse);
+        throw new Error('Resposta inválida do servidor.');
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Falha ao remover assinatura');
       }
+
+      console.log('✅ Signature removed successfully');
 
       setSignatureUrl(null);
       setSignatureSuccess('Assinatura digital removida com sucesso!');

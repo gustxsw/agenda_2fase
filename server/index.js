@@ -74,6 +74,8 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
+    console.log('🔄 Signature file filter - File type:', file.mimetype);
+    
       callback(null, true);
     } else {
       console.log('❌ CORS blocked origin:', origin);
