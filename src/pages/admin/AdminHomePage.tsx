@@ -124,6 +124,7 @@ const AdminHomePage: React.FC = () => {
         }
 
         const usersData = await usersResponse.json();
+        console.log("Users data loaded:", usersData.length);
 
         // Fetch monthly revenue report
         const dateRange = getCurrentMonthRange();
@@ -139,7 +140,10 @@ const AdminHomePage: React.FC = () => {
 
         if (revenueResponse.ok) {
           const revenueData = await revenueResponse.json();
+          console.log("Revenue data loaded:", revenueData);
           setMonthlyRevenue(revenueData);
+        } else {
+          console.warn("Revenue data not available:", revenueResponse.status);
         }
 
         // Calculate consultation counts
@@ -163,6 +167,7 @@ const AdminHomePage: React.FC = () => {
         const monthCount = consultationsData.filter(
           (c: any) => new Date(c.date) >= monthAgo
         ).length;
+        console.log("Consultations data loaded:", consultationsData.length);
 
         setConsultationCounts({
           total: consultationsData.length,
