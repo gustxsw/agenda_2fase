@@ -282,9 +282,6 @@ app.use((error, req, res, next) => {
 
 const startServer = async () => {
   try {
-    // Ensure signature_url column exists
-    await ensureSignatureColumn();
-    
     // Initialize database
     await initializeDatabase();
     
