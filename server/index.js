@@ -21,7 +21,6 @@ import { generateDocumentPDF } from './utils/documentGenerator.js';
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 
 // Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -66,9 +65,6 @@ app.use(express.static('dist'));
 
 // Database initialization
 const initializeDatabase = async () => {
-  try {
-    console.log('🔄 Initializing database...');
-    
     // Create tables if they don't exist
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
