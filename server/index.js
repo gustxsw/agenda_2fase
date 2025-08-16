@@ -1534,32 +1534,37 @@ app.get('/api/consultations', authenticate, async (req, res) => {
 app.get('/api/consultations/client/:clientId', authenticate, async (req, res) => {
   try {
     const { clientId } = req.params;
-
-    const result = await pool.query(`
+    
+    console.log('🔍 Fetching consultations for client:', clientId);
+    
+    // Get consultations for the client and their dependents
+    const query = `
       SELECT 
-        c.id, c.value, c.date, c.status, c.notes,
-        COALESCE(u.name, d.name) as client_name,
+        c.id,
+        c.date,
+        c.value,
+        c.status,
         s.name as service_name,
-        prof.name as professional_name,
-        CASE 
-          WHEN c.dependent_id IS NOT NULL THEN true 
-          ELSE false 
-        END as is_dependent
+        u.name as professional_name,
+        COALESCE(cl.name, d.name) as client_name,
+        CASE WHEN d.id IS NOT NULL THEN true ELSE false END as is_dependent
       FROM consultations c
-      LEFT JOIN users u ON c.client_id = u.id
+      JOIN services s ON c.service_id = s.id
+      JOIN users u ON c.professional_id = u.id
+      LEFT JOIN users cl ON c.client_id = cl.id
       LEFT JOIN dependents d ON c.dependent_id = d.id
-      LEFT JOIN services s ON c.service_id = s.id
-      LEFT JOIN users prof ON c.professional_id = prof.id
-      WHERE c.client_id = $1 OR c.dependent_id IN (
-        SELECT id FROM dependents WHERE client_id = $1
-      )
+      WHERE (c.client_id = $1 OR d.client_id = $1)
+      AND c.status = 'completed'
       ORDER BY c.date DESC
-    `, [clientId]);
-
+    `;
+    
+    const result = await pool.query(query, [clientId]);
+    
+    console.log(`✅ Found ${result.rows.length} completed consultations for client`);
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching client consultations:', error);
-    res.status(500).json({ message: 'Erro ao buscar consultas do cliente' });
+    console.error('❌ Error fetching client consultations:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
 
@@ -1963,6 +1968,65 @@ app.post('/api/admin/revoke-scheduling-access', authenticate, authorize(['admin'
     res.json({ message: 'Acesso à agenda revogado com sucesso' });
   } catch (error) {
     console.error('Error revoking scheduling access:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Admin home page data
+app.get('/api/admin/dashboard', authenticate, authorize(['admin']), async (req, res) => {
+  try {
+    console.log('📊 Fetching admin dashboard data');
+    
+    // Get consultation counts with completed status only
+    const consultationCountsQuery = `
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN DATE(date) = CURRENT_DATE THEN 1 END) as today,
+        COUNT(CASE WHEN date >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as week,
+        COUNT(CASE WHEN date >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as month
+      FROM consultations
+      WHERE status = 'completed'
+    `;
+    
+    const consultationCounts = await pool.query(consultationCountsQuery);
+    
+    // Get user counts by role
+    const userCountsQuery = `
+      SELECT 
+        COUNT(CASE WHEN 'client' = ANY(roles) THEN 1 END) as clients,
+        COUNT(CASE WHEN 'professional' = ANY(roles) THEN 1 END) as professionals,
+        COUNT(*) as total
+      FROM users
+    `;
+    
+    const userCounts = await pool.query(userCountsQuery);
+    
+    // Get current month revenue with completed status only
+    const currentMonth = new Date();
+    const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    
+    const revenueQuery = `
+      SELECT 
+        SUM(c.value) as total_revenue,
+        SUM(c.value * ((100 - u.percentage) / 100)) as clinic_revenue
+      FROM consultations c
+      JOIN users u ON c.professional_id = u.id
+      WHERE c.date >= $1 AND c.date <= $2 AND c.status = 'completed'
+    `;
+    
+    const revenueResult = await pool.query(revenueQuery, [firstDay.toISOString(), lastDay.toISOString()]);
+    
+    const dashboardData = {
+      consultation_counts: consultationCounts.rows[0],
+      user_counts: userCounts.rows[0],
+      monthly_revenue: revenueResult.rows[0]
+    };
+    
+    console.log('✅ Admin dashboard data generated successfully');
+    res.json(dashboardData);
+  } catch (error) {
+    console.error('❌ Error fetching admin dashboard data:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
@@ -2801,12 +2865,12 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
           ELSE c.value * ((100 - $3) / 100.0)
         END as amount_to_pay
       FROM consultations c
-      WHERE c.professional_id = $1 AND c.date >= $2 AND c.date <= $3 AND c.status = 'completed'
+      LEFT JOIN users u ON c.client_id = u.id
       LEFT JOIN dependents d ON c.dependent_id = d.id
       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
       LEFT JOIN services s ON c.service_id = s.id
       WHERE c.professional_id = $1 
-      WHERE c.date >= $1 AND c.date <= $2 AND c.status = 'completed'
+        AND c.date >= $2 AND c.date <= $4 AND c.status = 'completed'
       ORDER BY c.date DESC
     `, [req.user.id, start_date, professionalPercentage, end_date]);
 
