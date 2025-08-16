@@ -74,8 +74,6 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
-    console.log('🔄 Signature file filter - File type:', file.mimetype);
-    
       callback(null, true);
     } else {
       console.log('❌ CORS blocked origin:', origin);
@@ -2515,8 +2513,7 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin', 'professional'
 
     // Calculate total revenue
     const totalRevenue = revenueByProfessional.rows.reduce(
-      templateData,
-      req.user.id // Pass professional ID to get signature
+      (sum, row) => sum + parseFloat(row.revenue || 0), 0
     );
 
     res.json({
@@ -3347,6 +3344,48 @@ app.post('/api/upload-image', authenticate, async (req, res) => {
     console.error('❌ Error in image upload route:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
+});
+
+// Upload signature endpoint
+app.post('/api/upload-signature', authenticate, (req, res) => {
+  const uploadSignature = createUpload('signature');
+  
+  uploadSignature.single('signature')(req, res, async (err) => {
+    if (err) {
+      console.error('❌ Signature upload error:', err);
+      return res.status(400).json({ 
+        message: err.message || 'Erro no upload da assinatura' 
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ 
+        message: 'Nenhuma imagem de assinatura foi enviada' 
+      });
+    }
+
+    console.log('✅ Signature uploaded to Cloudinary:', req.file.path);
+
+    try {
+      // Update user signature_url in database
+      await pool.query(
+        'UPDATE users SET signature_url = $1 WHERE id = $2',
+        [req.file.path, req.user.id]
+      );
+
+      console.log('✅ User signature_url updated in database');
+
+      res.json({ 
+        message: 'Assinatura enviada com sucesso',
+        signatureUrl: req.file.path
+      });
+    } catch (dbError) {
+      console.error('❌ Database error updating signature:', dbError);
+      res.status(500).json({ 
+        message: 'Erro ao salvar assinatura no banco de dados' 
+      });
+    }
+  });
 });
 
 // =============================================================================
