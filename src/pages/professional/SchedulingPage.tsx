@@ -36,6 +36,13 @@ type Service = {
   base_price: number;
 };
 
+type AttendanceLocation = {
+  id: number;
+  name: string;
+  address: string;
+  is_default: boolean;
+};
+
 type PrivatePatient = {
   id: number;
   name: string;
@@ -47,6 +54,7 @@ const SchedulingPage: React.FC = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [privatePatients, setPrivatePatients] = useState<PrivatePatient[]>([]);
+  const [attendanceLocations, setAttendanceLocations] = useState<AttendanceLocation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -73,6 +81,7 @@ const SchedulingPage: React.FC = () => {
     time: "",
     service_id: "",
     value: "",
+    location_id: "",
     notes: "",
   });
 
@@ -169,6 +178,28 @@ const SchedulingPage: React.FC = () => {
       } else {
         console.error("Private patients response error:", patientsResponse.status);
       }
+
+      // Fetch attendance locations
+      const locationsResponse = await fetch(`${apiUrl}/api/attendance-locations`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+      });
+
+      if (locationsResponse.ok) {
+        const locationsData = await locationsResponse.json();
+        console.log("Attendance locations loaded:", locationsData.length);
+        setAttendanceLocations(locationsData);
+        
+        // Set default location if exists
+        const defaultLocation = locationsData.find((loc: AttendanceLocation) => loc.is_default);
+        if (defaultLocation) {
+          setFormData(prev => ({ ...prev, location_id: defaultLocation.id.toString() }));
+        }
+      } else {
+        console.error("Attendance locations response error:", locationsResponse.status);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
       setError("Não foi possível carregar os dados da agenda");
@@ -219,6 +250,7 @@ const SchedulingPage: React.FC = () => {
             ? parseInt(formData.private_patient_id)
             : null,
         service_id: parseInt(formData.service_id),
+        location_id: formData.location_id ? parseInt(formData.location_id) : null,
         value: parseFloat(formData.value),
         date: new Date(`${formData.date}T${formData.time}`).toISOString(),
         status: "scheduled", // Status inicial
@@ -251,6 +283,7 @@ const SchedulingPage: React.FC = () => {
         time: "",
         service_id: "",
         value: "",
+        location_id: "",
         notes: "",
       });
       setSuccess("Agendamento criado com sucesso!");
@@ -796,6 +829,33 @@ const SchedulingPage: React.FC = () => {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Local de Atendimento
+                  </label>
+                  <select
+                    value={formData.location_id || ''}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        location_id: e.target.value,
+                      }))
+                    }
+                    className="input"
+                  >
+                    <option value="">Selecione um local</option>
+                    {attendanceLocations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name} {location.is_default && "(Padrão)"}
+                      </option>
+                    ))}
+                  </select>
+                  {attendanceLocations.length === 0 && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Configure seus locais de atendimento no perfil.
+                    </p>
+                  )}
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Observações
