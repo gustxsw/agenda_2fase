@@ -176,32 +176,24 @@ const AdminHomePage: React.FC = () => {
           month: monthCount,
         });
 
-        // 🔥 FIXED: Calculate user counts correctly using roles array
+        // Calculate user counts correctly using roles array
         const clientCount = usersData.filter(
           (u: any) => u.roles && u.roles.includes('client')
         ).length;
         const professionalCount = usersData.filter(
-      console.log("Users data loaded:", usersData.length);
           (u: any) => u.roles && u.roles.includes('professional')
         ).length;
-      console.log("Consultations data loaded:", consultationsData.length);
 
         setUserCounts({
           clients: clientCount,
           professionals: professionalCount,
           total: usersData.length,
         });
-            "Content-Type": "application/json",
-          "Content-Type": "application/json",
       } catch (error) {
         console.error("Error fetching admin data:", error);
         setError("Não foi possível carregar os dados do painel");
       } finally {
-        console.error("Users response error:", usersResponse.status);
-        console.log("Revenue data loaded:", revenueData);
         setIsLoading(false);
-      } else {
-        console.warn("Revenue data not available:", revenueResponse.status);
       }
     };
 
