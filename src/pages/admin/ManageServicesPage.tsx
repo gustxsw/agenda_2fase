@@ -75,52 +75,47 @@ const ManageServicesPage: React.FC = () => {
       
       console.log('Fetching services data from:', apiUrl);
       
-      try {
-        // Fetch categories
-        const categoriesResponse = await fetch(`${apiUrl}/api/service-categories`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
-        if (categoriesResponse.ok) {
-          const categoriesData = await categoriesResponse.json();
-          console.log('✅ Categories loaded:', categoriesData.length);
-          setCategories(categoriesData);
-        } else {
-          console.warn('⚠️ Categories not available:', categoriesResponse.status);
-          setCategories([]);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching categories:', error);
+      // Fetch categories
+      const categoriesResponse = await fetch(`${apiUrl}/api/service-categories`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (categoriesResponse.ok) {
+        const categoriesData = await categoriesResponse.json();
+        console.log('✅ Categories loaded:', categoriesData.length);
+        setCategories(categoriesData);
+      } else {
+        console.warn('⚠️ Categories not available:', categoriesResponse.status);
         setCategories([]);
       }
       
-      try {
-        // Fetch services
-        const servicesResponse = await fetch(`${apiUrl}/api/services`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
-        if (servicesResponse.ok) {
-          const servicesData = await servicesResponse.json();
-          console.log('✅ Services loaded:', servicesData.length);
-          setServices(servicesData);
-        } else {
-          console.warn('⚠️ Services not available:', servicesResponse.status);
-          setServices([]);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching services:', error);
-        setServices([]);
+      // Fetch services
+      const servicesResponse = await fetch(`${apiUrl}/api/services`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!servicesResponse.ok) {
+        console.error('❌ Services response error:', servicesResponse.status);
+        const errorText = await servicesResponse.text();
+        console.error('❌ Services error details:', errorText);
+        throw new Error(`Falha ao carregar serviços: ${servicesResponse.status}`);
       }
+      
+      const servicesData = await servicesResponse.json();
+      console.log('✅ Services loaded:', servicesData.length);
+      console.log('✅ Services data:', servicesData);
+      setServices(servicesData);
     } catch (error) {
       console.error('Error fetching data:', error);
-      setError('Não foi possível carregar alguns dados. Tente novamente.');
+      setError(error instanceof Error ? error.message : 'Não foi possível carregar os dados. Tente novamente.');
     } finally {
       setIsLoading(false);
     }
