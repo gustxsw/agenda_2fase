@@ -28,7 +28,7 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
   const getApiUrl = () => {
     if (window.location.hostname === 'www.cartaoquiroferreira.com.br' || 
       window.location.hostname === "cartaoquiroferreira.com.br" ||
-      window.location.hostname === "www.cartaoquiroferreira.com.br"
+      window.location.hostname === "www.cartaoquiroferreira.com.br") {
       return 'https://www.cartaoquiroferreira.com.br';
     }
     
@@ -207,8 +207,9 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
             </p>
           </>
         )}
+      </div>
     </div>
-      return "https://www.cartaoquiroferreira.com.br";
+  );
 };
 
 export default PaymentSection;
