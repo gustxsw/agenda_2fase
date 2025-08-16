@@ -13,6 +13,7 @@ import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import path from 'path';
 
 // Load environment variables
 dotenv.config();
@@ -2855,10 +2856,8 @@ app.get('/api/reports/clients-by-city', authenticate, authorize(['admin']), asyn
 
 // Professionals by city report (admin only)
 app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin']), async (req, res) => {
-    // Create upload middleware instance
-    const upload = createUpload();
-    
   try {
+    const result = await pool.query(`
       SELECT 
         u.city,
         u.state,
@@ -2867,7 +2866,7 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
           json_build_object(
             'category_name', COALESCE(sc.name, 'Sem categoria'),
             'count', 1
-      if (!req.file) {
+          )
         ) as categories
       FROM users u
       LEFT JOIN service_categories sc ON u.category_id = sc.id
@@ -2878,11 +2877,10 @@ app.get('/api/reports/professionals-by-city', authenticate, authorize(['admin'])
       ORDER BY total_professionals DESC, u.city
     `);
 
-        [req.file.path, req.user.id]
     const processedResult = result.rows.map(row => {
       const categoryMap = new Map();
       
-          imageUrl: req.file.path
+      row.categories.forEach(cat => {
         const name = cat.category_name;
         if (categoryMap.has(name)) {
           categoryMap.set(name, categoryMap.get(name) + 1);
@@ -2935,7 +2933,6 @@ app.use((error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: 'Arquivo muito grande. Tamanho máximo: 5MB' });
     }
-      if (!req.file) {
   }
   
   res.status(500).json({ message: 'Erro interno do servidor' });
@@ -2945,19 +2942,16 @@ app.use((error, req, res, next) => {
 
 const startServer = async () => {
   try {
-    // Create upload middleware instance
-        [req.file.path, req.user.id]
-    
     // Initialize database
     await initializeDatabase();
-          signatureUrl: req.file.path
+    
     // Start server
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`📊 Database: Connected`);
-      console.log(`💳 MercadoPago: ${process.env.MP_ACCESS_TOKEN ? 'Configured' : 'Not configured'}`);
-      console.log(`☁️ Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Configured' : 'Not configured'}`);
+      console.log(\`🚀 Server running on port ${PORT}`);
+      console.log(\`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(\`📊 Database: Connected`);
+      console.log(\`💳 MercadoPago: ${process.env.MP_ACCESS_TOKEN ? 'Configured' : 'Not configured'}`);
+      console.log(\`☁️ Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME ? 'Configured' : 'Not configured'}`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
