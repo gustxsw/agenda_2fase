@@ -3358,6 +3358,60 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development'
   });
+// Upload signature route
+app.post('/api/upload-signature', authenticate, async (req, res) => {
+  try {
+    console.log('🔄 Processing signature upload request...');
+    
+    // Create upload middleware
+    const upload = createUpload();
+    
+    // Use multer middleware
+    upload.single('signature')(req, res, async (err) => {
+      if (err) {
+        console.error('❌ Multer error:', err);
+        return res.status(400).json({ 
+          message: err.message || 'Erro no upload da assinatura' 
+        });
+      }
+      
+      if (!req.file) {
+        console.error('❌ No file received');
+        return res.status(400).json({ 
+          message: 'Nenhum arquivo foi enviado' 
+        });
+      }
+      
+      console.log('✅ Signature uploaded successfully:', req.file.path);
+      
+      try {
+        // Update user signature_url in database
+        await pool.query(
+          'UPDATE users SET signature_url = $1 WHERE id = $2',
+          [req.file.path, req.user.id]
+        );
+        
+        console.log('✅ User signature_url updated in database');
+        
+        res.json({
+          message: 'Assinatura enviada com sucesso',
+          signatureUrl: req.file.path
+        });
+      } catch (dbError) {
+        console.error('❌ Database error:', dbError);
+        res.status(500).json({ 
+          message: 'Erro ao salvar URL da assinatura no banco de dados' 
+        });
+      }
+    });
+  } catch (error) {
+    console.error('❌ Upload signature route error:', error);
+    res.status(500).json({ 
+      message: 'Erro interno do servidor' 
+    });
+  }
+});
+
 });
 
 // API status route
