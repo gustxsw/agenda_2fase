@@ -97,30 +97,37 @@ const ReportsPage: React.FC = () => {
 
       console.log("Fetching report from:", apiUrl);
 
-      const response = await fetch(
-        `${apiUrl}/api/reports/revenue?start_date=${startDate}&end_date=${endDate}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+      try {
+        const response = await fetch(
+          `${apiUrl}/api/reports/revenue?start_date=${startDate}&end_date=${endDate}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        console.log("📡 Revenue report response status:", response.status);
+
+        if (!response.ok) {
+          console.error("❌ Revenue report response error:", response.status);
+          const errorText = await response.text();
+          console.error("❌ Error details:", errorText);
+          throw new Error(`Falha ao carregar relatório (${response.status})`);
         }
-      );
 
-      if (!response.ok) {
-        console.error("Revenue report response error:", response.status);
-        const errorText = await response.text();
-        console.error("Error details:", errorText);
-        throw new Error("Falha ao carregar relatório");
+        const data = await response.json();
+        console.log("✅ Revenue report loaded:", data);
+        setReport(data);
+      } catch (fetchError) {
+        console.error("❌ Network error fetching report:", fetchError);
+        throw new Error("Erro de conexão ao carregar relatório. Verifique sua internet.");
       }
-
-      const data = await response.json();
-      console.log("Revenue report loaded:", data);
-      setReport(data);
     } catch (error) {
       console.error("Error fetching report:", error);
-      setError("Não foi possível carregar o relatório");
+      setError(error instanceof Error ? error.message : "Não foi possível carregar o relatório");
       setReport(null);
     } finally {
       setIsLoading(false);
@@ -140,40 +147,60 @@ const ReportsPage: React.FC = () => {
       const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
-      // Fetch clients by city
-      const clientsResponse = await fetch(
-        `${apiUrl}/api/reports/clients-by-city`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      console.log("🔄 Fetching city reports from:", apiUrl);
 
-      if (clientsResponse.ok) {
-        const clientsData = await clientsResponse.json();
-        setClientsReport(clientsData);
+      try {
+        // Fetch clients by city
+        const clientsResponse = await fetch(
+          `${apiUrl}/api/reports/clients-by-city`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (clientsResponse.ok) {
+          const clientsData = await clientsResponse.json();
+          console.log("✅ Clients by city loaded:", clientsData.length);
+          setClientsReport(clientsData);
+        } else {
+          console.warn("⚠️ Clients by city not available:", clientsResponse.status);
+          setClientsReport([]);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching clients by city:", error);
+        setClientsReport([]);
       }
 
-      // Fetch professionals by city
-      const professionalsResponse = await fetch(
-        `${apiUrl}/api/reports/professionals-by-city`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      try {
+        // Fetch professionals by city
+        const professionalsResponse = await fetch(
+          `${apiUrl}/api/reports/professionals-by-city`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      if (professionalsResponse.ok) {
-        const professionalsData = await professionalsResponse.json();
-        setProfessionalsReport(professionalsData);
+        if (professionalsResponse.ok) {
+          const professionalsData = await professionalsResponse.json();
+          console.log("✅ Professionals by city loaded:", professionalsData.length);
+          setProfessionalsReport(professionalsData);
+        } else {
+          console.warn("⚠️ Professionals by city not available:", professionalsResponse.status);
+          setProfessionalsReport([]);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching professionals by city:", error);
+        setProfessionalsReport([]);
       }
     } catch (error) {
       console.error("Error fetching city reports:", error);
-      setError("Não foi possível carregar os relatórios por cidade");
+      setError("Não foi possível carregar alguns relatórios. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
