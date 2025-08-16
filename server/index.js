@@ -2342,6 +2342,154 @@ app.post('/api/medical-records/generate-document', authenticate, authorize(['pro
 });
 
 // =============================================================================
+// IMAGE UPLOAD ROUTES
+// =============================================================================
+
+// Upload image route
+app.post('/api/upload-image', authenticate, async (req, res) => {
+  try {
+    console.log('🔄 Image upload request received');
+    
+    // Create upload middleware instance
+    const upload = createUpload();
+    
+    // Use multer middleware
+    upload.single('image')(req, res, async (err) => {
+      if (err) {
+        console.error('❌ Multer error:', err);
+        return res.status(400).json({ 
+          message: err.message || 'Erro no upload da imagem' 
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: 'Nenhuma imagem foi enviada' });
+      }
+
+      console.log('✅ Image uploaded to Cloudinary:', req.file.path);
+
+      // Update user photo URL in database
+      const user = req.user;
+      await pool.query(
+        'UPDATE users SET photo_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [req.file.path, user.id]
+      );
+
+      console.log('✅ User photo URL updated in database');
+
+      res.json({
+        message: 'Imagem enviada com sucesso',
+        imageUrl: req.file.path
+      });
+    });
+  } catch (error) {
+    console.error('❌ Error in image upload route:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Upload signature endpoint
+app.post('/api/upload-signature', authenticate, async (req, res) => {
+  try {
+    if (!signatureUpload) {
+      return res.status(500).json({ 
+        message: 'Upload service not available. Please check Cloudinary configuration.' 
+      });
+    }
+
+    // Use multer middleware for signature
+    signatureUpload.single('signature')(req, res, async (err) => {
+      if (err) {
+        console.error('❌ Signature upload error:', err);
+        return res.status(400).json({ 
+          message: err.message || 'Erro no upload da assinatura' 
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ 
+          message: 'Nenhuma imagem de assinatura foi enviada' 
+        });
+      }
+
+      console.log('✅ Signature uploaded to Cloudinary:', req.file.path);
+
+      // Update user signature_url in database
+      try {
+        await pool.query(
+          'UPDATE users SET signature_url = $1 WHERE id = $2',
+          [req.file.path, req.user.id]
+        );
+
+        console.log('✅ User signature_url updated in database');
+
+        res.json({
+          message: 'Assinatura enviada com sucesso',
+          signatureUrl: req.file.path
+        });
+      } catch (dbError) {
+        console.error('❌ Database error updating signature_url:', dbError);
+        res.status(500).json({ 
+          message: 'Erro ao salvar URL da assinatura no banco de dados' 
+        });
+      }
+    });
+  } catch (error) {
+    console.error('❌ Signature upload route error:', error);
+    res.status(500).json({ 
+      message: 'Erro interno do servidor no upload da assinatura' 
+    });
+  }
+});
+
+// Remove signature endpoint
+app.post('/api/remove-signature', authenticate, async (req, res) => {
+  try {
+    // Get current signature URL to delete from Cloudinary
+    const userResult = await pool.query(
+      'SELECT signature_url FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (userResult.rows.length > 0 && userResult.rows[0].signature_url) {
+      const signatureUrl = userResult.rows[0].signature_url;
+      
+      // Extract public_id from Cloudinary URL
+      const urlParts = signatureUrl.split('/');
+      const fileWithExtension = urlParts[urlParts.length - 1];
+      const publicId = `quiro-ferreira/signatures/${fileWithExtension.split('.')[0]}`;
+      
+      // Delete from Cloudinary
+      if (cloudinary) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+          console.log('✅ Signature deleted from Cloudinary:', publicId);
+        } catch (cloudinaryError) {
+          console.error('⚠️ Error deleting from Cloudinary (continuing anyway):', cloudinaryError);
+        }
+      }
+    }
+
+    // Remove signature_url from database
+    await pool.query(
+      'UPDATE users SET signature_url = NULL WHERE id = $1',
+      [req.user.id]
+    );
+
+    console.log('✅ User signature_url removed from database');
+
+    res.json({
+      message: 'Assinatura removida com sucesso'
+    });
+  } catch (error) {
+    console.error('❌ Remove signature error:', error);
+    res.status(500).json({ 
+      message: 'Erro ao remover assinatura' 
+    });
+  }
+});
+
+// =============================================================================
 // MEDICAL DOCUMENTS ROUTES
 // =============================================================================
 
@@ -3297,53 +3445,6 @@ app.get('/payment-pending', (req, res) => {
     </body>
     </html>
   `);
-});
-
-// =============================================================================
-// IMAGE UPLOAD ROUTES
-// =============================================================================
-
-// Upload image route
-app.post('/api/upload-image', authenticate, async (req, res) => {
-  try {
-    console.log('🔄 Image upload request received');
-    
-    // Create upload middleware instance
-    const upload = createUpload();
-    
-    // Use multer middleware
-    upload.single('image')(req, res, async (err) => {
-      if (err) {
-        console.error('❌ Multer error:', err);
-        return res.status(400).json({ 
-          message: err.message || 'Erro no upload da imagem' 
-        });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({ message: 'Nenhuma imagem foi enviada' });
-      }
-
-      console.log('✅ Image uploaded to Cloudinary:', req.file.path);
-
-      // Update user photo URL in database
-      const user = req.user;
-      await pool.query(
-        'UPDATE users SET photo_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        [req.file.path, user.id]
-      );
-
-      console.log('✅ User photo URL updated in database');
-
-      res.json({
-        message: 'Imagem enviada com sucesso',
-        imageUrl: req.file.path
-      });
-    });
-  } catch (error) {
-    console.error('❌ Error in image upload route:', error);
-    res.status(500).json({ message: 'Erro interno do servidor' });
-  }
 });
 
 // =============================================================================

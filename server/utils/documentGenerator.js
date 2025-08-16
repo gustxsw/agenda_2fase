@@ -1067,15 +1067,22 @@ ${data.content}
 };
 
 // Generate HTML document and upload to Cloudinary
-export const generateDocumentPDF = async (documentType, templateData) => {
+export const generateDocumentPDF = async (documentType, templateData, professionalId = null) => {
   try {
     console.log('🔄 Generating document:', { documentType, templateData });
+    
+    // Get professional signature if available
+    let signatureUrl = null;
+    if (professionalId) {
+      signatureUrl = await getProfessionalSignature(professionalId);
+      console.log('🔄 Professional signature:', signatureUrl ? 'Found' : 'Not found');
+    }
     
     // Get the template function
     const templateFunction = templates[documentType] || templates.other;
     
     // Generate HTML content
-    const htmlContent = templateFunction(templateData);
+    const htmlContent = templateFunction(templateData, signatureUrl);
     
     console.log('✅ HTML content generated, length:', htmlContent.length);
     
