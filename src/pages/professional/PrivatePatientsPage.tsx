@@ -274,6 +274,16 @@ const PrivatePatientsPage: React.FC = () => {
     return date.toLocaleDateString('pt-BR');
   };
 
+  const formatZipCode = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    return numericValue.slice(0, 8);
+  };
+
+  const formatPhone = (value: string) => {
+    const numericValue = value.replace(/\D/g, '');
+    return numericValue.slice(0, 11);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -381,9 +391,11 @@ const PrivatePatientsPage: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">
                             {patient.name}
                           </div>
-                          <div className="text-sm text-gray-500">
-                            CPF: {formatCpfDisplay(patient.cpf)}
-                          </div>
+                          {patient.cpf && (
+                            <div className="text-sm text-gray-500">
+                              CPF: {formatCpfDisplay(patient.cpf)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -400,6 +412,9 @@ const PrivatePatientsPage: React.FC = () => {
                             <Mail className="h-3 w-3 text-gray-400 mr-1" />
                             {patient.email}
                           </div>
+                        )}
+                        {!patient.phone && !patient.email && (
+                          <span className="text-gray-400 text-sm">Não informado</span>
                         )}
                       </div>
                     </td>
@@ -420,6 +435,9 @@ const PrivatePatientsPage: React.FC = () => {
                               )}
                             </div>
                           </div>
+                        )}
+                        {!patient.address && (
+                          <span className="text-gray-400 text-sm">Não informado</span>
                         )}
                       </div>
                     </td>
@@ -500,7 +518,7 @@ const PrivatePatientsPage: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    CPF
+                    CPF (opcional)
                   </label>
                   <input
                     type="text"
@@ -514,7 +532,7 @@ const PrivatePatientsPage: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                    Email (opcional)
                   </label>
                   <input
                     type="email"
@@ -527,7 +545,7 @@ const PrivatePatientsPage: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Telefone
+                    Telefone (opcional)
                   </label>
                   <input
                     type="text"
@@ -540,7 +558,7 @@ const PrivatePatientsPage: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Data de Nascimento
+                    Data de Nascimento (opcional)
                   </label>
                   <input
                     type="date"
@@ -554,7 +572,7 @@ const PrivatePatientsPage: React.FC = () => {
                 {/* Address Information */}
                 <div className="md:col-span-2 mt-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Endereço
+                    Endereço (opcional)
                   </h3>
                 </div>
 
