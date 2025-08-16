@@ -29,12 +29,6 @@ const ProfessionalProfilePage: React.FC = () => {
   const [signatureError, setSignatureError] = useState('');
   const [signatureSuccess, setSignatureSuccess] = useState('');
   
-  // Signature state
-  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
-  const [isUploadingSignature, setIsUploadingSignature] = useState(false);
-  const [signatureError, setSignatureError] = useState('');
-  const [signatureSuccess, setSignatureSuccess] = useState('');
-  
   // Profile form state
   const [profileData, setProfileData] = useState({
     name: '',
