@@ -49,14 +49,16 @@ const ManageServicesPage: React.FC = () => {
 
   // Get API URL with fallback
   const getApiUrl = () => {
-    if (
-      window.location.hostname === "cartaoquiroferreira.com.br" ||
-      window.location.hostname === "www.cartaoquiroferreira.com.br"
-    ) {
-      return "https://www.cartaoquiroferreira.com.br";
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
     }
     
-    return "http://localhost:3001";
+    if (window.location.hostname === 'cartaoquiroferreira.com.br' || 
+        window.location.hostname === 'www.cartaoquiroferreira.com.br') {
+      return 'https://convenioquiroferreira.onrender.com';
+    }
+    
+    return 'http://localhost:3001';
   };
   
   useEffect(() => {
@@ -73,47 +75,52 @@ const ManageServicesPage: React.FC = () => {
       
       console.log('Fetching services data from:', apiUrl);
       
-      // Fetch categories
-      const categoriesResponse = await fetch(`${apiUrl}/api/service-categories`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (categoriesResponse.ok) {
-        const categoriesData = await categoriesResponse.json();
-        console.log('✅ Categories loaded:', categoriesData.length);
-        setCategories(categoriesData);
-      } else {
-        console.warn('⚠️ Categories not available:', categoriesResponse.status);
+      try {
+        // Fetch categories
+        const categoriesResponse = await fetch(`${apiUrl}/api/service-categories`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (categoriesResponse.ok) {
+          const categoriesData = await categoriesResponse.json();
+          console.log('✅ Categories loaded:', categoriesData.length);
+          setCategories(categoriesData);
+        } else {
+          console.warn('⚠️ Categories not available:', categoriesResponse.status);
+          setCategories([]);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching categories:', error);
         setCategories([]);
       }
       
-      // Fetch services
-      const servicesResponse = await fetch(`${apiUrl}/api/services`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!servicesResponse.ok) {
-        console.error('❌ Services response error:', servicesResponse.status);
-        const errorText = await servicesResponse.text();
-        console.error('❌ Services error details:', errorText);
-        throw new Error(`Falha ao carregar serviços: ${servicesResponse.status}`);
+      try {
+        // Fetch services
+        const servicesResponse = await fetch(`${apiUrl}/api/services`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (servicesResponse.ok) {
+          const servicesData = await servicesResponse.json();
+          console.log('✅ Services loaded:', servicesData.length);
+          setServices(servicesData);
+        } else {
+          console.warn('⚠️ Services not available:', servicesResponse.status);
+          setServices([]);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching services:', error);
+        setServices([]);
       }
-      
-      const servicesData = await servicesResponse.json();
-      console.log('✅ Services loaded:', servicesData.length);
-      console.log('✅ Services data:', servicesData);
-      setServices(servicesData);
     } catch (error) {
       console.error('Error fetching data:', error);
-      setError(error instanceof Error ? error.message : 'Não foi possível carregar os dados. Tente novamente.');
+      setError('Não foi possível carregar alguns dados. Tente novamente.');
     } finally {
       setIsLoading(false);
     }
@@ -363,20 +370,17 @@ const ManageServicesPage: React.FC = () => {
       <div className="card">
         {isLoading ? (
           <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Carregando serviços...</p>
           </div>
         ) : services.length === 0 ? (
           <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum serviço encontrado</h3>
-            <p className="text-gray-600 mb-4">Comece criando o primeiro serviço do sistema.</p>
+            <p className="text-gray-600">Nenhum serviço encontrado.</p>
             <button
               onClick={openCreateModal}
-              className="btn btn-primary inline-flex items-center"
+              className="btn btn-primary mt-4 inline-flex items-center"
             >
               <FilePlus className="h-5 w-5 mr-2" />
-              Adicionar Primeiro Serviço
+              Adicionar Serviço
             </button>
           </div>
         ) : (
