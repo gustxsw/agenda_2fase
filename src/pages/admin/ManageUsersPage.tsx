@@ -199,9 +199,9 @@ const ManageUsersPage: React.FC = () => {
   const openActivationModal = (user: UserData) => {
     setUserToActivate(user);
     
-    // Set default expiry date to 1 month from now
+    // Set default expiry date to 1 year from now
     const defaultExpiry = new Date();
-    defaultExpiry.setMonth(defaultExpiry.getMonth() + 1);
+    defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
     setExpiryDate(defaultExpiry.toISOString().split('T')[0]);
     
     setShowActivationModal(true);
