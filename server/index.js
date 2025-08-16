@@ -3360,6 +3360,11 @@ app.get('/api/health', (req, res) => {
   });
 // Upload signature route
 app.post('/api/upload-signature', authenticate, async (req, res) => {
+  console.log('🔄 Signature upload route called');
+  console.log('🔄 User:', req.user?.id, req.user?.name);
+  console.log('🔄 Files received:', req.files);
+  console.log('🔄 Body received:', req.body);
+  
   try {
     console.log('🔄 Processing signature upload request...');
     
@@ -3368,6 +3373,10 @@ app.post('/api/upload-signature', authenticate, async (req, res) => {
     
     // Use multer middleware
     upload.single('signature')(req, res, async (err) => {
+      console.log('🔄 Multer processing completed');
+      console.log('🔄 Multer error:', err);
+      console.log('🔄 File after multer:', req.file);
+      
       if (err) {
         console.error('❌ Multer error:', err);
         return res.status(400).json({ 
@@ -3376,12 +3385,18 @@ app.post('/api/upload-signature', authenticate, async (req, res) => {
       }
       
       if (!req.file) {
+        console.error('❌ No signature file received');
         console.error('❌ No file received');
         return res.status(400).json({ 
           message: 'Nenhum arquivo foi enviado' 
         });
       }
       
+      console.log('✅ Signature file received:', {
+        filename: req.file.filename,
+        path: req.file.path,
+        size: req.file.size
+      });
       console.log('✅ Signature uploaded successfully:', req.file.path);
       
       try {
@@ -3398,6 +3413,7 @@ app.post('/api/upload-signature', authenticate, async (req, res) => {
           signatureUrl: req.file.path
         });
       } catch (dbError) {
+      console.log('✅ Database update result:', result.rows[0]);
         console.error('❌ Database error:', dbError);
         res.status(500).json({ 
           message: 'Erro ao salvar URL da assinatura no banco de dados' 
