@@ -27,7 +27,8 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
   // Get API URL - PRODUCTION READY
   const getApiUrl = () => {
     if (window.location.hostname === 'www.cartaoquiroferreira.com.br' || 
-        window.location.hostname === 'cartaoquiroferreira.com.br') {
+      window.location.hostname === "cartaoquiroferreira.com.br" ||
+      window.location.hostname === "www.cartaoquiroferreira.com.br"
       return 'https://www.cartaoquiroferreira.com.br';
     }
     
@@ -73,19 +74,29 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
         const token = localStorage.getItem('token');
         const apiUrl = getApiUrl();
         
+        console.log('🔄 Fetching dependents for payment calculation from:', `${apiUrl}/api/dependents/${userId}`);
+        
         const response = await fetch(`${apiUrl}/api/dependents/${userId}`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
         });
         
+        console.log('📡 Payment dependents response status:', response.status);
+        
         if (response.ok) {
           const data = await response.json();
+          console.log('✅ Payment dependents loaded:', data.length);
           setDependentCount(data.length);
+        } else {
+          console.warn('⚠️ Payment dependents not available:', response.status);
+          setDependentCount(0);
         }
       } catch (error) {
-        console.error('Error fetching dependents:', error);
+        console.error('❌ Error fetching dependents for payment:', error);
+        setDependentCount(0);
       }
     };
     
@@ -196,9 +207,8 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
             </p>
           </>
         )}
-      </div>
     </div>
-  );
+      return "https://www.cartaoquiroferreira.com.br";
 };
 
 export default PaymentSection;

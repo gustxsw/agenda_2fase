@@ -35,13 +35,11 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
 
   // Get API URL with fallback
   const getApiUrl = () => {
-    if (import.meta.env.VITE_API_URL) {
-      return import.meta.env.VITE_API_URL;
-    }
-    
-    if (window.location.hostname === 'cartaoquiroferreira.com.br' || 
-        window.location.hostname === 'www.cartaoquiroferreira.com.br') {
-      return 'https://convenioquiroferreira.onrender.com';
+    if (
+      window.location.hostname === "cartaoquiroferreira.com.br" ||
+      window.location.hostname === "www.cartaoquiroferreira.com.br"
+    ) {
+      return "https://www.cartaoquiroferreira.com.br";
     }
     
     return 'http://localhost:3001';
@@ -59,24 +57,30 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
       
-      console.log('Fetching dependents from:', apiUrl);
+      console.log('🔄 Fetching dependents from:', `${apiUrl}/api/dependents/${clientId}`);
       
       const response = await fetch(`${apiUrl}/api/dependents/${clientId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
       
-      if (!response.ok) {
-        throw new Error('Falha ao carregar dependentes');
+      console.log('📡 Dependents response status:', response.status);
+          cpf: cpf ? cpf.replace(/\D/g, '') : '',
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Dependents loaded:', data.length);
+        setDependents(data);
+      } else {
+        console.warn('⚠️ Dependents not available:', response.status);
+        setDependents([]);
       }
-      
-      const data = await response.json();
-      setDependents(data);
     } catch (error) {
-      console.error('Error fetching dependents:', error);
-      setError('Não foi possível carregar os dependentes');
+      console.error('❌ Error fetching dependents:', error);
+      setError('Não foi possível carregar os dependentes. Tente novamente.');
+      setDependents([]);
     } finally {
       setIsLoading(false);
     }

@@ -37,15 +37,11 @@ const ClientHomePage: React.FC = () => {
 
   // Get API URL with fallback
   const getApiUrl = () => {
-    if (import.meta.env.VITE_API_URL) {
-      return import.meta.env.VITE_API_URL;
-    }
-
     if (
       window.location.hostname === "cartaoquiroferreira.com.br" ||
       window.location.hostname === "www.cartaoquiroferreira.com.br"
     ) {
-      return "https://convenioquiroferreira.onrender.com";
+      return "https://www.cartaoquiroferreira.com.br";
     }
 
     return "http://localhost:3001";
@@ -62,7 +58,7 @@ const ClientHomePage: React.FC = () => {
         console.log("Fetching client data from:", apiUrl);
 
         // Fetch consultations
-        const consultationsResponse = await fetch(`${apiUrl}/api/consultations`, {
+        const consultationsResponse = await fetch(`${apiUrl}/api/consultations/client/${user?.id}`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -70,14 +66,14 @@ const ClientHomePage: React.FC = () => {
           },
         });
 
-        if (!consultationsResponse.ok) {
-          console.error("Consultations response error:", consultationsResponse.status);
-          throw new Error("Falha ao carregar consultas");
+        if (consultationsResponse.ok) {
+          const consultationsData = await consultationsResponse.json();
+          console.log("Consultations loaded:", consultationsData.length);
+          setConsultations(consultationsData);
+        } else {
+          console.warn("Consultations not available:", consultationsResponse.status);
+          setConsultations([]);
         }
-
-        const consultationsData = await consultationsResponse.json();
-        console.log("Consultations loaded:", consultationsData.length);
-        setConsultations(consultationsData);
 
         // Fetch dependents
         const dependentsResponse = await fetch(`${apiUrl}/api/dependents/${user?.id}`, {
@@ -94,6 +90,7 @@ const ClientHomePage: React.FC = () => {
           setDependents(dependentsData);
         } else {
           console.warn("Dependents not available:", dependentsResponse.status);
+          setDependents([]);
         }
 
         // Fetch subscription status
@@ -112,10 +109,11 @@ const ClientHomePage: React.FC = () => {
           setSubscriptionExpiry(userData.subscription_expiry);
         } else {
           console.warn("User data not available:", userResponse.status);
+          setSubscriptionStatus("pending");
         }
       } catch (error) {
         console.error("Error fetching data:", error);
-        setError("Não foi possível carregar seu histórico de consultas");
+        setError("Não foi possível carregar alguns dados. Tente novamente.");
       } finally {
         setIsLoading(false);
       }
