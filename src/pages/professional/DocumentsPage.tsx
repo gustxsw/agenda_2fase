@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileImage, FileText, Upload, Download, Eye, Plus, Search, Calendar, X, Check, User } from 'lucide-react';
+import { FileImage, FileText, Upload, Download, Eye, Plus, Search, Calendar, X, Check, User, AlertCircle } from 'lucide-react';
 
 type DocumentType = 
   | 'certificate' 
@@ -161,6 +161,7 @@ const DocumentsPage: React.FC = () => {
   };
 
   const openCreateModal = () => {
+    console.log('🔄 Opening create modal...');
     setFormData({
       document_type: 'certificate',
       patient_id: '',
@@ -179,11 +180,16 @@ const DocumentsPage: React.FC = () => {
       professionalSpecialty: '',
       crm: ''
     });
+    setError('');
+    setSuccess('');
     setShowCreateModal(true);
   };
 
   const closeModal = () => {
+    console.log('🔄 Closing modal...');
     setShowCreateModal(false);
+    setError('');
+    setSuccess('');
   };
 
   const formatDate = (dateString: string) => {
@@ -199,6 +205,7 @@ const DocumentsPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🔄 Submitting form with data:', formData);
     setIsCreating(true);
     setError('');
     setSuccess('');
@@ -254,6 +261,7 @@ const DocumentsPage: React.FC = () => {
         closeModal();
       }, 1500);
     } catch (error) {
+      console.error('❌ Error creating document:', error);
       setError(error instanceof Error ? error.message : 'Erro ao criar documento');
     } finally {
       setIsCreating(false);
@@ -261,6 +269,7 @@ const DocumentsPage: React.FC = () => {
   };
 
   const renderFormFields = () => {
+    console.log('🔄 Rendering form fields for type:', formData.document_type);
     switch (formData.document_type) {
       case 'certificate':
         return (
@@ -569,18 +578,33 @@ const DocumentsPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold">Criar Novo Documento</h2>
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">Criar Novo Documento</h2>
+                <button
+                  onClick={closeModal}
+                  className="text-gray-400 hover:text-gray-600"
+                  type="button"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
             </div>
 
             {error && (
               <div className="mx-6 mt-4 bg-red-50 text-red-600 p-3 rounded-lg">
-                {error}
+                <div className="flex items-center">
+                  <AlertCircle className="h-5 w-5 mr-2" />
+                  {error}
+                </div>
               </div>
             )}
 
             {success && (
               <div className="mx-6 mt-4 bg-green-50 text-green-600 p-3 rounded-lg">
-                {success}
+                <div className="flex items-center">
+                  <Check className="h-5 w-5 mr-2" />
+                  {success}
+                </div>
               </div>
             )}
 
@@ -640,6 +664,11 @@ const DocumentsPage: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                  {patients.length === 0 && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Nenhum paciente particular cadastrado. Cadastre pacientes primeiro na seção "Pacientes Particulares".
+                    </p>
+                  )}
                 </div>
 
                 {/* Professional Information */}
@@ -671,7 +700,7 @@ const DocumentsPage: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      CRM *
+                      CRM
                     </label>
                     <input
                       type="text"
@@ -680,7 +709,6 @@ const DocumentsPage: React.FC = () => {
                       onChange={handleInputChange}
                       className="input"
                       placeholder="Ex: 12345/GO"
-                      required
                     />
                   </div>
                 </div>
