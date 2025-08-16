@@ -68,7 +68,7 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
       });
       
       console.log('📡 Dependents response status:', response.status);
-          cpf: cpf.replace(/\D/g, ''),
+      
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Dependents loaded:', data.length);
