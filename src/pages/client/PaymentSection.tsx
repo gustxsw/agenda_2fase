@@ -23,6 +23,30 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Don't render payment section for active clients
+  if (subscriptionStatus === 'active') {
+    return (
+      <div className="card mb-6">
+        <div className="flex items-center mb-4">
+          <CreditCard className="h-6 w-6 text-red-600 mr-2" />
+          <h2 className="text-xl font-semibold">Assinatura</h2>
+        </div>
+        
+        <div className="bg-green-50 p-4 rounded-lg">
+          <div className="flex items-center mb-2">
+            <Calendar className="h-5 w-5 text-green-600 mr-2" />
+            <p className="text-green-700 font-medium">
+              Assinatura ativa até {subscriptionExpiry ? formatDate(subscriptionExpiry) : 'data não informada'}
+            </p>
+          </div>
+          <p className="text-sm text-green-600">
+            Sua assinatura está ativa e será renovada automaticamente.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Get API URL - PRODUCTION READY
   const getApiUrl = () => {
     if (window.location.hostname === 'www.cartaoquiroferreira.com.br' || 
@@ -121,58 +145,41 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
       </div>
       
       <div className="space-y-4">
-        {subscriptionStatus === 'active' && subscriptionExpiry && (
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="flex items-center mb-2">
-              <Calendar className="h-5 w-5 text-green-600 mr-2" />
-              <p className="text-green-700 font-medium">
-                Assinatura ativa até {formatDate(subscriptionExpiry)}
-              </p>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="font-medium mb-2">Detalhes da Assinatura (Titular)</h3>
+          <div className="space-y-2">
+            <p>Assinatura do titular: R$ 250,00</p>
+            <div className="border-t border-gray-200 pt-2 mt-2">
+              <p className="font-medium">Total: R$ {totalAmount},00</p>
             </div>
-            <p className="text-sm text-green-600">
-              Sua assinatura será renovada automaticamente.
-            </p>
+            <div className="bg-blue-50 p-3 rounded-lg mt-3">
+              <p className="text-sm text-blue-800">
+                <strong>Nota:</strong> Dependentes têm cobrança separada de R$ 50,00 cada.
+                Eles podem ser ativados individualmente após o cadastro.
+              </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {error && (
+          <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center">
+            <AlertCircle className="h-5 w-5 mr-2" />
+            {error}
           </div>
         )}
         
-        {(subscriptionStatus === 'pending' || subscriptionStatus === 'expired') && (
-          <>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-medium mb-2">Detalhes da Assinatura (Titular)</h3>
-              <div className="space-y-2">
-                <p>Assinatura do titular: R$ 250,00</p>
-                <div className="border-t border-gray-200 pt-2 mt-2">
-                  <p className="font-medium">Total: R$ {totalAmount},00</p>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-lg mt-3">
-                  <p className="text-sm text-blue-800">
-                    <strong>Nota:</strong> Dependentes têm cobrança separada de R$ 50,00 cada.
-                    Eles podem ser ativados individualmente após o cadastro.
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            {error && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-lg flex items-center">
-                <AlertCircle className="h-5 w-5 mr-2" />
-                {error}
-              </div>
-            )}
-            
-            <button
-              onClick={handlePayment}
-              className={`btn btn-primary w-full ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Processando...' : 'Realizar Pagamento'}
-            </button>
-            
-            <p className="text-sm text-gray-600 text-center">
-              O pagamento será processado de forma segura pelo Mercado Pago
-            </p>
-          </>
-        )}
+        <button
+          onClick={handlePayment}
+          className={`btn btn-primary w-full ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+          disabled={isLoading}
+        >
+          {isLoading ? 'Processando...' : 'Realizar Pagamento'}
+        </button>
+        
+        <p className="text-sm text-gray-600 text-center">
+          O pagamento será processado de forma segura pelo Mercado Pago
+        </p>
       </div>
     </div>
   );
