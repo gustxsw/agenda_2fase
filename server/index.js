@@ -1069,8 +1069,6 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
 });
 
 app.put('/api/users/:id', authenticate, async (req, res) => {
-}
-)
   try {
     const userId = parseInt(req.params.id);
     const { name, email, phone, roles, currentPassword, newPassword, professional_percentage } = req.body;
@@ -1489,7 +1487,7 @@ app.post('/api/admin/dependents/:id/activate', authenticate, authorize(['admin']
     
     // Insert payment record
     await pool.query(`
-      INSERT INTO dependent_payments (dependent_id, client_id, mp_payment_id, mp_preference_id, amount, status, payment_method, activated_at, processed_at)
+      INSERT INTO dependent_payments (dependent_id, client_id, mp_payment_id, mp_preference_id, amount, payment_status, payment_method, activated_at, processed_at)
       VALUES ($1, $2, $3, $4, 50.00, 'approved', $5, NOW(), NOW())
       ON CONFLICT (mp_payment_id) DO NOTHING
     `, [dependentId, dependent.client_id, paymentId, preferenceId, paymentMethod]);
@@ -3752,8 +3750,8 @@ app.post('/api/notifications', authenticate, authorize(['admin']), async (req, r
       const notifications = [];
       for (const user of users.rows) {
         const result = await pool.query(
-          'UPDATE users SET name = $1, email = $2, phone = $3, zip_code = $4, roles = $5 WHERE id = $6 RETURNING *',
-          [name, email, phone, zip_code, roles, id]
+          `INSERT INTO notifications (user_id, title, message, type, created_by)
+           VALUES ($1, $2, $3, $4, $5)
            RETURNING id`,
           [user.id, title.trim(), message.trim(), type || 'info', req.user.id]
         );
