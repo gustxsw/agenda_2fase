@@ -2757,7 +2757,7 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
     // Get revenue by professional
     const professionalResult = await pool.query(
       `SELECT u.name as professional_name,
-       COALESCE(u.professional_percentage, 50) as percentage,
+       COALESCE(u.professional_percentage, 50) as professional_percentage,
        COALESCE(SUM(c.value), 0) as revenue,
        COUNT(c.id) as consultation_count,
        COALESCE(SUM(c.value * (COALESCE(u.professional_percentage, 50) / 100.0)), 0) as professional_payment,
@@ -2773,8 +2773,8 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
 
     // Convert percentages to integers
     const revenueByProfessional = professionalResult.rows.map(row => ({
-      professional_name: row.professional_name,
-      professional_percentage: row.percentage || 50,
+      ...row,
+      professional_percentage: parseInt(row.professional_percentage) || 50,
       revenue: parseFloat(row.revenue) || 0,
       consultation_count: parseInt(row.consultation_count) || 0,
       professional_payment: parseFloat(row.professional_payment) || 0,
@@ -2788,7 +2788,7 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
        COUNT(c.id) as consultation_count
        FROM services s
        LEFT JOIN consultations c ON s.id = c.service_id 
-         AND c.date >= $1 AND c.date <= $2
+      WHERE c.date >= $1 AND c.date <= $2 AND c.client_id IS NOT NULL
        GROUP BY s.id, s.name
        HAVING COUNT(c.id) > 0
        ORDER BY revenue DESC`,
