@@ -3269,6 +3269,9 @@ app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) =>
         }
       },
       back_urls: {
+        success: 'https://cartaoquiroferreira.com.br/client?payment=success&type=dependent',
+        failure: 'https://cartaoquiroferreira.com.br/client?payment=failure&type=dependent',
+        pending: 'https://cartaoquiroferreira.com.br/client?payment=pending&type=dependent',
         success: `${req.protocol}://${req.get('host')}/api/payment/success?type=dependent&dependent_id=${dependentId}`,
         failure: `${req.protocol}://${req.get('host')}/api/payment/failure?type=dependent&dependent_id=${dependentId}`,
         pending: `${req.protocol}://${req.get('host')}/api/payment/pending?type=dependent&dependent_id=${dependentId}`
@@ -3371,9 +3374,9 @@ app.get('/api/payment/success', async (req, res) => {
     if (type === 'subscription' && user_id) {
       redirectUrl += `/client?payment=success&type=subscription`;
     } else if (type === 'dependent' && dependent_id) {
-      redirectUrl += `?payment=success&type=dependent`;
+      redirectUrl += `/client?payment=success&type=dependent`;
     } else if (type === 'professional' && professional_id) {
-      redirectUrl += `/professional?payment=success&type=professional`;
+      redirectUrl += `?payment=success&type=professional`;
     } else {
       redirectUrl += `/?payment=success`;
     }
@@ -3401,9 +3404,9 @@ app.get('/api/payment/failure', async (req, res) => {
     if (type === 'subscription' && user_id) {
       redirectUrl += `/client?payment=failure&type=subscription`;
     } else if (type === 'dependent' && dependent_id) {
-      redirectUrl += `?payment=failure&type=dependent`;
+      redirectUrl += `/client?payment=failure&type=dependent`;
     } else if (type === 'professional' && professional_id) {
-      redirectUrl += `/professional?payment=failure&type=professional`;
+      redirectUrl += `?payment=failure&type=professional`;
     } else {
       redirectUrl += `/?payment=failure`;
     }
@@ -3431,9 +3434,9 @@ app.get('/api/payment/pending', async (req, res) => {
     if (type === 'subscription' && user_id) {
       redirectUrl += `/client?payment=pending&type=subscription`;
     } else if (type === 'dependent' && dependent_id) {
-      redirectUrl += `?payment=pending&type=dependent`;
+      redirectUrl += `/client?payment=pending&type=dependent`;
     } else if (type === 'professional' && professional_id) {
-      redirectUrl += `/professional?payment=pending&type=professional`;
+      redirectUrl += `?payment=pending&type=professional`;
     } else {
       redirectUrl += `/?payment=pending`;
     }
