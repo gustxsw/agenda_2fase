@@ -40,6 +40,7 @@ const createTables = async () => {
         subscription_status VARCHAR(20) DEFAULT 'pending',
         subscription_expiry TIMESTAMP,
         professional_percentage INTEGER DEFAULT 50,
+        zip_code TEXT,
         photo_url TEXT,
         has_scheduling_access BOOLEAN DEFAULT false,
         scheduling_access_expires_at TIMESTAMP,
