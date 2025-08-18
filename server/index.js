@@ -2036,10 +2036,8 @@ app.post('/api/upload-image', authenticate, async (req, res) => {
 
 // Get base URL for redirects
 const getBaseUrl = () => {
-  if (process.env.NODE_ENV === 'production') {
-    return 'https://www.cartaoquiroferreira.com.br';
-  }
-  return 'http://localhost:5173';
+  // Always use production URL for Mercado Pago compatibility
+  return 'https://cartaoquiroferreira.com.br';
 };
 
 // Create subscription payment (clients)
@@ -2063,10 +2061,11 @@ app.post('/api/create-subscription', authenticate, async (req, res) => {
         email: 'cliente@quiroferreira.com.br'
       },
       back_urls: {
-        success: `${baseUrl}/client?payment=success`,
-        failure: `${baseUrl}/client?payment=failure`,
-        pending: `${baseUrl}/client?payment=pending`
+        success: "https://cartaoquiroferreira.com.br/client?payment=success",
+        failure: "https://cartaoquiroferreira.com.br/client?payment=failure",
+        pending: "https://cartaoquiroferreira.com.br/client?payment=pending"
       },
+      auto_return: "approved",
       auto_return: 'approved',
       external_reference: `client_${user_id}_${Date.now()}`,
       notification_url: `${process.env.NODE_ENV === 'production' ? 'https://www.cartaoquiroferreira.com.br' : 'http://localhost:3001'}/api/webhook/mercadopago`
@@ -2116,10 +2115,11 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
         email: 'profissional@quiroferreira.com.br'
       },
       back_urls: {
-        success: `${baseUrl}/professional?payment=success`,
-        failure: `${baseUrl}/professional?payment=failure`,
-        pending: `${baseUrl}/professional?payment=pending`
+        success: "https://cartaoquiroferreira.com.br/professional?payment=success",
+        failure: "https://cartaoquiroferreira.com.br/professional?payment=failure",
+        pending: "https://cartaoquiroferreira.com.br/professional?payment=pending"
       },
+      auto_return: "approved",
       auto_return: 'approved',
       external_reference: `professional_${req.user.id}_${Date.now()}`,
       notification_url: `${process.env.NODE_ENV === 'production' ? 'https://www.cartaoquiroferreira.com.br' : 'http://localhost:3001'}/api/webhook/mercadopago`
@@ -2177,10 +2177,11 @@ app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) =>
         email: 'cliente@quiroferreira.com.br'
       },
       back_urls: {
-        success: `${baseUrl}/client?payment=success&type=dependent`,
-        failure: `${baseUrl}/client?payment=failure&type=dependent`,
-        pending: `${baseUrl}/client?payment=pending&type=dependent`
+        success: "https://cartaoquiroferreira.com.br/client?payment=success&type=dependent",
+        failure: "https://cartaoquiroferreira.com.br/client?payment=failure&type=dependent",
+        pending: "https://cartaoquiroferreira.com.br/client?payment=pending&type=dependent"
       },
+      auto_return: "approved",
       auto_return: 'approved',
       external_reference: `dependent_${id}_${Date.now()}`,
       notification_url: `${process.env.NODE_ENV === 'production' ? 'https://www.cartaoquiroferreira.com.br' : 'http://localhost:3001'}/api/webhook/mercadopago`
@@ -2243,10 +2244,11 @@ app.post('/api/agenda/:id/create-payment', authenticate, async (req, res) => {
         email: 'cliente@quiroferreira.com.br'
       },
       back_urls: {
-        success: `${baseUrl}/client?payment=success&type=agenda`,
-        failure: `${baseUrl}/client?payment=failure&type=agenda`,
-        pending: `${baseUrl}/client?payment=pending&type=agenda`
+        success: "https://cartaoquiroferreira.com.br/client?payment=success&type=agenda",
+        failure: "https://cartaoquiroferreira.com.br/client?payment=failure&type=agenda",
+        pending: "https://cartaoquiroferreira.com.br/client?payment=pending&type=agenda"
       },
+      auto_return: "approved",
       auto_return: 'approved',
       external_reference: `agenda_${id}_${Date.now()}`,
       notification_url: `${process.env.NODE_ENV === 'production' ? 'https://www.cartaoquiroferreira.com.br' : 'http://localhost:3001'}/api/webhook/mercadopago`
