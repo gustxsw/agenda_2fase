@@ -217,7 +217,7 @@ const createTables = async () => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS client_payments (
         id SERIAL PRIMARY KEY,
-        client_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+       user_id INTEGER REFERENCES users(id),
         payment_id VARCHAR(255) UNIQUE,
         amount DECIMAL(10,2) NOT NULL,
         months INTEGER DEFAULT 1,
