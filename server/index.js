@@ -2788,7 +2788,7 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
        COUNT(c.id) as consultation_count
        FROM services s
        LEFT JOIN consultations c ON s.id = c.service_id 
-      WHERE c.date >= $1 AND c.date <= $2 AND c.client_id IS NOT NULL
+         AND c.date >= $1 AND c.date <= $2
        GROUP BY s.id, s.name
        HAVING COUNT(c.id) > 0
        ORDER BY revenue DESC`,
