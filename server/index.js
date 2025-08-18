@@ -1069,10 +1069,11 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
 });
 
 app.put('/api/users/:id', authenticate, async (req, res) => {
+}
+)
   try {
     const userId = parseInt(req.params.id);
     const { name, email, phone, roles, currentPassword, newPassword, professional_percentage } = req.body;
-    const zip_code = req.body.zip_code || null;
 
     // Only allow users to update their own data or admins to update any user data
     if (req.user.id !== userId && req.user.currentRole !== 'admin') {
@@ -3751,8 +3752,8 @@ app.post('/api/notifications', authenticate, authorize(['admin']), async (req, r
       const notifications = [];
       for (const user of users.rows) {
         const result = await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, created_by)
-           VALUES ($1, $2, $3, $4, $5)
+          'UPDATE users SET name = $1, email = $2, phone = $3, zip_code = $4, roles = $5 WHERE id = $6 RETURNING *',
+          [name, email, phone, zip_code, roles, id]
            RETURNING id`,
           [user.id, title.trim(), message.trim(), type || 'info', req.user.id]
         );
@@ -3762,13 +3763,13 @@ app.post('/api/notifications', authenticate, authorize(['admin']), async (req, r
       console.log('✅ Notifications created for role:', role_filter, 'count:', notifications.length);
 
       res.status(201).json({
-        message: `${notifications.length} notificações criadas`,
+        message: \`${notifications.length} notificações criadas`,
         count: notifications.length
       });
     } else {
       // Send to all users
       const result = await pool.query(
-        `INSERT INTO notifications (title, message, type, created_by)
+        \`INSERT INTO notifications (title, message, type, created_by)
          VALUES ($1, $2, $3, $4)
          RETURNING id, title, message, type, created_at`,
         [title.trim(), message.trim(), type || 'info', req.user.id]
@@ -3789,7 +3790,7 @@ app.put('/api/notifications/:id/read', authenticate, async (req, res) => {
     const notificationId = parseInt(req.params.id);
 
     const result = await pool.query(
-      `UPDATE notifications 
+      \`UPDATE notifications 
        SET is_read = true, read_at = CURRENT_TIMESTAMP
        WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)
        RETURNING id`,
@@ -3852,9 +3853,9 @@ createTables().catch(error => {
 
 // 🔥 START SERVER
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+  console.log(\`🚀 Server running on port ${PORT}`);
+  console.log(\`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(\`🔗 Health check: http://localhost:${PORT}/health`);
 });
 
 export default app;
