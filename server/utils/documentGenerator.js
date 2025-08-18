@@ -1,4 +1,4 @@
-const { v2: cloudinary } = require('cloudinary');
+import { v2 as cloudinary } from 'cloudinary';
 
 // Document templates
 const templates = {
@@ -1067,7 +1067,7 @@ ${data.content}
 };
 
 // Generate HTML document and upload to Cloudinary
-const generateDocumentPDF = async (documentType, templateData) => {
+export const generateDocumentPDF = async (documentType, templateData) => {
   try {
     console.log('🔄 Generating document:', { documentType, templateData });
     
@@ -1103,5 +1103,3 @@ const generateDocumentPDF = async (documentType, templateData) => {
     throw new Error(`Erro ao gerar documento: ${error.message}`);
   }
 };
-
-module.exports = { generateDocumentPDF };

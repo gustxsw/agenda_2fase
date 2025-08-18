@@ -186,13 +186,29 @@ const PrivatePatientsPage: React.FC = () => {
 
       const method = modalMode === 'create' ? 'POST' : 'PUT';
 
+      // Prepare data with optional CPF
+      const submitData = {
+        ...formData,
+        cpf: formData.cpf.trim() || null, // Send null if CPF is empty
+        email: formData.email.trim() || null,
+        phone: formData.phone.replace(/\D/g, '') || null,
+        birth_date: formData.birth_date || null,
+        address: formData.address.trim() || null,
+        address_number: formData.address_number.trim() || null,
+        address_complement: formData.address_complement.trim() || null,
+        neighborhood: formData.neighborhood.trim() || null,
+        city: formData.city.trim() || null,
+        state: formData.state || null,
+        zip_code: formData.zip_code.replace(/\D/g, '') || null
+      };
+
       const response = await fetch(url, {
         method,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submitData)
       });
 
       if (!response.ok) {
@@ -383,7 +399,7 @@ const PrivatePatientsPage: React.FC = () => {
                           </div>
                           {patient.cpf && (
                             <div className="text-sm text-gray-500">
-                              CPF: {formatCpfDisplay(patient.cpf)}
+                              CPF: {patient.cpf ? formatCpfDisplay(patient.cpf) : 'Não informado'}
                             </div>
                           )}
                         </div>

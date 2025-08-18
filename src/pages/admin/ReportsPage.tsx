@@ -214,16 +214,18 @@ const ReportsPage: React.FC = () => {
 
   const calculateTotalClinicRevenue = () => {
     if (!report) return 0;
+    if (!report.revenue_by_professional || !Array.isArray(report.revenue_by_professional)) return 0;
     return report.revenue_by_professional.reduce(
-      (total, prof) => total + prof.clinic_revenue,
+      (total, prof) => total + (Number(prof.clinic_revenue) || 0),
       0
     );
   };
 
   const calculateTotalProfessionalPayments = () => {
     if (!report) return 0;
+    if (!report.revenue_by_professional || !Array.isArray(report.revenue_by_professional)) return 0;
     return report.revenue_by_professional.reduce(
-      (total, prof) => total + prof.professional_payment,
+      (total, prof) => total + (Number(prof.professional_payment) || 0),
       0
     );
   };
@@ -362,7 +364,7 @@ const ReportsPage: React.FC = () => {
                     <div className="text-center">
                       <p className="text-gray-600 mb-1">Faturamento Total</p>
                       <p className="text-3xl font-bold text-red-600">
-                        {formatCurrency(report.total_revenue)}
+                        {formatCurrency(Number(report.total_revenue) || 0)}
                       </p>
                     </div>
                   </div>
@@ -371,7 +373,7 @@ const ReportsPage: React.FC = () => {
                     <div className="text-center">
                       <p className="text-gray-600 mb-1">Receita do Convênio</p>
                       <p className="text-3xl font-bold text-green-600">
-                        {formatCurrency(calculateTotalClinicRevenue())}
+                        {formatCurrency(Number(calculateTotalClinicRevenue()) || 0)}
                       </p>
                     </div>
                   </div>
@@ -382,7 +384,7 @@ const ReportsPage: React.FC = () => {
                         Faturamento dos Profissionais
                       </p>
                       <p className="text-3xl font-bold text-blue-600">
-                        {formatCurrency(calculateTotalProfessionalPayments())}
+                        {formatCurrency(Number(calculateTotalProfessionalPayments()) || 0)}
                       </p>
                     </div>
                   </div>
@@ -421,11 +423,11 @@ const ReportsPage: React.FC = () => {
                         {report.revenue_by_professional.map((item, index) => (
                           <tr key={index}>
                             <td>{item.professional_name}</td>
-                            <td>{item.professional_percentage}%</td>
-                            <td>{item.consultation_count}</td>
-                            <td>{formatCurrency(item.revenue)}</td>
-                            <td>{formatCurrency(item.professional_payment)}</td>
-                            <td>{formatCurrency(item.clinic_revenue)}</td>
+                            <td>{Number(item.professional_percentage) || 0}%</td>
+                            <td>{Number(item.consultation_count) || 0}</td>
+                            <td>{formatCurrency(Number(item.revenue) || 0)}</td>
+                            <td>{formatCurrency(Number(item.professional_payment) || 0)}</td>
+                            <td>{formatCurrency(Number(item.clinic_revenue) || 0)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -459,8 +461,8 @@ const ReportsPage: React.FC = () => {
                         {report.revenue_by_service.map((item, index) => (
                           <tr key={index}>
                             <td>{item.service_name}</td>
-                            <td>{item.consultation_count}</td>
-                            <td>{formatCurrency(item.revenue)}</td>
+                            <td>{Number(item.consultation_count) || 0}</td>
+                            <td>{formatCurrency(Number(item.revenue) || 0)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -535,7 +537,7 @@ const ReportsPage: React.FC = () => {
                     </p>
                     <p className="text-2xl font-bold text-green-700">
                       {clientsReport.reduce(
-                        (sum, city) => sum + Number(city.active_clients),
+                        (sum, city) => sum + (Number(city.active_clients) || 0),
                         0
                       )}
                     </p>
@@ -548,7 +550,7 @@ const ReportsPage: React.FC = () => {
                     </p>
                     <p className="text-2xl font-bold text-yellow-700">
                       {clientsReport.reduce(
-                        (sum, city) => sum + Number(city.pending_clients),
+                        (sum, city) => sum + (Number(city.pending_clients) || 0),
                         0
                       )}
                     </p>
@@ -561,7 +563,7 @@ const ReportsPage: React.FC = () => {
                     </p>
                     <p className="text-2xl font-bold text-red-700">
                       {clientsReport.reduce(
-                        (sum, city) => sum + Number(city.expired_clients),
+                        (sum, city) => sum + (Number(city.expired_clients) || 0),
                         0
                       )}
                     </p>
@@ -592,17 +594,17 @@ const ReportsPage: React.FC = () => {
                         <td className="font-medium">{city.client_count}</td>
                         <td>
                           <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                            {city.active_clients}
+                            {Number(city.active_clients) || 0}
                           </span>
                         </td>
                         <td>
                           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">
-                            {city.pending_clients}
+                            {Number(city.pending_clients) || 0}
                           </span>
                         </td>
                         <td>
                           <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-                            {city.expired_clients}
+                            {Number(city.expired_clients) || 0}
                           </span>
                         </td>
                       </tr>

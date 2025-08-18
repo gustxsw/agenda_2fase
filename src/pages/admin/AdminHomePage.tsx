@@ -185,9 +185,9 @@ const AdminHomePage: React.FC = () => {
         ).length;
 
         setUserCounts({
-          clients: clientCount,
-          professionals: professionalCount,
-          total: usersData.length,
+          clients: Number(clientCount) || 0,
+          professionals: Number(professionalCount) || 0,
+          total: Number(usersData.length) || 0,
         });
       } catch (error) {
         console.error("Error fetching admin data:", error);
@@ -210,8 +210,9 @@ const AdminHomePage: React.FC = () => {
   // Calculate total clinic revenue (what admin will receive)
   const calculateClinicRevenue = () => {
     if (!monthlyRevenue) return 0;
+    if (!monthlyRevenue.revenue_by_professional || !Array.isArray(monthlyRevenue.revenue_by_professional)) return 0;
     return monthlyRevenue.revenue_by_professional.reduce(
-      (total, prof) => total + prof.clinic_revenue,
+      (total, prof) => total + (Number(prof.clinic_revenue) || 0),
       0
     );
   };
@@ -334,7 +335,7 @@ const AdminHomePage: React.FC = () => {
                     Receita do Convênio
                   </p>
                   <p className="text-2xl font-bold text-green-700">
-                    {formatCurrency(calculateClinicRevenue())}
+                    {formatCurrency(Number(calculateClinicRevenue()) || 0)}
                   </p>
                 </div>
                 <div className="bg-orange-50 p-4 rounded-lg">
@@ -343,10 +344,10 @@ const AdminHomePage: React.FC = () => {
                   </p>
                   <p className="text-2xl font-bold text-orange-700">
                     {formatCurrency(
-                      monthlyRevenue.revenue_by_professional.reduce(
-                        (total, prof) => total + prof.professional_payment,
+                      monthlyRevenue.revenue_by_professional?.reduce(
+                        (total, prof) => total + (Number(prof.professional_payment) || 0),
                         0
-                      )
+                      ) || 0
                     )}
                   </p>
                 </div>
