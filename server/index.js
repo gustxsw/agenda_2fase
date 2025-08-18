@@ -312,15 +312,8 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_consultations_status ON consultations(status);
       CREATE INDEX IF NOT EXISTS idx_medical_records_professional_id ON medical_records(professional_id);
       CREATE INDEX IF NOT EXISTS idx_medical_records_patient_id ON medical_records(private_patient_id);
-      CREATE INDEX IF NOT EXISTS idx_client_payments_client_id ON client_payments(client_id);
-      CREATE INDEX IF NOT EXISTS idx_client_payments_status ON client_payments(payment_status);
-      CREATE INDEX IF NOT EXISTS idx_dependent_payments_dependent_id ON dependent_payments(dependent_id);
-      CREATE INDEX IF NOT EXISTS idx_dependent_payments_client_id ON dependent_payments(client_id);
-      CREATE INDEX IF NOT EXISTS idx_dependent_payments_status ON dependent_payments(payment_status);
-      CREATE INDEX IF NOT EXISTS idx_professional_payments_professional_id ON professional_payments(professional_id);
-      CREATE INDEX IF NOT EXISTS idx_professional_payments_status ON professional_payments(payment_status);
-      CREATE INDEX IF NOT EXISTS idx_agenda_payments_professional_id ON agenda_payments(professional_id);
-      CREATE INDEX IF NOT EXISTS idx_agenda_payments_status ON agenda_payments(payment_status);
+      CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
       CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
       CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
@@ -487,7 +480,7 @@ const mercadoPagoClient = new MercadoPagoConfig({
 });
 
 // 🔥 AUTHENTICATION MIDDLEWARE
-const payment = new Payment(mercadoPagoClient);
+const payment = new Payment(client);
 const authenticate = async (req, res, next) => {
   try {
     const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
@@ -3310,11 +3303,14 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
 
     const preference = new Preference(mercadoPagoClient);
 
-    const preferenceData = {
+    // 🔥 MERCADOPAGO SDK V2 - Create preference for professional payment
       items: [
         {
           id: `professional_payment_${req.user.id}`,
-          title: 'Repasse ao Convênio Quiro Ferreira',
+        
+  }
+}
+)  title: 'Repasse ao Convênio Quiro Ferreira',
           description: 'Pagamento de repasse ao convênio referente às consultas realizadas',
           quantity: 1,
           unit_price: parseFloat(amount),
@@ -3326,9 +3322,9 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
         identification: {
           type: 'CPF',
           number: req.user.cpf || '00000000000'
-        }
-      },
-      back_urls: {
+        success: 'https://cartaoquiroferreira.com.br/professional?payment=success&type=professional',
+        failure: 'https://cartaoquiroferreira.com.br/professional?payment=failure&type=professional',
+        pending: 'https://cartaoquiroferreira.com.br/professional?payment=pending&type=professional',
         success: `${req.protocol}://${req.get('host')}/api/payment/success?type=professional&professional_id=${req.user.id}`,
         failure: `${req.protocol}://${req.get('host')}/api/payment/failure?type=professional&professional_id=${req.user.id}`,
         pending: `${req.protocol}://${req.get('host')}/api/payment/pending?type=professional&professional_id=${req.user.id}`
@@ -3340,10 +3336,18 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
 
     const result = await preference.create({ body: preferenceData });
 
-    console.log('✅ Professional payment preference created:', result.id);
-
-    res.json({
-      id: result.id,
+    // 🔥 Save to professional_payments table
+    const currentDate = new Date();
+    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    
+    const paymentResult = await pool.query(
+      `INSERT INTO professional_payments 
+       (professional_id, amount, mp_preference_id, period_start, period_end, professional_percentage) 
+    console.log('✅ Professional payment record created:', paymentResult.rows[0].id);
+    
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [professionalId, amount, result.id, firstDay, lastDay, req.user.professional_percentage || 50]
       init_point: result.init_point,
       sandbox_init_point: result.sandbox_init_point
     });
