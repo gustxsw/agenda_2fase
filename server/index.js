@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from './db.js';
-import { MercadoPagoConfig, Preference } from 'mercadopago';
+import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import createUpload from './middleware/upload.js';
 import { generateDocumentPDF } from './utils/documentGenerator.js';
 import dotenv from 'dotenv';
@@ -14,7 +14,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Database setup and table creation
+// 🔥 MERCADOPAGO SDK V2 CONFIGURATION
 const createTables = async () => {
   try {
     console.log('🔄 Creating database tables...');
@@ -192,17 +192,67 @@ const createTables = async () => {
     
     // Create payments table
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS payments (
+      CREATE TABLE IF NOT EXISTS client_payments (
         id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        dependent_id INTEGER REFERENCES dependents(id) ON DELETE SET NULL,
-        payment_type VARCHAR(50) NOT NULL,
+        client_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         amount DECIMAL(10,2) NOT NULL,
-        status VARCHAR(20) DEFAULT 'pending',
+        payment_status VARCHAR(20) DEFAULT 'pending',
         payment_method VARCHAR(50),
         external_payment_id VARCHAR(255),
         payment_reference VARCHAR(255),
-        paid_at TIMESTAMP,
+        subscription_months INTEGER DEFAULT 12,
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 🔥 DEPENDENT PAYMENTS TABLE
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dependent_payments (
+        id SERIAL PRIMARY KEY,
+        dependent_id INTEGER NOT NULL REFERENCES dependents(id) ON DELETE CASCADE,
+        client_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        amount DECIMAL(10,2) NOT NULL DEFAULT 50.00,
+        payment_status VARCHAR(20) DEFAULT 'pending',
+        mp_payment_id VARCHAR(255),
+        mp_preference_id VARCHAR(255),
+        activated_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 🔥 PROFESSIONAL PAYMENTS TABLE (Contas a Pagar)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS professional_payments (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        amount DECIMAL(10,2) NOT NULL,
+        payment_status VARCHAR(20) DEFAULT 'pending',
+        mp_payment_id VARCHAR(255),
+        mp_preference_id VARCHAR(255),
+        period_start DATE NOT NULL,
+        period_end DATE NOT NULL,
+        consultation_count INTEGER DEFAULT 0,
+        total_revenue DECIMAL(10,2) DEFAULT 0,
+        professional_percentage INTEGER DEFAULT 50,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 🔥 AGENDA ACCESS PAYMENTS TABLE
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS agenda_payments (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        amount DECIMAL(10,2) NOT NULL DEFAULT 100.00,
+        payment_status VARCHAR(20) DEFAULT 'pending',
+        mp_payment_id VARCHAR(255),
+        mp_preference_id VARCHAR(255),
+        access_months INTEGER DEFAULT 1,
+        expires_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -430,6 +480,7 @@ const mercadoPagoClient = new MercadoPagoConfig({
 });
 
 // 🔥 AUTHENTICATION MIDDLEWARE
+const payment = new Payment(client);
 const authenticate = async (req, res, next) => {
   try {
     const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
