@@ -73,32 +73,22 @@ const initializeDatabase = async () => {
         subscription_status VARCHAR(20) DEFAULT 'pending',
         subscription_expiry TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        -- Check if percentage column exists (production environment)
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'users' AND column_name = 'percentage'
-        ) THEN
-          RAISE NOTICE 'Using existing percentage column from production';
-        ELSE
-          -- Create professional_percentage column for development/new environments
-          IF NOT EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'users' AND column_name = 'professional_percentage'
-          ) THEN
-            ALTER TABLE users ADD COLUMN professional_percentage DECIMAL(5,2) DEFAULT 50.00;
-            COMMENT ON COLUMN users.professional_percentage IS 'Porcentagem que o profissional recebe das consultas do convênio (padrão: 50%)';
-            
-            -- Set default percentage for existing professionals
-            UPDATE users 
-            SET professional_percentage = 50.00 
-            WHERE 'professional' = ANY(roles) AND professional_percentage IS NULL;
-            
-            RAISE NOTICE 'Column professional_percentage added to users table with default 50%';
-          ELSE
-            RAISE NOTICE 'Column professional_percentage already exists in users table';
-          END IF;
-        END IF;
-      END $$;
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Add additional columns if they don't exist
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES service_categories(id);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS crm VARCHAR(20);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS percentage DECIMAL(5,2) DEFAULT 50.00;
+      
+      -- Set default percentage for existing professionals who don't have it set
+      UPDATE users 
+      SET percentage = 50.00 
+      WHERE percentage IS NULL 
+      AND roles @> '["professional"]'::jsonb;
     `);
 
     // Create service_categories table
@@ -1789,41 +1779,15 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
     const professionalResult = await pool.query(`
       SELECT 
         u.name as professional_name,
-        COALESCE(
-          CASE 
-            WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'percentage')
-            THEN u.percentage
-            ELSE u.professional_percentage
-          END, 
-          50.0
-        ) as professional_percentage,
+        COALESCE(u.percentage, 50.0) as professional_percentage,
         COUNT(c.id) as consultation_count,
         SUM(c.value) as revenue,
-        COALESCE(SUM(c.value * (COALESCE(
-          CASE 
-            WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'percentage')
-            THEN u.percentage
-            ELSE u.professional_percentage
-          END, 
-          50.0
-        ) / 100)), 0) as professional_payment,
-        COALESCE(SUM(c.value * (1 - COALESCE(
-          CASE 
-            WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'percentage')
-            THEN u.percentage
-            ELSE u.professional_percentage
-          END, 
-          50.0
-        ) / 100)), 0) as clinic_revenue
+        COALESCE(SUM(c.value * (COALESCE(u.percentage, 50.0) / 100)), 0) as professional_payment,
+        COALESCE(SUM(c.value * (1 - COALESCE(u.percentage, 50.0) / 100)), 0) as clinic_revenue
       FROM consultations c
       JOIN users u ON c.professional_id = u.id
       WHERE c.date >= $1 AND c.date <= $2
-      GROUP BY u.id, u.name, 
-        CASE 
-          WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'percentage')
-          THEN u.percentage
-          ELSE u.professional_percentage
-        END
+      GROUP BY u.id, u.name, u.percentage
       ORDER BY revenue DESC
     `, [start_date, end_date]);
 
@@ -1873,12 +1837,12 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
 
     // Get professional percentage from users table
     const userResult = await pool.query(`
-      SELECT professional_percentage
+      SELECT percentage
       FROM users 
       WHERE id = $1
     `, [req.user.id]);
 
-    const professionalPercentage = userResult.rows[0]?.professional_percentage || 50;
+    const professionalPercentage = userResult.rows[0]?.percentage || 50;
 
     // Get consultations for the professional in the date range
     const consultationsResult = await pool.query(`
@@ -1959,12 +1923,12 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
 
     // Get professional percentage from users table
     const userResult = await pool.query(`
-      SELECT professional_percentage
+      SELECT percentage
       FROM users 
       WHERE id = $1
     `, [req.user.id]);
 
-    const professionalPercentage = userResult.rows[0]?.professional_percentage || 50;
+    const professionalPercentage = userResult.rows[0]?.percentage || 50;
 
     // Get detailed consultations data
     const consultationsResult = await pool.query(`
