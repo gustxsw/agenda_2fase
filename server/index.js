@@ -404,8 +404,6 @@ const createTables = async () => {
       'SELECT id FROM users WHERE roles @> ARRAY[\'admin\'] LIMIT 1'
     );
     
-    console.log('✅ Dependent payment record created:', paymentResult.rows[0].id);
-    
     if (adminExists.rows.length === 0) {
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await pool.query(`
@@ -3289,6 +3287,8 @@ app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) =>
       'INSERT INTO dependent_payments (dependent_id, client_id, amount, mp_preference_id) VALUES ($1, $2, $3, $4) RETURNING id',
       [dependentId, dependent.client_id, dependent.billing_amount || 50, result.id]
     );
+
+    console.log('✅ Dependent payment record created:', paymentResult.rows[0].id);
 
     console.log('✅ Dependent payment preference created:', result.id);
 
