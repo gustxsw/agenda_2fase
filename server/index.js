@@ -3303,7 +3303,7 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
 
     const preference = new Preference(mercadoPagoClient);
 
-    const preferenceData = {
+    // 🔥 MERCADOPAGO SDK V2 - Create preference for professional payment
       items: [
         {
           id: `professional_payment_${req.user.id}`,
@@ -3319,9 +3319,9 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
         identification: {
           type: 'CPF',
           number: req.user.cpf || '00000000000'
-        }
-      },
-      back_urls: {
+        success: 'https://cartaoquiroferreira.com.br/professional?payment=success&type=professional',
+        failure: 'https://cartaoquiroferreira.com.br/professional?payment=failure&type=professional',
+        pending: 'https://cartaoquiroferreira.com.br/professional?payment=pending&type=professional',
         success: `${req.protocol}://${req.get('host')}/api/payment/success?type=professional&professional_id=${req.user.id}`,
         failure: `${req.protocol}://${req.get('host')}/api/payment/failure?type=professional&professional_id=${req.user.id}`,
         pending: `${req.protocol}://${req.get('host')}/api/payment/pending?type=professional&professional_id=${req.user.id}`
@@ -3333,10 +3333,18 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
 
     const result = await preference.create({ body: preferenceData });
 
-    console.log('✅ Professional payment preference created:', result.id);
-
-    res.json({
-      id: result.id,
+    // 🔥 Save to professional_payments table
+    const currentDate = new Date();
+    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    
+    const paymentResult = await pool.query(
+      `INSERT INTO professional_payments 
+       (professional_id, amount, mp_preference_id, period_start, period_end, professional_percentage) 
+    console.log('✅ Professional payment record created:', paymentResult.rows[0].id);
+    
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [professionalId, amount, result.id, firstDay, lastDay, req.user.professional_percentage || 50]
       init_point: result.init_point,
       sandbox_init_point: result.sandbox_init_point
     });
