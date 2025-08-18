@@ -405,6 +405,8 @@ const createTables = async () => {
       'SELECT id FROM users WHERE roles @> ARRAY[\'admin\'] LIMIT 1'
     );
     
+    console.log('✅ Dependent payment record created:', paymentResult.rows[0].id);
+    
     if (adminExists.rows.length === 0) {
       const hashedPassword = await bcrypt.hash('admin123', 10);
       await pool.query(`
@@ -480,7 +482,7 @@ const mercadoPagoClient = new MercadoPagoConfig({
 });
 
 // 🔥 AUTHENTICATION MIDDLEWARE
-const payment = new Payment(client);
+const payment = new Payment(mercadoPagoClient);
 const authenticate = async (req, res, next) => {
   try {
     const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
@@ -663,7 +665,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT id, name, cpf, password, roles, subscription_status, subscription_expiry FROM users WHERE cpf = $1',
+      'SELECT id, name, cpf, password_hash, roles, subscription_status, subscription_expiry FROM users WHERE cpf = $1',
       [cleanCpf]
     );
 
@@ -674,7 +676,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
       console.log('❌ Invalid password for user:', user.id);
       return res.status(401).json({ message: 'Credenciais inválidas' });
@@ -825,6 +827,7 @@ app.post('/api/auth/register', async (req, res) => {
       neighborhood,
       city,
       state,
+      zip_code,
       password
     } = req.body;
 
@@ -860,9 +863,9 @@ app.post('/api/auth/register', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (
         name, cpf, email, phone, birth_date, address, address_number, 
-        address_complement, neighborhood, city, state, password, roles, 
+        address_complement, neighborhood, city, state, zip_code, password_hash, roles, 
         subscription_status, professional_percentage
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
       RETURNING id, name, cpf, email, roles, subscription_status, subscription_expiry`,
       [
         name.trim(),
@@ -876,6 +879,7 @@ app.post('/api/auth/register', async (req, res) => {
         neighborhood?.trim() || null,
         city?.trim() || null,
         state || null,
+        zip_code?.replace(/\D/g, '') || null,
         hashedPassword,
         ['client'],
         'pending',
@@ -986,7 +990,7 @@ app.get('/api/users/:id', authenticate, async (req, res) => {
 
     const result = await pool.query(
       `SELECT id, name, cpf, email, phone, birth_date, address, address_number,
-       address_complement, neighborhood, city, state, roles, subscription_status,
+       address_complement, neighborhood, city, state, zip_code, roles, subscription_status,
        subscription_expiry, professional_percentage, photo_url, created_at
        FROM users WHERE id = $1`,
       [userId]
@@ -1042,7 +1046,7 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO users (
-        name, cpf, email, phone, password, roles, subscription_status, professional_percentage
+        name, cpf, email, phone, password_hash, roles, subscription_status, professional_percentage
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
       RETURNING id, name, cpf, email, phone, roles, subscription_status, subscription_expiry, created_at`,
       [
@@ -1078,7 +1082,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
 
     // Get current user data
     const currentUser = await pool.query(
-      'SELECT password FROM users WHERE id = $1',
+      'SELECT password_hash FROM users WHERE id = $1',
       [userId]
     );
 
@@ -1126,7 +1130,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
         return res.status(400).json({ message: 'Senha atual é obrigatória para alterar a senha' });
       }
 
-      const isValidPassword = await bcrypt.compare(currentPassword, currentUser.rows[0].password);
+      const isValidPassword = await bcrypt.compare(currentPassword, currentUser.rows[0].password_hash);
       if (!isValidPassword) {
         return res.status(400).json({ message: 'Senha atual incorreta' });
       }
@@ -1136,7 +1140,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      updateFields.push(`password = $${paramCount}`);
+      updateFields.push(`password_hash = $${paramCount}`);
       updateValues.push(hashedPassword);
       paramCount++;
     }
@@ -3247,6 +3251,7 @@ app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) =>
 
     const preference = new Preference(mercadoPagoClient);
 
+    // 🔥 MERCADOPAGO SDK V2 - Create preference for dependent
     const preferenceData = {
       items: [
         {
@@ -3266,6 +3271,9 @@ app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) =>
         }
       },
       back_urls: {
+        success: 'https://cartaoquiroferreira.com.br/client?payment=success&type=dependent',
+        failure: 'https://cartaoquiroferreira.com.br/client?payment=failure&type=dependent',
+        pending: 'https://cartaoquiroferreira.com.br/client?payment=pending&type=dependent',
         success: `${req.protocol}://${req.get('host')}/api/payment/success?type=dependent&dependent_id=${dependentId}`,
         failure: `${req.protocol}://${req.get('host')}/api/payment/failure?type=dependent&dependent_id=${dependentId}`,
         pending: `${req.protocol}://${req.get('host')}/api/payment/pending?type=dependent&dependent_id=${dependentId}`
@@ -3276,6 +3284,12 @@ app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) =>
     };
 
     const result = await preference.create({ body: preferenceData });
+
+    // 🔥 Save to dependent_payments table
+    const paymentResult = await pool.query(
+      'INSERT INTO dependent_payments (dependent_id, client_id, amount, mp_preference_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      [dependentId, dependent.client_id, dependent.billing_amount || 50, result.id]
+    );
 
     console.log('✅ Dependent payment preference created:', result.id);
 
@@ -3303,14 +3317,11 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
 
     const preference = new Preference(mercadoPagoClient);
 
-    // 🔥 MERCADOPAGO SDK V2 - Create preference for professional payment
+    const preferenceData = {
       items: [
         {
           id: `professional_payment_${req.user.id}`,
-        
-  }
-}
-)  title: 'Repasse ao Convênio Quiro Ferreira',
+          title: 'Repasse ao Convênio Quiro Ferreira',
           description: 'Pagamento de repasse ao convênio referente às consultas realizadas',
           quantity: 1,
           unit_price: parseFloat(amount),
@@ -3322,9 +3333,9 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
         identification: {
           type: 'CPF',
           number: req.user.cpf || '00000000000'
-        success: 'https://cartaoquiroferreira.com.br/professional?payment=success&type=professional',
-        failure: 'https://cartaoquiroferreira.com.br/professional?payment=failure&type=professional',
-        pending: 'https://cartaoquiroferreira.com.br/professional?payment=pending&type=professional',
+        }
+      },
+      back_urls: {
         success: `${req.protocol}://${req.get('host')}/api/payment/success?type=professional&professional_id=${req.user.id}`,
         failure: `${req.protocol}://${req.get('host')}/api/payment/failure?type=professional&professional_id=${req.user.id}`,
         pending: `${req.protocol}://${req.get('host')}/api/payment/pending?type=professional&professional_id=${req.user.id}`
@@ -3336,18 +3347,10 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
 
     const result = await preference.create({ body: preferenceData });
 
-    // 🔥 Save to professional_payments table
-    const currentDate = new Date();
-    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-    
-    const paymentResult = await pool.query(
-      `INSERT INTO professional_payments 
-       (professional_id, amount, mp_preference_id, period_start, period_end, professional_percentage) 
-    console.log('✅ Professional payment record created:', paymentResult.rows[0].id);
-    
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [professionalId, amount, result.id, firstDay, lastDay, req.user.professional_percentage || 50]
+    console.log('✅ Professional payment preference created:', result.id);
+
+    res.json({
+      id: result.id,
       init_point: result.init_point,
       sandbox_init_point: result.sandbox_init_point
     });
