@@ -987,10 +987,7 @@ app.get('/api/users/:id', authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, name, cpf, email, phone, birth_date, address, address_number,
-       address_complement, neighborhood, city, state, zip_code, roles, subscription_status,
-       subscription_expiry, professional_percentage, photo_url, created_at
-       FROM users WHERE id = $1`,
+      'SELECT id, name, cpf, email, phone, roles, subscription_status, subscription_expiry, created_at, zip_code FROM users WHERE id = $1',
       [userId]
     );
 
