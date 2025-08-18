@@ -77,6 +77,21 @@ const initializeDatabase = async () => {
       )
     `);
 
+    // Add professional_percentage column to users table if it doesn't exist
+    await pool.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'users' AND column_name = 'professional_percentage'
+        ) THEN
+          ALTER TABLE users ADD COLUMN professional_percentage DECIMAL(5,2) DEFAULT 50.00;
+          UPDATE users SET professional_percentage = 50.00 WHERE professional_percentage IS NULL;
+          COMMENT ON COLUMN users.professional_percentage IS 'Percentage that professional receives from convenio consultations';
+        END IF;
+      END $$;
+    `);
+
     // Create service_categories table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS service_categories (
@@ -1764,16 +1779,26 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
     // Get revenue by professional
     const professionalResult = await pool.query(`
       SELECT 
-        prof.name as professional_name,
-        COALESCE(prof.professional_percentage, 50) as professional_percentage,
-        COALESCE(SUM(c.value), 0) as revenue,
+        u.name as professional_name,
+        u.professional_percentage,
         COUNT(c.id) as consultation_count,
-        COALESCE(SUM(c.value * (COALESCE(prof.professional_percentage, 50) / 100.0)), 0) as professional_payment,
-        COALESCE(SUM(c.value * ((100 - COALESCE(prof.professional_percentage, 50)) / 100.0)), 0) as clinic_revenue
+        SUM(c.value) as revenue,
+        SUM(
+          CASE 
+            WHEN c.private_patient_id IS NOT NULL THEN c.value
+            ELSE ROUND(c.value * (u.professional_percentage / 100.0), 2)
+          END
+        ) as professional_payment,
+        SUM(
+          CASE 
+            WHEN c.private_patient_id IS NOT NULL THEN 0
+            ELSE ROUND(c.value * ((100 - u.professional_percentage) / 100.0), 2)
+          END
+        ) as clinic_revenue
       FROM consultations c
-      JOIN users prof ON c.professional_id = prof.id
+      JOIN users u ON c.professional_id = u.id
       WHERE c.date >= $1 AND c.date <= $2
-      GROUP BY prof.id, prof.name, prof.professional_percentage
+      GROUP BY u.id, u.name, u.professional_percentage
       ORDER BY revenue DESC
     `, [start_date, end_date]);
 
@@ -1792,8 +1817,19 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
 
     res.json({
       total_revenue: totalResult.rows[0].total_revenue,
-      revenue_by_professional: professionalResult.rows,
-      revenue_by_service: serviceResult.rows
+      revenue_by_professional: professionalResult.rows.map(row => ({
+        professional_name: row.professional_name,
+        professional_percentage: parseFloat(row.professional_percentage) || 50,
+        revenue: parseFloat(row.revenue),
+        consultation_count: parseInt(row.consultation_count),
+        professional_payment: parseFloat(row.professional_payment),
+        clinic_revenue: parseFloat(row.clinic_revenue)
+      })),
+      revenue_by_service: serviceResult.rows.map(row => ({
+        service_name: row.service_name,
+        revenue: parseFloat(row.revenue),
+        consultation_count: parseInt(row.consultation_count)
+      }))
     });
   } catch (error) {
     console.error('Error generating revenue report:', error);
@@ -1810,43 +1846,77 @@ app.get('/api/reports/professional-revenue', authenticate, authorize(['professio
       return res.status(400).json({ message: 'Datas de início e fim são obrigatórias' });
     }
 
-    // Get professional percentage
-    const profResult = await pool.query(
-      'SELECT COALESCE(professional_percentage, 50) as percentage FROM users WHERE id = $1',
-      [req.user.id]
-    );
+    // Get professional percentage from users table
+    const userResult = await pool.query(`
+      SELECT professional_percentage
+      FROM users 
+      WHERE id = $1
+    `, [req.user.id]);
 
-    const professionalPercentage = profResult.rows[0]?.percentage || 50;
+    const professionalPercentage = userResult.rows[0]?.professional_percentage || 50;
 
-    // Get consultations summary
-    const summaryResult = await pool.query(`
+    // Get consultations for the professional in the date range
+    const consultationsResult = await pool.query(`
       SELECT 
-        COUNT(*) as total_consultations,
-        COUNT(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN 1 END) as convenio_consultations,
-        COUNT(CASE WHEN c.private_patient_id IS NOT NULL THEN 1 END) as private_consultations,
-        COALESCE(SUM(c.value), 0) as total_revenue,
-        COALESCE(SUM(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN c.value ELSE 0 END), 0) as convenio_revenue,
-        COALESCE(SUM(CASE WHEN c.private_patient_id IS NOT NULL THEN c.value ELSE 0 END), 0) as private_revenue
+        c.id,
+        c.date,
+        COALESCE(cl.name, pp.name) as client_name,
+        s.name as service_name,
+        c.value as total_value,
+        CASE 
+          WHEN c.private_patient_id IS NOT NULL THEN c.value
+          ELSE ROUND(c.value * ($3 / 100.0), 2)
+        END as professional_payment,
+        CASE 
+          WHEN c.private_patient_id IS NOT NULL THEN 0
+          ELSE ROUND(c.value * ((100 - $3) / 100.0), 2)
+        END as amount_to_pay,
+        CASE WHEN c.private_patient_id IS NOT NULL THEN 'private' ELSE 'convenio' END as consultation_type
       FROM consultations c
-      WHERE c.professional_id = $1 AND c.date >= $2 AND c.date <= $3
-    `, [req.user.id, start_date, end_date]);
+      LEFT JOIN users cl ON c.client_id = cl.id
+      LEFT JOIN dependents d ON c.dependent_id = d.id
+      LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
+      LEFT JOIN services s ON c.service_id = s.id
+      WHERE c.professional_id = $1
+        AND c.date >= $2 
+        AND c.date <= $4
+      ORDER BY c.date DESC
+    `, [req.user.id, start_date, professionalPercentage, end_date]);
 
-    const summary = summaryResult.rows[0];
-    const convenioRevenue = parseFloat(summary.convenio_revenue) || 0;
-    const amountToPay = convenioRevenue * ((100 - professionalPercentage) / 100);
+    // Calculate summary
+    const totalRevenue = consultationsResult.rows.reduce((sum, row) => sum + parseFloat(row.total_value), 0);
+    const totalAmountToPay = consultationsResult.rows.reduce((sum, row) => sum + parseFloat(row.amount_to_pay), 0);
+    const convenioConsultations = consultationsResult.rows.filter(row => row.consultation_type === 'convenio').length;
+    const privateConsultations = consultationsResult.rows.filter(row => row.consultation_type === 'private').length;
+    const convenioRevenue = consultationsResult.rows
+      .filter(row => row.consultation_type === 'convenio')
+      .reduce((sum, row) => sum + parseFloat(row.total_value), 0);
+    const privateRevenue = consultationsResult.rows
+      .filter(row => row.consultation_type === 'private')
+      .reduce((sum, row) => sum + parseFloat(row.total_value), 0);
 
-    res.json({
+    const report = {
       summary: {
-        total_consultations: parseInt(summary.total_consultations) || 0,
-        convenio_consultations: parseInt(summary.convenio_consultations) || 0,
-        private_consultations: parseInt(summary.private_consultations) || 0,
-        total_revenue: parseFloat(summary.total_revenue) || 0,
-        convenio_revenue: convenioRevenue,
-        private_revenue: parseFloat(summary.private_revenue) || 0,
         professional_percentage: professionalPercentage,
-        amount_to_pay: amountToPay
-      }
-    });
+        total_revenue: totalRevenue,
+        convenio_revenue: convenioRevenue,
+        private_revenue: privateRevenue,
+        consultation_count: consultationsResult.rows.length,
+        convenio_consultations: convenioConsultations,
+        private_consultations: privateConsultations,
+        amount_to_pay: totalAmountToPay
+      },
+      consultations: consultationsResult.rows.map(row => ({
+        date: row.date,
+        client_name: row.client_name,
+        service_name: row.service_name,
+        total_value: parseFloat(row.total_value),
+        amount_to_pay: parseFloat(row.amount_to_pay),
+        consultation_type: row.consultation_type
+      }))
+    };
+
+    res.json(report);
   } catch (error) {
     console.error('Error generating professional revenue report:', error);
     res.status(500).json({ message: 'Erro ao gerar relatório' });
@@ -1862,57 +1932,76 @@ app.get('/api/reports/professional-detailed', authenticate, authorize(['professi
       return res.status(400).json({ message: 'Datas de início e fim são obrigatórias' });
     }
 
-    // Get professional percentage
-    const profResult = await pool.query(
-      'SELECT COALESCE(professional_percentage, 50) as percentage FROM users WHERE id = $1',
-      [req.user.id]
-    );
+    // Get professional percentage from users table
+    const userResult = await pool.query(`
+      SELECT professional_percentage
+      FROM users 
+      WHERE id = $1
+    `, [req.user.id]);
 
-    const professionalPercentage = profResult.rows[0]?.percentage || 50;
+    const professionalPercentage = userResult.rows[0]?.professional_percentage || 50;
 
-    // Get detailed consultations
+    // Get detailed consultations data
     const consultationsResult = await pool.query(`
       SELECT 
+        c.id,
         c.date,
-        COALESCE(u.name, d.name, pp.name) as client_name,
+        COALESCE(cl.name, pp.name) as client_name,
         s.name as service_name,
-        c.value as total_value,
+        c.value,
+        CASE WHEN c.private_patient_id IS NOT NULL THEN 'private' ELSE 'convenio' END as consultation_type,
+        CASE 
+          WHEN c.private_patient_id IS NOT NULL THEN c.value
+          ELSE ROUND(c.value * ($3 / 100.0), 2)
+        END as professional_payment,
         CASE 
           WHEN c.private_patient_id IS NOT NULL THEN 0
-          ELSE c.value * ((100 - $4) / 100.0)
+          ELSE ROUND(c.value * ((100 - $3) / 100.0), 2)
         END as amount_to_pay
       FROM consultations c
-      LEFT JOIN users u ON c.client_id = u.id
+      LEFT JOIN users cl ON c.client_id = cl.id
       LEFT JOIN dependents d ON c.dependent_id = d.id
       LEFT JOIN private_patients pp ON c.private_patient_id = pp.id
       LEFT JOIN services s ON c.service_id = s.id
-      WHERE c.professional_id = $1 AND c.date >= $2 AND c.date <= $3
+      WHERE c.professional_id = $1
+        AND c.date >= $2 
+        AND c.date <= $4
       ORDER BY c.date DESC
-    `, [req.user.id, start_date, end_date, professionalPercentage]);
+    `, [req.user.id, start_date, professionalPercentage, end_date]);
 
-    // Calculate summary
     const consultations = consultationsResult.rows;
-    const totalConsultations = consultations.length;
-    const convenioConsultations = consultations.filter(c => c.amount_to_pay > 0).length;
-    const privateConsultations = consultations.filter(c => c.amount_to_pay === 0).length;
-    const totalRevenue = consultations.reduce((sum, c) => sum + parseFloat(c.total_value), 0);
-    const convenioRevenue = consultations.filter(c => c.amount_to_pay > 0).reduce((sum, c) => sum + parseFloat(c.total_value), 0);
-    const privateRevenue = consultations.filter(c => c.amount_to_pay === 0).reduce((sum, c) => sum + parseFloat(c.total_value), 0);
-    const amountToPay = consultations.reduce((sum, c) => sum + parseFloat(c.amount_to_pay), 0);
 
-    res.json({
+    // Calculate summary statistics
+    const convenioConsultations = consultations.filter(c => c.consultation_type === 'convenio');
+    const privateConsultations = consultations.filter(c => c.consultation_type === 'private');
+
+    const totalConsultations = consultations.length;
+    const convenioCount = convenioConsultations.length;
+    const privateCount = privateConsultations.length;
+
+    const totalRevenue = consultations.reduce((sum, c) => sum + parseFloat(c.value), 0);
+    const convenioRevenue = convenioConsultations.reduce((sum, c) => sum + parseFloat(c.value), 0);
+    const privateRevenue = privateConsultations.reduce((sum, c) => sum + parseFloat(c.value), 0);
+
+    // Calculate amount to pay to convenio (only from convenio consultations)
+    const amountToPay = consultations
+      .filter(c => c.consultation_type === 'convenio')
+      .reduce((sum, c) => sum + parseFloat(c.amount_to_pay), 0);
+
+    const report = {
       summary: {
         total_consultations: totalConsultations,
-        convenio_consultations: convenioConsultations,
-        private_consultations: privateConsultations,
+        convenio_consultations: convenioCount,
+        private_consultations: privateCount,
         total_revenue: totalRevenue,
         convenio_revenue: convenioRevenue,
         private_revenue: privateRevenue,
         professional_percentage: professionalPercentage,
         amount_to_pay: amountToPay
-      },
-      consultations: consultations
-    });
+      }
+    };
+
+    res.json(report);
   } catch (error) {
     console.error('Error generating detailed professional report:', error);
     res.status(500).json({ message: 'Erro ao gerar relatório detalhado' });
