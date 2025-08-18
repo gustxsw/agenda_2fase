@@ -1789,25 +1789,41 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
     const professionalResult = await pool.query(`
       SELECT 
         u.name as professional_name,
-        u.professional_percentage,
+        COALESCE(
+          CASE 
+            WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'percentage')
+            THEN u.percentage
+            ELSE u.professional_percentage
+          END, 
+          50.0
+        ) as professional_percentage,
         COUNT(c.id) as consultation_count,
         SUM(c.value) as revenue,
-        SUM(
+        COALESCE(SUM(c.value * (COALESCE(
           CASE 
-            WHEN c.private_patient_id IS NOT NULL THEN c.value
-            ELSE ROUND(c.value * (u.professional_percentage / 100.0), 2)
-          END
-        ) as professional_payment,
-        SUM(
+            WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'percentage')
+            THEN u.percentage
+            ELSE u.professional_percentage
+          END, 
+          50.0
+        ) / 100)), 0) as professional_payment,
+        COALESCE(SUM(c.value * (1 - COALESCE(
           CASE 
-            WHEN c.private_patient_id IS NOT NULL THEN 0
-            ELSE ROUND(c.value * ((100 - u.professional_percentage) / 100.0), 2)
-          END
-        ) as clinic_revenue
+            WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'percentage')
+            THEN u.percentage
+            ELSE u.professional_percentage
+          END, 
+          50.0
+        ) / 100)), 0) as clinic_revenue
       FROM consultations c
       JOIN users u ON c.professional_id = u.id
       WHERE c.date >= $1 AND c.date <= $2
-      GROUP BY u.id, u.name, u.professional_percentage
+      GROUP BY u.id, u.name, 
+        CASE 
+          WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'percentage')
+          THEN u.percentage
+          ELSE u.professional_percentage
+        END
       ORDER BY revenue DESC
     `, [start_date, end_date]);
 
