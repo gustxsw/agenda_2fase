@@ -1792,8 +1792,8 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
         COALESCE(u.percentage, 50) as professional_percentage,
         COUNT(c.id) as consultation_count,
         SUM(c.value) as revenue,
-        COALESCE(SUM(c.value * (COALESCE(u.percentage, 50) / 100)), 0) as professional_payment,
-        COALESCE(SUM(c.value * (1 - COALESCE(u.percentage, 50) / 100)), 0) as clinic_revenue
+        SUM(c.value * (COALESCE(u.percentage, 50) / 100)) as professional_payment,
+        SUM(c.value * (1 - COALESCE(u.percentage, 50) / 100)) as clinic_revenue
       FROM consultations c
       JOIN users u ON c.professional_id = u.id
       WHERE c.date >= $1 AND c.date <= $2
