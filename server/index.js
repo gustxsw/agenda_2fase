@@ -486,7 +486,7 @@ app.get("/api/users/:id", authenticate, async (req, res) => {
         subscription_status, subscription_expiry, 
         percentage, photo_url, category_name, crm,
         created_at, updated_at
-      FROM users 
+      'SELECT id, name, cpf, email, phone, roles, subscription_status, subscription_expiry FROM users WHERE id = $1',
       WHERE id = $1`,
       [id]
     );
