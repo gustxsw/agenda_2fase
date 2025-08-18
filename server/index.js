@@ -3750,8 +3750,8 @@ app.post('/api/notifications', authenticate, authorize(['admin']), async (req, r
       const notifications = [];
       for (const user of users.rows) {
         const result = await pool.query(
-          'UPDATE users SET name = $1, email = $2, phone = $3, zip_code = $4 WHERE id = $5 RETURNING id, name, email, phone, zip_code',
-          [name, email, phone, zip_code, id]
+          'UPDATE users SET name = $1, email = $2, phone = $3, zip_code = $4, roles = $5 WHERE id = $6 RETURNING *',
+          [name, email, phone, zip_code, roles, id]
            RETURNING id`,
           [user.id, title.trim(), message.trim(), type || 'info', req.user.id]
         );
