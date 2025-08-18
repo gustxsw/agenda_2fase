@@ -73,21 +73,30 @@ const initializeDatabase = async () => {
         subscription_status VARCHAR(20) DEFAULT 'pending',
         subscription_expiry TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Add professional_percentage column to users table if it doesn't exist
-    await pool.query(`
-      DO $$ 
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'users' AND column_name = 'professional_percentage'
+        -- Check if percentage column exists (production environment)
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'users' AND column_name = 'percentage'
         ) THEN
-          ALTER TABLE users ADD COLUMN professional_percentage DECIMAL(5,2) DEFAULT 50.00;
-          UPDATE users SET professional_percentage = 50.00 WHERE professional_percentage IS NULL;
-          COMMENT ON COLUMN users.professional_percentage IS 'Percentage that professional receives from convenio consultations';
+          RAISE NOTICE 'Using existing percentage column from production';
+        ELSE
+          -- Create professional_percentage column for development/new environments
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'users' AND column_name = 'professional_percentage'
+          ) THEN
+            ALTER TABLE users ADD COLUMN professional_percentage DECIMAL(5,2) DEFAULT 50.00;
+            COMMENT ON COLUMN users.professional_percentage IS 'Porcentagem que o profissional recebe das consultas do convênio (padrão: 50%)';
+            
+            -- Set default percentage for existing professionals
+            UPDATE users 
+            SET professional_percentage = 50.00 
+            WHERE 'professional' = ANY(roles) AND professional_percentage IS NULL;
+            
+            RAISE NOTICE 'Column professional_percentage added to users table with default 50%';
+          ELSE
+            RAISE NOTICE 'Column professional_percentage already exists in users table';
+          END IF;
         END IF;
       END $$;
     `);
