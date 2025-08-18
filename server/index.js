@@ -2111,7 +2111,7 @@ app.post("/api/dependents/:id/create-payment", authenticate, async (req, res) =>
       return res.status(500).json({ message: "MercadoPago não configurado" });
     }
 
-    const dependentResult = await pool.query(
+      'SELECT id, name, cpf, email, phone, roles, subscription_status, subscription_expiry FROM users WHERE id = $1',
       'SELECT id, name, cpf, email, phone, roles, subscription_status, subscription_expiry, created_at FROM users WHERE id = $1',
       [id]
     );
