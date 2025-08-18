@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarClock, AlertCircle, Filter, User, Users, Check, Clock, CheckCircle, XCircle } from "lucide-react";
+import { CalendarClock, AlertCircle, Filter, User, Users, Check, Clock, CheckCircle, XCircle, X } from "lucide-react";
 import DependentsSection from "./DependentsSection";
 import PaymentSection from "./PaymentSection";
 
