@@ -162,11 +162,13 @@ const ClientHomePage: React.FC = () => {
 
         if (userResponse.ok) {
           const userData = await userResponse.json();
-          console.log("User subscription data:", userData);
+          console.log("🔍 User subscription data from API:", userData);
+          console.log("🔍 Subscription status:", userData.subscription_status);
+          console.log("🔍 Subscription expiry:", userData.subscription_expiry);
           setSubscriptionStatus(userData.subscription_status || "pending");
           setSubscriptionExpiry(userData.subscription_expiry);
         } else {
-          console.warn("User data not available:", userResponse.status);
+          console.error("❌ User data not available:", userResponse.status);
           setSubscriptionStatus("pending");
         }
       } catch (error) {

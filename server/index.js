@@ -1772,6 +1772,7 @@ app.post("/api/medical-documents", authenticate, authorize(["professional"]), as
 app.post("/api/upload-image", authenticate, async (req, res) => {
   try {
     const upload = createUpload();
+    console.log('🔍 Fetching user data for ID:', id);
     
     upload.single("image")(req, res, async (err) => {
       if (err) {
@@ -2111,7 +2112,7 @@ app.post("/api/dependents/:id/create-payment", authenticate, async (req, res) =>
     }
 
     const dependentResult = await pool.query(
-      "SELECT d.*, u.name as client_name FROM dependents d JOIN users u ON d.client_id = u.id WHERE d.id = $1",
+      'SELECT id, name, cpf, email, phone, roles, subscription_status, subscription_expiry, created_at FROM users WHERE id = $1',
       [id]
     );
 
@@ -2119,7 +2120,15 @@ app.post("/api/dependents/:id/create-payment", authenticate, async (req, res) =>
       return res.status(404).json({ message: "Dependente não encontrado" });
     }
 
-    const dependent = dependentResult.rows[0];
+    const userData = result.rows[0];
+    console.log('✅ User data found:', {
+      id: userData.id,
+      name: userData.name,
+      subscription_status: userData.subscription_status,
+      subscription_expiry: userData.subscription_expiry
+    });
+    
+    res.json(userData);
 
     if (req.user.currentRole !== "admin" && req.user.id !== dependent.client_id) {
       return res.status(403).json({ message: "Acesso negado" });
