@@ -1802,9 +1802,9 @@ app.post('/api/consultations', authenticate, authorize(['professional']), async 
           [client_id]
         );
         
-        if (subscriptionCheck.rows.length === 0) {
+        const professionalPercentage = parseInt(professionalPercentageQuery.rows[0]?.professional_percentage) || 50;
           return res.status(404).json({ message: 'Cliente não encontrado' });
-        }
+        const amountToPay = convenioRevenue * ((100 - professionalPercentage) / 100);
         
         if (subscriptionCheck.rows[0].subscription_status !== 'active') {
           return res.status(400).json({ message: 'Cliente não possui assinatura ativa' });
