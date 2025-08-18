@@ -543,71 +543,102 @@ const SchedulingPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
-            {dailyAppointments.map((appointment) => {
-              const statusInfo = getStatusInfo(appointment.status);
-              return (
-                <div
-                  key={appointment.id}
-                  className="p-6 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      {/* Horário */}
-                      <div className="text-center min-w-[80px]">
-                        <div className="text-lg font-bold text-gray-900">
-                          {appointment.time}
-                        </div>
-                        <Clock className="h-4 w-4 text-gray-400 mx-auto" />
-                      </div>
-
-                      {/* Informações do paciente */}
-                      <div className="flex-1">
-                        <div className="flex items-center mb-1">
-                          {appointment.is_dependent ? (
-                            <Users className="h-4 w-4 text-blue-600 mr-2" />
-                          ) : (
-                            <User className="h-4 w-4 text-green-600 mr-2" />
-                          )}
-                          <span className="font-medium text-gray-900">
-                            {appointment.client_name}
-                          </span>
-                          {appointment.is_dependent && (
-                            <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                              Dependente
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-600 mb-1">
-                          {appointment.service_name}
-                        </p>
-                        <p className="text-sm font-medium text-green-600">
-                          {formatCurrency(appointment.value)}
-                        </p>
-                        {appointment.notes && (
-                          <p className="text-sm text-gray-500 mt-1 italic">
-                            "{appointment.notes}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Status e Ações */}
-                    <div className="flex items-center space-x-3">
-                      <button
-                        onClick={() => openStatusModal(appointment)}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center border transition-all hover:shadow-sm ${statusInfo.className}`}
-                        title="Clique para alterar o status"
-                      >
-                        {statusInfo.icon}
-                        {statusInfo.text}
-                        <Edit2 className="h-3 w-3 ml-2 opacity-60" />
-                      </button>
-                    </div>
-                  </div>
+          <div className="flex">
+            {/* Coluna de Horários */}
+            <div className="w-24 bg-gray-50 border-r border-gray-200">
+              <div className="sticky top-0 bg-gray-100 p-3 border-b border-gray-200">
+                <div className="text-xs font-medium text-gray-600 text-center">
+                  HORÁRIO
                 </div>
-              );
-            })}
+              </div>
+              <div className="space-y-0">
+                {timeSlots.map((timeSlot) => (
+                  <div
+                    key={timeSlot}
+                    className="h-16 flex items-center justify-center border-b border-gray-100 text-sm font-medium text-gray-700"
+                  >
+                    {timeSlot}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Coluna de Agendamentos */}
+            <div className="flex-1">
+              <div className="sticky top-0 bg-gray-100 p-3 border-b border-gray-200">
+                <div className="text-xs font-medium text-gray-600 text-center">
+                  AGENDAMENTOS
+                </div>
+              </div>
+              <div className="relative">
+                {timeSlots.map((timeSlot) => {
+                  const appointment = dailyAppointments.find(
+                    (apt) => apt.time === timeSlot
+                  );
+                  
+                  return (
+                    <div
+                      key={timeSlot}
+                      className="h-16 border-b border-gray-100 flex items-center px-4 hover:bg-gray-50 transition-colors"
+                    >
+                      {appointment ? (
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center space-x-3 flex-1">
+                            {/* Informações do paciente */}
+                            <div className="flex-1">
+                              <div className="flex items-center mb-1">
+                                {appointment.is_dependent ? (
+                                  <Users className="h-4 w-4 text-blue-600 mr-2" />
+                                ) : (
+                                  <User className="h-4 w-4 text-green-600 mr-2" />
+                                )}
+                                <span className="font-medium text-gray-900 text-sm">
+                                  {appointment.client_name}
+                                </span>
+                                {appointment.is_dependent && (
+                                  <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                                    Dependente
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center space-x-4">
+                                <p className="text-xs text-gray-600">
+                                  {appointment.service_name}
+                                </p>
+                                <p className="text-xs font-medium text-green-600">
+                                  {formatCurrency(appointment.value)}
+                                </p>
+                              </div>
+                              {appointment.notes && (
+                                <p className="text-xs text-gray-500 mt-1 italic truncate">
+                                  "{appointment.notes}"
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Status */}
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => openStatusModal(appointment)}
+                              className={`px-2 py-1 rounded text-xs font-medium flex items-center border transition-all hover:shadow-sm ${getStatusInfo(appointment.status).className}`}
+                              title="Clique para alterar o status"
+                            >
+                              {getStatusInfo(appointment.status).icon}
+                              {getStatusInfo(appointment.status).text}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-400 italic">
+                          Horário livre
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
