@@ -1072,6 +1072,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     const { name, email, phone, roles, currentPassword, newPassword, professional_percentage } = req.body;
+    const zip_code = req.body.zip_code || null;
 
     // Only allow users to update their own data or admins to update any user data
     if (req.user.id !== userId && req.user.currentRole !== 'admin') {
@@ -3750,8 +3751,8 @@ app.post('/api/notifications', authenticate, authorize(['admin']), async (req, r
       const notifications = [];
       for (const user of users.rows) {
         const result = await pool.query(
-          'UPDATE users SET name = $1, email = $2, phone = $3, zip_code = $4, roles = $5 WHERE id = $6 RETURNING *',
-          [name, email, phone, zip_code, roles, id]
+          `INSERT INTO notifications (user_id, title, message, type, created_by)
+           VALUES ($1, $2, $3, $4, $5)
            RETURNING id`,
           [user.id, title.trim(), message.trim(), type || 'info', req.user.id]
         );
