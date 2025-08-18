@@ -46,7 +46,6 @@ const createTables = async () => {
         scheduling_access_expires_at TIMESTAMP,
         scheduling_access_granted_by INTEGER,
         scheduling_access_granted_at TIMESTAMP,
-        subscription_months INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -258,6 +257,69 @@ const createTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    -- Create client_payments table
+    CREATE TABLE IF NOT EXISTS client_payments (
+      id SERIAL PRIMARY KEY,
+      client_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      mp_payment_id TEXT UNIQUE,
+      mp_preference_id TEXT,
+      amount DECIMAL(10,2) NOT NULL,
+      months INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'pending',
+      payment_method TEXT,
+      expires_at TIMESTAMPTZ,
+      processed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    
+    -- Create dependent_payments table
+    CREATE TABLE IF NOT EXISTS dependent_payments (
+      id SERIAL PRIMARY KEY,
+      dependent_id INTEGER REFERENCES dependents(id) ON DELETE CASCADE,
+      client_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      mp_payment_id TEXT UNIQUE,
+      mp_preference_id TEXT,
+      amount DECIMAL(10,2) DEFAULT 50.00,
+      status TEXT DEFAULT 'pending',
+      payment_method TEXT,
+      activated_at TIMESTAMPTZ,
+      processed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    
+    -- Create professional_payments table (contas a pagar)
+    CREATE TABLE IF NOT EXISTS professional_payments (
+      id SERIAL PRIMARY KEY,
+      professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      mp_payment_id TEXT UNIQUE,
+      mp_preference_id TEXT,
+      amount DECIMAL(10,2) NOT NULL,
+      period_start DATE,
+      period_end DATE,
+      consultation_count INTEGER DEFAULT 0,
+      total_revenue DECIMAL(10,2) DEFAULT 0,
+      professional_percentage INTEGER DEFAULT 50,
+      status TEXT DEFAULT 'pending',
+      payment_method TEXT,
+      processed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    
+    -- Create agenda_payments table
+    CREATE TABLE IF NOT EXISTS agenda_payments (
+      id SERIAL PRIMARY KEY,
+      professional_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      mp_payment_id TEXT UNIQUE,
+      mp_preference_id TEXT,
+      amount DECIMAL(10,2) DEFAULT 100.00,
+      months INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'pending',
+      payment_method TEXT,
+      expires_at TIMESTAMPTZ,
+      processed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
     
     // Create audit_logs table
     await pool.query(`
@@ -319,6 +381,14 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+      CREATE INDEX IF NOT EXISTS idx_client_payments_client ON client_payments(client_id);
+      CREATE INDEX IF NOT EXISTS idx_client_payments_mp_id ON client_payments(mp_payment_id);
+      CREATE INDEX IF NOT EXISTS idx_dependent_payments_dependent ON dependent_payments(dependent_id);
+      CREATE INDEX IF NOT EXISTS idx_dependent_payments_mp_id ON dependent_payments(mp_payment_id);
+      CREATE INDEX IF NOT EXISTS idx_professional_payments_professional ON professional_payments(professional_id);
+      CREATE INDEX IF NOT EXISTS idx_professional_payments_mp_id ON professional_payments(mp_payment_id);
+      CREATE INDEX IF NOT EXISTS idx_agenda_payments_professional ON agenda_payments(professional_id);
+      CREATE INDEX IF NOT EXISTS idx_agenda_payments_mp_id ON agenda_payments(mp_payment_id);
     `);
     
     // Insert default service categories
