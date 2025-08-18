@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarClock, AlertCircle, Filter, User, Users, Check, Clock } from "lucide-react";
+import { CalendarClock, AlertCircle, Filter, User, Users, Check, Clock, CheckCircle, XCircle } from "lucide-react";
 import DependentsSection from "./DependentsSection";
 import PaymentSection from "./PaymentSection";
 
@@ -35,6 +35,11 @@ const ClientHomePage: React.FC = () => {
   const [subscriptionExpiry, setSubscriptionExpiry] = useState<string | null>(
     null
   );
+  const [paymentFeedback, setPaymentFeedback] = useState<{
+    type: 'success' | 'failure' | 'pending' | null;
+    paymentType: string | null;
+    message: string;
+  }>({ type: null, paymentType: null, message: '' });
 
   // Get API URL with fallback
   const getApiUrl = () => {
@@ -47,6 +52,58 @@ const ClientHomePage: React.FC = () => {
 
     return "http://localhost:3001";
   };
+
+  // Handle payment feedback from URL parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+    const paymentType = urlParams.get('type');
+    
+    if (paymentStatus) {
+      let message = '';
+      
+      if (paymentStatus === 'success') {
+        if (paymentType === 'dependent') {
+          message = 'Pagamento do dependente aprovado! O dependente será ativado em breve.';
+        } else if (paymentType === 'agenda') {
+          message = 'Pagamento da consulta aprovado! Sua consulta foi confirmada.';
+        } else {
+          message = 'Pagamento da assinatura aprovado com sucesso!';
+        }
+      } else if (paymentStatus === 'failure') {
+        if (paymentType === 'dependent') {
+          message = 'Falha no pagamento do dependente. Tente novamente.';
+        } else if (paymentType === 'agenda') {
+          message = 'Falha no pagamento da consulta. Tente novamente.';
+        } else {
+          message = 'Falha no pagamento da assinatura. Tente novamente.';
+        }
+      } else if (paymentStatus === 'pending') {
+        if (paymentType === 'dependent') {
+          message = 'Pagamento do dependente está sendo processado.';
+        } else if (paymentType === 'agenda') {
+          message = 'Pagamento da consulta está sendo processado.';
+        } else {
+          message = 'Pagamento da assinatura está sendo processado.';
+        }
+      }
+      
+      setPaymentFeedback({
+        type: paymentStatus as 'success' | 'failure' | 'pending',
+        paymentType,
+        message
+      });
+      
+      // Clear URL parameters after showing feedback
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+      
+      // Auto-hide feedback after 10 seconds
+      setTimeout(() => {
+        setPaymentFeedback({ type: null, paymentType: null, message: '' });
+      }, 10000);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -159,8 +216,8 @@ const ClientHomePage: React.FC = () => {
       { value: 'titular', label: `${user?.name} (Titular)`, icon: <User className="h-4 w-4" /> }
     ];
 
-    // Only show active dependents in filter
-    dependents.filter(d => (d.current_status || d.subscription_status) === 'active').forEach(dependent => {
+    // Only show active dependents in filter (check individual status)
+    dependents.filter(d => d.subscription_status === 'active').forEach(dependent => {
       options.push({
         value: dependent.id.toString(),
         label: dependent.name,
@@ -171,12 +228,58 @@ const ClientHomePage: React.FC = () => {
     return options;
   };
 
+  const dismissPaymentFeedback = () => {
+    setPaymentFeedback({ type: null, paymentType: null, message: '' });
+  };
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Olá, {user?.name}</h1>
         <p className="text-gray-600">Bem-vindo ao seu painel de cliente.</p>
       </div>
+
+      {/* Payment Feedback */}
+      {paymentFeedback.type && (
+        <div className={`border-l-4 p-4 mb-6 relative ${
+          paymentFeedback.type === 'success' 
+            ? 'bg-green-50 border-green-600' 
+            : paymentFeedback.type === 'failure'
+            ? 'bg-red-50 border-red-600'
+            : 'bg-yellow-50 border-yellow-600'
+        }`}>
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              {paymentFeedback.type === 'success' && <CheckCircle className="h-5 w-5 text-green-600" />}
+              {paymentFeedback.type === 'failure' && <XCircle className="h-5 w-5 text-red-600" />}
+              {paymentFeedback.type === 'pending' && <Clock className="h-5 w-5 text-yellow-600" />}
+            </div>
+            <div className="ml-3 flex-1">
+              <p className={`font-medium ${
+                paymentFeedback.type === 'success' 
+                  ? 'text-green-800' 
+                  : paymentFeedback.type === 'failure'
+                  ? 'text-red-800'
+                  : 'text-yellow-800'
+              }`}>
+                {paymentFeedback.message}
+              </p>
+            </div>
+            <button
+              onClick={dismissPaymentFeedback}
+              className={`ml-3 ${
+                paymentFeedback.type === 'success' 
+                  ? 'text-green-600 hover:text-green-800' 
+                  : paymentFeedback.type === 'failure'
+                  ? 'text-red-600 hover:text-red-800'
+                  : 'text-yellow-600 hover:text-yellow-800'
+              }`}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {subscriptionStatus === "expired" && (
         <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-6">
@@ -211,55 +314,6 @@ const ClientHomePage: React.FC = () => {
 
       {user && <DependentsSection clientId={user.id} />}
 
-      {/* Payment feedback handling */}
-      {(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const paymentStatus = urlParams.get('payment');
-        const paymentType = urlParams.get('type');
-        
-        if (paymentStatus === 'success') {
-          return (
-            <div className="bg-green-50 border-l-4 border-green-600 p-4 mb-6">
-              <div className="flex items-center">
-                <Check className="h-5 w-5 text-green-600 mr-2" />
-                <p className="text-green-700">
-                  {paymentType === 'dependent' && 'Pagamento do dependente aprovado! O dependente será ativado em breve.'}
-                  {paymentType === 'agenda' && 'Pagamento da consulta aprovado! Sua consulta foi confirmada.'}
-                  {!paymentType && 'Pagamento aprovado com sucesso!'}
-                </p>
-              </div>
-            </div>
-          );
-        } else if (paymentStatus === 'failure') {
-          return (
-            <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-6">
-              <div className="flex items-center">
-                <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                <p className="text-red-700">
-                  {paymentType === 'dependent' && 'Falha no pagamento do dependente. Tente novamente.'}
-                  {paymentType === 'agenda' && 'Falha no pagamento da consulta. Tente novamente.'}
-                  {!paymentType && 'Falha no pagamento. Tente novamente.'}
-                </p>
-              </div>
-            </div>
-          );
-        } else if (paymentStatus === 'pending') {
-          return (
-            <div className="bg-yellow-50 border-l-4 border-yellow-600 p-4 mb-6">
-              <div className="flex items-center">
-                <Clock className="h-5 w-5 text-yellow-600 mr-2" />
-                <p className="text-yellow-700">
-                  {paymentType === 'dependent' && 'Pagamento do dependente está sendo processado.'}
-                  {paymentType === 'agenda' && 'Pagamento da consulta está sendo processado.'}
-                  {!paymentType && 'Pagamento está sendo processado.'}
-                </p>
-              </div>
-            </div>
-          );
-        }
-        return null;
-      })()}
-
       <div className="card mb-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
@@ -288,6 +342,7 @@ const ClientHomePage: React.FC = () => {
 
         {isLoading ? (
           <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Carregando consultas...</p>
           </div>
         ) : error ? (
