@@ -35,13 +35,12 @@ const createTables = async () => {
         city VARCHAR(100),
         state VARCHAR(2),
         zip_code VARCHAR(8),
-        password_hash VARCHAR(255) NOT NULL,
+        password VARCHAR(255) NOT NULL,
         roles TEXT[] DEFAULT ARRAY['client'],
         subscription_status VARCHAR(20) DEFAULT 'pending',
         subscription_expiry TIMESTAMP,
         professional_percentage INTEGER DEFAULT 50,
         photo_url TEXT,
-        crm VARCHAR(20),
         has_scheduling_access BOOLEAN DEFAULT false,
         scheduling_access_expires_at TIMESTAMP,
         scheduling_access_granted_by INTEGER,
@@ -414,7 +413,7 @@ const createTables = async () => {
           name, 
           cpf, 
           email, 
-          password_hash, 
+          password, 
           roles, 
           subscription_status,
           professional_percentage
@@ -665,7 +664,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT id, name, cpf, password_hash, roles, subscription_status, subscription_expiry FROM users WHERE cpf = $1',
+      'SELECT id, name, cpf, password, roles, subscription_status, subscription_expiry FROM users WHERE cpf = $1',
       [cleanCpf]
     );
 
@@ -676,7 +675,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       console.log('❌ Invalid password for user:', user.id);
       return res.status(401).json({ message: 'Credenciais inválidas' });
@@ -863,7 +862,7 @@ app.post('/api/auth/register', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (
         name, cpf, email, phone, birth_date, address, address_number, 
-        address_complement, neighborhood, city, state, zip_code, password_hash, roles, 
+        address_complement, neighborhood, city, state, zip_code, password, roles, 
         subscription_status, professional_percentage
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
       RETURNING id, name, cpf, email, roles, subscription_status, subscription_expiry`,
@@ -1046,7 +1045,7 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO users (
-        name, cpf, email, phone, password_hash, roles, subscription_status, professional_percentage
+        name, cpf, email, phone, password, roles, subscription_status, professional_percentage
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
       RETURNING id, name, cpf, email, phone, roles, subscription_status, subscription_expiry, created_at`,
       [
@@ -1082,7 +1081,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
 
     // Get current user data
     const currentUser = await pool.query(
-      'SELECT password_hash FROM users WHERE id = $1',
+      'SELECT password FROM users WHERE id = $1',
       [userId]
     );
 
@@ -1130,7 +1129,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
         return res.status(400).json({ message: 'Senha atual é obrigatória para alterar a senha' });
       }
 
-      const isValidPassword = await bcrypt.compare(currentPassword, currentUser.rows[0].password_hash);
+      const isValidPassword = await bcrypt.compare(currentPassword, currentUser.rows[0].password);
       if (!isValidPassword) {
         return res.status(400).json({ message: 'Senha atual incorreta' });
       }
@@ -1140,7 +1139,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      updateFields.push(`password_hash = $${paramCount}`);
+      updateFields.push(`password = $${paramCount}`);
       updateValues.push(hashedPassword);
       paramCount++;
     }
