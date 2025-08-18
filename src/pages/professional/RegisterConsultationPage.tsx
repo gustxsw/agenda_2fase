@@ -231,10 +231,10 @@ const RegisterConsultationPage: React.FC = () => {
       if (dependentResponse.ok) {
         const dependentData = await dependentResponse.json();
 
-        // 🔥 Check if the client has active subscription
-        if (dependentData.client_subscription_status !== "active") {
+        // 🔥 Check if the dependent has active subscription
+        if (dependentData.dependent_subscription_status !== "active") {
           setError(
-            "Este dependente não pode ser atendido pois o titular não possui assinatura ativa."
+            "Este dependente não pode ser atendido pois não possui assinatura ativa."
           );
           resetForm();
           return;
@@ -243,11 +243,11 @@ const RegisterConsultationPage: React.FC = () => {
         setFoundDependent(dependentData);
         setClientId(dependentData.client_id);
         setClientName(dependentData.client_name);
-        setSubscriptionStatus(dependentData.client_subscription_status);
+        setSubscriptionStatus(dependentData.dependent_subscription_status);
         setSelectedDependentId(dependentData.id);
         setDependents([]);
         setSuccess(
-          `Dependente encontrado: ${dependentData.name} (Titular: ${dependentData.client_name})`
+          `Dependente encontrado: ${dependentData.name} (Titular: ${dependentData.client_name}) - Status: Ativo`
         );
         return;
       }

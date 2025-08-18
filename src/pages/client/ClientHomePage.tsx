@@ -20,6 +20,7 @@ type Dependent = {
   id: number;
   name: string;
   cpf: string;
+  subscription_status: string;
 };
 
 const ClientHomePage: React.FC = () => {
@@ -158,7 +159,8 @@ const ClientHomePage: React.FC = () => {
       { value: 'titular', label: `${user?.name} (Titular)`, icon: <User className="h-4 w-4" /> }
     ];
 
-    dependents.forEach(dependent => {
+    // Only show active dependents in filter
+    dependents.filter(d => d.subscription_status === 'active').forEach(dependent => {
       options.push({
         value: dependent.id.toString(),
         label: dependent.name,

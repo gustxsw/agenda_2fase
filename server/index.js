@@ -56,6 +56,61 @@ app.use(cookieParser());
 // Serve static files
 app.use(express.static("dist"));
 
+// Initialize database tables for dependent billing
+const initializeDependentBilling = async () => {
+  try {
+    // Add columns to dependents table if they don't exist
+    await pool.query(`
+      DO $$ 
+      BEGIN
+        -- Add subscription_status column
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'dependents' AND column_name = 'subscription_status'
+        ) THEN
+          ALTER TABLE dependents ADD COLUMN subscription_status VARCHAR(20) DEFAULT 'pending';
+        END IF;
+        
+        -- Add subscription_expiry column
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'dependents' AND column_name = 'subscription_expiry'
+        ) THEN
+          ALTER TABLE dependents ADD COLUMN subscription_expiry TIMESTAMP;
+        END IF;
+        
+        -- Add billing_amount column
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'dependents' AND column_name = 'billing_amount'
+        ) THEN
+          ALTER TABLE dependents ADD COLUMN billing_amount DECIMAL(10,2) DEFAULT 50.00;
+        END IF;
+        
+        -- Add payment_reference column
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'dependents' AND column_name = 'payment_reference'
+        ) THEN
+          ALTER TABLE dependents ADD COLUMN payment_reference VARCHAR(255);
+        END IF;
+        
+        -- Add activated_at column
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'dependents' AND column_name = 'activated_at'
+        ) THEN
+          ALTER TABLE dependents ADD COLUMN activated_at TIMESTAMP;
+        END IF;
+      END $$;
+    `);
+    
+    console.log('✅ Dependent billing tables initialized');
+  } catch (error) {
+    console.error('❌ Error initializing dependent billing:', error);
+  }
+};
+
 // Database initialization
 const initializeDatabase = async () => {
   try {
@@ -290,6 +345,9 @@ const initializeDatabase = async () => {
     await ensureSignatureColumn();
 
     console.log("✅ Database initialized successfully");
+    
+    // Initialize dependent billing
+    await initializeDependentBilling();
   } catch (error) {
     console.error("❌ Database initialization error:", error);
     throw error;
@@ -1045,10 +1103,16 @@ app.get("/api/dependents/:clientId", authenticate, async (req, res) => {
   try {
     const { clientId } = req.params;
 
-    const result = await pool.query(
-      "SELECT * FROM dependents WHERE client_id = $1 ORDER BY name",
-      [clientId]
-    );
+    // Include subscription status in the query
+    const result = await pool.query(`
+      SELECT 
+        id, name, cpf, birth_date, client_id, created_at,
+        subscription_status, subscription_expiry, billing_amount,
+        payment_reference, activated_at
+      FROM dependents 
+      WHERE client_id = $1 
+      ORDER BY created_at DESC
+    `, [clientId]);
 
     res.json(result.rows);
   } catch (error) {
@@ -1068,20 +1132,29 @@ app.get("/api/dependents/lookup", authenticate, async (req, res) => {
 
     const cleanCpf = cpf.replace(/\D/g, "");
 
-    const result = await pool.query(
-      `
+    const result = await pool.query(`
       SELECT 
-        d.id, d.name, d.cpf, d.birth_date, d.client_id,
-        u.name as client_name, u.subscription_status as client_subscription_status
-      FROM dependents d
-      JOIN users u ON d.client_id = u.id
+        d.*, 
+        u.name as client_name, 
+        u.subscription_status as client_subscription_status,
+        d.subscription_status as dependent_subscription_status
+      FROM dependents d 
+      JOIN users u ON d.client_id = u.id 
       WHERE d.cpf = $1
-    `,
-      [cleanCpf]
-    );
+    `, [cleanCpf]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Dependente não encontrado" });
+    }
+
+    const dependent = result.rows[0];
+
+    // Check if dependent is active (has own active subscription)
+    if (dependent.dependent_subscription_status !== 'active') {
+      return res.status(403).json({ 
+        message: 'Dependente não possui assinatura ativa',
+        dependent_status: dependent.dependent_subscription_status
+      });
     }
 
     res.json(result.rows[0]);
@@ -1132,11 +1205,18 @@ app.post("/api/dependents", authenticate, async (req, res) => {
         .json({ message: "CPF já cadastrado como usuário" });
     }
 
+    // Get default billing amount (could be configurable)
+    const defaultBillingAmount = 50.00;
+
     const result = await pool.query(
-      "INSERT INTO dependents (client_id, name, cpf, birth_date) VALUES ($1, $2, $3, $4) RETURNING *",
-      [client_id, name.trim(), cleanCpf, birth_date || null]
+      `INSERT INTO dependents 
+       (client_id, name, cpf, birth_date, subscription_status, billing_amount) 
+       VALUES ($1, $2, $3, $4, 'pending', $5) 
+       RETURNING *`,
+      [client_id, name.trim(), cleanCpf, birth_date || null, defaultBillingAmount]
     );
 
+    console.log('✅ Dependent created with pending status:', result.rows[0]);
     res.status(201).json({
       message: "Dependente criado com sucesso",
       dependent: result.rows[0],
@@ -1157,6 +1237,7 @@ app.put("/api/dependents/:id", authenticate, async (req, res) => {
     const { id } = req.params;
     const { name, birth_date } = req.body;
 
+    // Only allow updating basic info, not subscription status
     const result = await pool.query(
       "UPDATE dependents SET name = $1, birth_date = $2 WHERE id = $3 RETURNING *",
       [name?.trim(), birth_date || null, id]
@@ -1173,6 +1254,128 @@ app.put("/api/dependents/:id", authenticate, async (req, res) => {
   } catch (error) {
     console.error("Error updating dependent:", error);
     res.status(500).json({ message: "Erro interno do servidor" });
+  }
+});
+
+// Activate dependent (admin only)
+app.put('/api/dependents/:id/activate', authenticate, authorize(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { expiry_date } = req.body;
+    
+    if (!expiry_date) {
+      return res.status(400).json({ message: 'Data de expiração é obrigatória' });
+    }
+    
+    const result = await pool.query(
+      `UPDATE dependents 
+       SET subscription_status = 'active', 
+           subscription_expiry = $1,
+           activated_at = NOW()
+       WHERE id = $2 
+       RETURNING *`,
+      [expiry_date, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Dependente não encontrado' });
+    }
+    
+    console.log('✅ Dependent activated:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error activating dependent:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Create dependent payment
+app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get dependent data
+    const dependentResult = await pool.query(
+      'SELECT d.*, u.name as client_name FROM dependents d JOIN users u ON d.client_id = u.id WHERE d.id = $1',
+      [id]
+    );
+    
+    if (dependentResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Dependente não encontrado' });
+    }
+    
+    const dependent = dependentResult.rows[0];
+    
+    // Check if user owns this dependent
+    if (dependent.client_id !== req.user.id && !req.user.roles.includes('admin')) {
+      return res.status(403).json({ message: 'Acesso negado' });
+    }
+    
+    // Create MercadoPago preference
+    const preference = {
+      items: [
+        {
+          title: `Ativação de Dependente - ${dependent.name}`,
+          quantity: 1,
+          unit_price: parseFloat(dependent.billing_amount),
+          currency_id: 'BRL',
+        },
+      ],
+      payer: {
+        name: dependent.client_name,
+        email: req.user.email || 'cliente@quiroferreira.com.br',
+      },
+      back_urls: {
+        success: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/client?payment=success&type=dependent&id=${id}`,
+        failure: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/client?payment=failure&type=dependent&id=${id}`,
+        pending: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/client?payment=pending&type=dependent&id=${id}`,
+      },
+      auto_return: 'approved',
+      external_reference: `dependent_${id}_${Date.now()}`,
+      notification_url: `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/webhooks/mercadopago`,
+    };
+    
+    const response = await mercadopago.preferences.create(preference);
+    
+    // Update dependent with payment reference
+    await pool.query(
+      'UPDATE dependents SET payment_reference = $1 WHERE id = $2',
+      [response.body.external_reference, id]
+    );
+    
+    console.log('✅ Dependent payment preference created:', response.body.id);
+    
+    res.json({
+      preference_id: response.body.id,
+      init_point: response.body.init_point,
+      sandbox_init_point: response.body.sandbox_init_point,
+    });
+  } catch (error) {
+    console.error('Error creating dependent payment:', error);
+    res.status(500).json({ message: 'Erro ao criar pagamento para dependente' });
+  }
+});
+
+// Get all dependents for admin (with client info)
+app.get('/api/admin/dependents', authenticate, authorize(['admin']), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        d.id, d.name, d.cpf, d.birth_date, d.created_at,
+        d.subscription_status, d.subscription_expiry, d.billing_amount,
+        d.payment_reference, d.activated_at,
+        u.name as client_name, u.cpf as client_cpf,
+        u.subscription_status as client_subscription_status
+      FROM dependents d
+      JOIN users u ON d.client_id = u.id
+      WHERE 'client' = ANY(u.roles)
+      ORDER BY d.created_at DESC
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching dependents for admin:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
 
@@ -2339,22 +2542,20 @@ app.post(
   authorize(["client"]),
   async (req, res) => {
     try {
-      const { user_id, dependent_ids = [] } = req.body;
+      const { user_id } = req.body;
 
       if (!user_id) {
         return res.status(400).json({ message: "User ID é obrigatório" });
       }
 
-      // Calculate amount: R$250 for titular + R$50 per dependent
-      const baseAmount = 250;
-      const dependentAmount = dependent_ids.length * 50;
-      const totalAmount = baseAmount + dependentAmount;
+      // Only charge for the client (R$250)
+      const totalAmount = 250;
 
       const preferenceData = {
         items: [
           {
             id: `subscription_${user_id}`,
-            title: `Assinatura Convênio Quiro Ferreira - Titular + ${dependent_ids.length} Dependente(s)`,
+            title: `Assinatura Convênio Quiro Ferreira (Titular) - ${req.user.name}`,
             quantity: 1,
             unit_price: totalAmount,
             currency_id: "BRL",
@@ -2406,7 +2607,7 @@ app.post(
           result.id,
           totalAmount,
           preferenceData.external_reference,
-          `Assinatura Convênio - Titular + ${dependent_ids.length} Dependente(s)`,
+          `Assinatura Convênio (Titular) - ${req.user.name}`,
         ]
       );
 
@@ -2861,6 +3062,71 @@ app.get("/api/payment/scheduling/pending", async (req, res) => {
 });
 
 // ==================== PAYMENT WEBHOOK ROUTES ====================
+
+// MercadoPago webhook handler
+app.post('/api/webhooks/mercadopago', async (req, res) => {
+  try {
+    console.log('🔔 MercadoPago webhook received:', req.body);
+    
+    const { type, data } = req.body;
+    
+    if (type === 'payment') {
+      const paymentId = data.id;
+      
+      // Get payment details from MercadoPago
+      const paymentInfo = await payment.get({ id: paymentId });
+      console.log('💳 Payment details:', paymentInfo);
+      
+      if (paymentInfo.status === 'approved') {
+        const externalReference = paymentInfo.external_reference;
+        console.log('✅ Payment approved for:', externalReference);
+        
+        // Check if it's a dependent payment
+        if (externalReference && externalReference.startsWith('dependent_')) {
+          const dependentId = externalReference.split('_')[1];
+          
+          // Activate dependent
+          const expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + 1); // 1 year from now
+          
+          await pool.query(
+            `UPDATE dependents 
+             SET subscription_status = 'active', 
+                 subscription_expiry = $1,
+                 activated_at = NOW()
+             WHERE id = $2`,
+            [expiryDate, dependentId]
+          );
+          
+          console.log('✅ Dependent activated via webhook:', dependentId);
+        }
+        // Check if it's a subscription payment (client)
+        else if (externalReference && externalReference.startsWith('subscription_')) {
+          const userId = externalReference.split('_')[1];
+          
+          // Activate user subscription
+          const expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + 1); // 1 year from now
+          
+          await pool.query(
+            `UPDATE users 
+             SET subscription_status = 'active', 
+                 subscription_expiry = $1
+             WHERE id = $2`,
+            [expiryDate, userId]
+          );
+          
+          console.log('✅ User subscription activated via webhook:', userId);
+        }
+      }
+    }
+    
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('❌ Webhook error:', error);
+    res.status(500).send('Error');
+  }
+});
 
 // 🔥 CLIENT PAYMENT WEBHOOK
 app.post("/api/payment/client/webhook", async (req, res) => {

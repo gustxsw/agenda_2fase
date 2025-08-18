@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserPlus, Edit, Trash2, User, Check, X, Search, Filter, UserCheck, Calendar } from 'lucide-react';
+import { UserPlus, Edit, Trash2, User, Check, X, Search, Filter, UserCheck, Calendar, Users } from 'lucide-react';
 
 type UserData = {
   id: number;
@@ -31,6 +31,7 @@ type Category = {
 
 const ManageUsersPage: React.FC = () => {
   const [users, setUsers] = useState<UserData[]>([]);
+  const [dependents, setDependents] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -78,6 +79,15 @@ const ManageUsersPage: React.FC = () => {
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [userToActivate, setUserToActivate] = useState<UserData | null>(null);
   const [expiryDate, setExpiryDate] = useState('');
+  
+  // 🔥 NEW: View mode state
+  const [viewMode, setViewMode] = useState<'clients' | 'dependents'>('clients');
+  
+  // 🔥 NEW: Dependent activation state
+  const [isDependentActivating, setIsDependentActivating] = useState<number | null>(null);
+  const [showDependentActivationModal, setShowDependentActivationModal] = useState(false);
+  const [dependentToActivate, setDependentToActivate] = useState<any>(null);
+  const [dependentExpiryDate, setDependentExpiryDate] = useState('');
 
   // Get API URL with fallback
   const getApiUrl = () => {
@@ -187,6 +197,24 @@ const ManageUsersPage: React.FC = () => {
       const usersData = await usersResponse.json();
       console.log("Users data loaded:", usersData.length);
       setUsers(usersData);
+      
+      // Fetch dependents for admin view
+      const dependentsResponse = await fetch(`${apiUrl}/api/admin/dependents`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (dependentsResponse.ok) {
+        const dependentsData = await dependentsResponse.json();
+        console.log("Dependents data loaded:", dependentsData.length);
+        setDependents(dependentsData);
+      } else {
+        console.error("Dependents response error:", dependentsResponse.status);
+        setDependents([]);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Não foi possível carregar os dados');
@@ -266,6 +294,112 @@ const ManageUsersPage: React.FC = () => {
     setShowActivationModal(false);
     setUserToActivate(null);
     setExpiryDate('');
+  };
+  
+  // 🔥 NEW: Function to open dependent activation modal
+  const openDependentActivationModal = (dependent: any) => {
+    setDependentToActivate(dependent);
+    
+    // Set default expiry date to 1 year from now
+    const defaultExpiry = new Date();
+    defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
+    setDependentExpiryDate(defaultExpiry.toISOString().split('T')[0]);
+    
+    setShowDependentActivationModal(true);
+  };
+
+  // 🔥 NEW: Function to activate dependent
+  const activateDependent = async () => {
+    if (!dependentToActivate || !dependentExpiryDate) return;
+    
+    try {
+      setIsDependentActivating(dependentToActivate.id);
+      setError('');
+      setSuccess('');
+      
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+      
+      const response = await fetch(`${apiUrl}/api/dependents/${dependentToActivate.id}/activate`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          expiry_date: dependentExpiryDate
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Falha ao ativar dependente');
+      }
+      
+      // Close modal and refresh data
+      setShowDependentActivationModal(false);
+      setDependentToActivate(null);
+      setDependentExpiryDate('');
+      
+      // Refresh data
+      await fetchData();
+      
+      setSuccess('Dependente ativado com sucesso!');
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess('');
+      }, 3000);
+    } catch (error) {
+      console.error('Error activating dependent:', error);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('Ocorreu um erro ao ativar o dependente');
+      }
+    } finally {
+      setIsDependentActivating(null);
+    }
+  };
+
+  // 🔥 NEW: Function to cancel dependent activation
+  const cancelDependentActivation = () => {
+    setShowDependentActivationModal(false);
+    setDependentToActivate(null);
+    setDependentExpiryDate('');
+  };
+  
+  // 🔥 NEW: Function to get dependent status display
+  const getDependentStatusDisplay = (status?: string) => {
+    switch (status) {
+      case 'active':
+        return {
+          text: 'Ativo',
+          className: 'bg-green-100 text-green-800'
+        };
+      case 'pending':
+        return {
+          text: 'Aguardando Pagamento',
+          className: 'bg-yellow-100 text-yellow-800'
+        };
+      case 'expired':
+        return {
+          text: 'Vencido',
+          className: 'bg-red-100 text-red-800'
+        };
+      default:
+        return {
+          text: 'Inativo',
+          className: 'bg-gray-100 text-gray-800'
+        };
+    }
+  };
+  
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
   };
   
   const openCreateModal = () => {
@@ -566,13 +700,43 @@ const ManageUsersPage: React.FC = () => {
           <p className="text-gray-600">Adicione, edite ou remova usuários do sistema</p>
         </div>
         
-        <button
-          onClick={openCreateModal}
-          className="btn btn-primary flex items-center"
-        >
-          <UserPlus className="h-5 w-5 mr-2" />
-          Novo Usuário
-        </button>
+        <div className="flex items-center space-x-3">
+          {/* View mode toggle */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('clients')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                viewMode === 'clients'
+                  ? 'bg-white text-red-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <User className="h-4 w-4 inline mr-2" />
+              Clientes
+            </button>
+            <button
+              onClick={() => setViewMode('dependents')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                viewMode === 'dependents'
+                  ? 'bg-white text-red-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Users className="h-4 w-4 inline mr-2" />
+              Dependentes
+            </button>
+          </div>
+          
+          {viewMode === 'clients' && (
+            <button
+              onClick={openCreateModal}
+              className="btn btn-primary flex items-center"
+            >
+              <UserPlus className="h-5 w-5 mr-2" />
+              Novo Usuário
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters section */}
@@ -698,123 +862,209 @@ const ManageUsersPage: React.FC = () => {
       )}
       
       <div className="card">
-        {isLoading ? (
-          <div className="text-center py-8">
-            <p className="text-gray-600">Carregando usuários...</p>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <p className="text-gray-600">Nenhum usuário encontrado.</p>
-            <button
-              onClick={openCreateModal}
-              className="btn btn-primary mt-4 inline-flex items-center"
-            >
-              <UserPlus className="h-5 w-5 mr-2" />
-              Adicionar Usuário
-            </button>
-          </div>
-        ) : (
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>CPF</th>
-                  <th>Email</th>
-                  <th>Telefone</th>
-                  <th>Roles</th>
-                  <th>Status Assinatura</th>
-                  <th>Categoria</th>
-                  <th>Porcentagem</th>
-                  <th>Data de Cadastro</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td className="flex items-center">
-                      <User className="h-5 w-5 mr-2 text-gray-500" />
-                      {user.name}
-                    </td>
-                    <td>{formattedCpf(user.cpf)}</td>
-                    <td>{user.email || '-'}</td>
-                    <td>{user.phone || '-'}</td>
-                    <td>
-                      <div className="flex flex-wrap gap-1">
-                        {user.roles?.map((role) => (
-                          <span
-                            key={role}
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              role === 'admin' 
-                                ? 'bg-purple-100 text-purple-800'
-                                : role === 'professional'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-green-100 text-green-800'
-                            }`}
-                          >
-                            {getRoleName(role)}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td>
-                      {user.roles?.includes('client') ? (
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          getSubscriptionStatusDisplay(user.subscription_status).className
-                        }`}>
-                          {getSubscriptionStatusDisplay(user.subscription_status).text}
-                        </span>
-                      ) : (
-                        <span className="text-gray-500">-</span>
-                      )}
-                    </td>
-                    <td>
-                      {user.roles?.includes('professional') && user.category_id
-                        ? categories.find(c => c.id === user.category_id)?.name || '-'
-                        : '-'}
-                    </td>
-                    <td>
-                      {user.roles?.includes('professional') ? `${user.percentage}%` : '-'}
-                    </td>
-                    <td>{formatDate(user.created_at)}</td>
-                    <td>
-                      <div className="flex space-x-2">
-                        {/* 🔥 NEW: Activate button for clients with pending status */}
-                        {user.roles?.includes('client') && user.subscription_status === 'pending' && (
-                          <button
-                            onClick={() => openActivationModal(user)}
-                            className={`p-1 text-green-600 hover:text-green-800 ${
-                              isActivating === user.id ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                            title="Ativar Cliente"
-                            disabled={isActivating === user.id}
-                          >
-                            <UserCheck className="h-5 w-5" />
-                          </button>
-                        )}
-                        
-                        <button
-                          onClick={() => openEditModal(user)}
-                          className="p-1 text-blue-600 hover:text-blue-800"
-                          title="Editar"
-                        >
-                          <Edit className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => confirmDelete(user)}
-                          className="p-1 text-red-600 hover:text-red-800"
-                          title="Excluir"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
-                      </div>
-                    </td>
+        {viewMode === 'clients' ? (
+          // Clients view
+          isLoading ? (
+            <div className="text-center py-8">
+              <p className="text-gray-600">Carregando usuários...</p>
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <p className="text-gray-600">Nenhum usuário encontrado.</p>
+              <button
+                onClick={openCreateModal}
+                className="btn btn-primary mt-4 inline-flex items-center"
+              >
+                <UserPlus className="h-5 w-5 mr-2" />
+                Adicionar Usuário
+              </button>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>CPF</th>
+                    <th>Email</th>
+                    <th>Telefone</th>
+                    <th>Roles</th>
+                    <th>Status Assinatura</th>
+                    <th>Categoria</th>
+                    <th>Porcentagem</th>
+                    <th>Data de Cadastro</th>
+                    <th>Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr key={user.id}>
+                      <td className="flex items-center">
+                        <User className="h-5 w-5 mr-2 text-gray-500" />
+                        {user.name}
+                      </td>
+                      <td>{formattedCpf(user.cpf)}</td>
+                      <td>{user.email || '-'}</td>
+                      <td>{user.phone || '-'}</td>
+                      <td>
+                        <div className="flex flex-wrap gap-1">
+                          {user.roles?.map((role) => (
+                            <span
+                              key={role}
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                role === 'admin' 
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : role === 'professional'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              {getRoleName(role)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        {user.roles?.includes('client') ? (
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            getSubscriptionStatusDisplay(user.subscription_status).className
+                          }`}>
+                            {getSubscriptionStatusDisplay(user.subscription_status).text}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">-</span>
+                        )}
+                      </td>
+                      <td>
+                        {user.roles?.includes('professional') && user.category_id
+                          ? categories.find(c => c.id === user.category_id)?.name || '-'
+                          : '-'}
+                      </td>
+                      <td>
+                        {user.roles?.includes('professional') ? `${user.percentage}%` : '-'}
+                      </td>
+                      <td>{formatDate(user.created_at)}</td>
+                      <td>
+                        <div className="flex space-x-2">
+                          {/* 🔥 NEW: Activate button for clients with pending status */}
+                          {user.roles?.includes('client') && user.subscription_status === 'pending' && (
+                            <button
+                              onClick={() => openActivationModal(user)}
+                              className={`p-1 text-green-600 hover:text-green-800 ${
+                                isActivating === user.id ? 'opacity-50 cursor-not-allowed' : ''
+                              }`}
+                              title="Ativar Cliente"
+                              disabled={isActivating === user.id}
+                            >
+                              <UserCheck className="h-5 w-5" />
+                            </button>
+                          )}
+                          
+                          <button
+                            onClick={() => openEditModal(user)}
+                            className="p-1 text-blue-600 hover:text-blue-800"
+                            title="Editar"
+                          >
+                            <Edit className="h-5 w-5" />
+                          </button>
+                          <button
+                            onClick={() => confirmDelete(user)}
+                            className="p-1 text-red-600 hover:text-red-800"
+                            title="Excluir"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : (
+          // Dependents view
+          isLoading ? (
+            <div className="text-center py-8">
+              <p className="text-gray-600">Carregando dependentes...</p>
+            </div>
+          ) : dependents.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Nenhum dependente cadastrado
+              </h3>
+              <p className="text-gray-600">
+                Os dependentes aparecerão aqui quando os clientes os cadastrarem.
+              </p>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Dependente</th>
+                    <th>CPF</th>
+                    <th>Cliente Titular</th>
+                    <th>Status</th>
+                    <th>Valor</th>
+                    <th>Data de Cadastro</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dependents.map((dependent) => {
+                    const statusInfo = getDependentStatusDisplay(dependent.subscription_status);
+                    return (
+                      <tr key={dependent.id}>
+                        <td className="flex items-center">
+                          <Users className="h-5 w-5 mr-2 text-blue-500" />
+                          {dependent.name}
+                        </td>
+                        <td>{formattedCpf(dependent.cpf)}</td>
+                        <td>
+                          <div>
+                            <div className="font-medium">{dependent.client_name}</div>
+                            <div className="text-xs text-gray-500">
+                              {formattedCpf(dependent.client_cpf)}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}>
+                            {statusInfo.text}
+                          </span>
+                          {dependent.subscription_expiry && dependent.subscription_status === 'active' && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Expira: {formatDate(dependent.subscription_expiry)}
+                            </div>
+                          )}
+                        </td>
+                        <td>{formatCurrency(dependent.billing_amount || 50)}</td>
+                        <td>{formatDate(dependent.created_at)}</td>
+                        <td>
+                          <div className="flex space-x-2">
+                            {dependent.subscription_status === 'pending' && (
+                              <button
+                                onClick={() => openDependentActivationModal(dependent)}
+                                className={`p-1 text-green-600 hover:text-green-800 ${
+                                  isDependentActivating === dependent.id ? 'opacity-50 cursor-not-allowed' : ''
+                                }`}
+                                title="Ativar Dependente"
+                                disabled={isDependentActivating === dependent.id}
+                              >
+                                <UserCheck className="h-5 w-5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </div>
 
@@ -888,6 +1138,87 @@ const ManageUsersPage: React.FC = () => {
                   <>
                     <UserCheck className="h-5 w-5 mr-2" />
                     Ativar Cliente
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 🔥 NEW: Dependent activation modal */}
+      {showDependentActivationModal && dependentToActivate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold flex items-center">
+                <Calendar className="h-6 w-6 text-green-600 mr-2" />
+                Ativar Dependente
+              </h2>
+              <button
+                onClick={cancelDependentActivation}
+                className="text-gray-500 hover:text-gray-700"
+                disabled={isDependentActivating === dependentToActivate.id}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-gray-700 mb-2">
+                <span className="font-medium">Dependente:</span> {dependentToActivate.name}
+              </p>
+              <p className="text-gray-700 mb-2">
+                <span className="font-medium">CPF:</span> {formattedCpf(dependentToActivate.cpf)}
+              </p>
+              <p className="text-gray-700 mb-4">
+                <span className="font-medium">Cliente Titular:</span> {dependentToActivate.client_name}
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label htmlFor="dependentExpiryDate" className="block text-sm font-medium text-gray-700 mb-1">
+                Data de Expiração da Assinatura *
+              </label>
+              <input
+                id="dependentExpiryDate"
+                type="date"
+                value={dependentExpiryDate}
+                onChange={(e) => setDependentExpiryDate(e.target.value)}
+                className="input"
+                min={new Date().toISOString().split('T')[0]}
+                disabled={isDependentActivating === dependentToActivate.id}
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                A assinatura do dependente ficará ativa até a data selecionada
+              </p>
+            </div>
+            
+            <div className="flex justify-end">
+              <button
+                onClick={cancelDependentActivation}
+                className="btn btn-secondary mr-2"
+                disabled={isDependentActivating === dependentToActivate.id}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={activateDependent}
+                className={`btn btn-primary flex items-center ${
+                  isDependentActivating === dependentToActivate.id ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
+                disabled={isDependentActivating === dependentToActivate.id || !dependentExpiryDate}
+              >
+                {isDependentActivating === dependentToActivate.id ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Ativando...
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="h-5 w-5 mr-2" />
+                    Ativar Dependente
                   </>
                 )}
               </button>

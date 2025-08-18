@@ -189,6 +189,22 @@ const AdminHomePage: React.FC = () => {
           professionals: Number(professionalCount) || 0,
           total: Number(usersData.length) || 0,
         });
+        
+        // Fetch dependents data for additional stats
+        try {
+          const dependentsResponse = await fetch(`${apiUrl}/api/admin/dependents`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (dependentsResponse.ok) {
+            const dependentsData = await dependentsResponse.json();
+            console.log("Dependents data loaded for stats:", dependentsData.length);
+            
+            // You could add dependent stats here if needed
+          }
+        } catch (error) {
+          console.warn("Could not load dependents data:", error);
+        }
       } catch (error) {
         console.error("Error fetching admin data:", error);
         setError("Não foi possível carregar os dados do painel");

@@ -20,7 +20,6 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
   subscriptionStatus,
   subscriptionExpiry 
 }) => {
-  const [dependentCount, setDependentCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -68,41 +67,6 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
     };
   }, []);
   
-  useEffect(() => {
-    const fetchDependents = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const apiUrl = getApiUrl();
-        
-        console.log('🔄 Fetching dependents for payment calculation from:', `${apiUrl}/api/dependents/${userId}`);
-        
-        const response = await fetch(`${apiUrl}/api/dependents/${userId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        console.log('📡 Payment dependents response status:', response.status);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Payment dependents loaded:', data.length);
-          setDependentCount(data.length);
-        } else {
-          console.warn('⚠️ Payment dependents not available:', response.status);
-          setDependentCount(0);
-        }
-      } catch (error) {
-        console.error('❌ Error fetching dependents for payment:', error);
-        setDependentCount(0);
-      }
-    };
-    
-    fetchDependents();
-  }, [userId]);
-  
   const handlePayment = async () => {
     try {
       setIsLoading(true);
@@ -120,8 +84,7 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_id: userId,
-          dependent_ids: [] // Will be populated with actual dependent IDs
+          user_id: userId
         }),
       });
       
@@ -143,7 +106,7 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
     }
   };
   
-  const totalAmount = 250 + (dependentCount * 50); // R$250 titular + R$50 per dependent
+  const totalAmount = 250; // Only R$250 for the client (titular)
   
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -175,14 +138,17 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
         {(subscriptionStatus === 'pending' || subscriptionStatus === 'expired') && (
           <>
             <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-medium mb-2">Detalhes da Assinatura</h3>
+              <h3 className="font-medium mb-2">Detalhes da Assinatura (Titular)</h3>
               <div className="space-y-2">
-                <p>Titular: R$ 250,00</p>
-                {dependentCount > 0 && (
-                  <p>Dependentes ({dependentCount}): R$ {dependentCount * 50},00</p>
-                )}
+                <p>Assinatura do titular: R$ 250,00</p>
                 <div className="border-t border-gray-200 pt-2 mt-2">
                   <p className="font-medium">Total: R$ {totalAmount},00</p>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-lg mt-3">
+                  <p className="text-sm text-blue-800">
+                    <strong>Nota:</strong> Dependentes têm cobrança separada de R$ 50,00 cada.
+                    Eles podem ser ativados individualmente após o cadastro.
+                  </p>
                 </div>
               </div>
             </div>
