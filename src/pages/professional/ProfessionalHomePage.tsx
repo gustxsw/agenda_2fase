@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarClock, PlusCircle, DollarSign, TrendingUp, Users, AlertCircle, RefreshCw, Camera, Upload } from 'lucide-react';
+import { CalendarClock, PlusCircle, DollarSign, TrendingUp, Users, AlertCircle, RefreshCw, Camera, Upload, CheckCircle, Clock } from 'lucide-react';
 import PaymentSection from './PaymentSection';
 
 type RevenueReport = {
@@ -291,6 +291,48 @@ const ProfessionalHomePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Payment feedback handling for professionals */}
+      {(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentStatus = urlParams.get('payment');
+        
+        if (paymentStatus === 'success') {
+          return (
+            <div className="bg-green-50 border-l-4 border-green-600 p-4 mb-6">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                <p className="text-green-700">
+                  Pagamento ao convênio realizado com sucesso! O valor foi registrado em seu histórico.
+                </p>
+              </div>
+            </div>
+          );
+        } else if (paymentStatus === 'failure') {
+          return (
+            <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-6">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                <p className="text-red-700">
+                  Falha no pagamento ao convênio. Tente novamente.
+                </p>
+              </div>
+            </div>
+          );
+        } else if (paymentStatus === 'pending') {
+          return (
+            <div className="bg-yellow-50 border-l-4 border-yellow-600 p-4 mb-6">
+              <div className="flex items-center">
+                <Clock className="h-5 w-5 text-yellow-600 mr-2" />
+                <p className="text-yellow-700">
+                  Pagamento ao convênio está sendo processado.
+                </p>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {error && (
         <div className="bg-red-50 border-l-4 border-red-600 p-4 mb-6">

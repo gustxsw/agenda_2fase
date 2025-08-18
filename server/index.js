@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import path from "path";
 import jwt from "jsonwebtoken";
-import cookieParser from "cookie-parser";
+import { MercadoPagoConfig, Preference, Payment } from "mercadopago";
 import { pool } from "./db.js";
 import { authenticate, authorize } from "./middleware/auth.js";
 import { ensureSignatureColumn } from "./database/signatureColumn.js";
@@ -18,11 +18,14 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Initialize MercadoPago
+// Initialize MercadoPago with SDK v2.0.8
 const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
   options: { timeout: 5000 },
 });
+
+const preference = new Preference(client);
+const payment = new Payment(client);
 
 const preference = new Preference(client);
 const payment = new Payment(client);
@@ -111,6 +114,13 @@ const initializeDependentBilling = async () => {
   }
 };
 
+// Get base URL for back_urls
+const getBaseUrl = (req) => {
+  const protocol = req.get('x-forwarded-proto') || req.protocol;
+  const host = req.get('host');
+  return `${protocol}://${host}`;
+};
+
 // Database initialization
 const initializeDatabase = async () => {
   try {
@@ -161,6 +171,42 @@ const initializeDatabase = async () => {
         category_id INTEGER REFERENCES service_categories(id),
         is_base_service BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    // Create dependent_payments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dependent_payments (
+        id SERIAL PRIMARY KEY,
+        dependent_id INTEGER REFERENCES dependents(id) ON DELETE CASCADE,
+        payment_id VARCHAR(255) UNIQUE,
+        preference_id VARCHAR(255),
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        payment_method VARCHAR(100),
+        payment_date TIMESTAMP,
+        external_reference VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create agenda_payments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS agenda_payments (
+        id SERIAL PRIMARY KEY,
+        appointment_id INTEGER,
+        client_id INTEGER REFERENCES users(id),
+        dependent_id INTEGER REFERENCES dependents(id),
+        payment_id VARCHAR(255) UNIQUE,
+        preference_id VARCHAR(255),
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(50) DEFAULT 'pending',
+        payment_method VARCHAR(100),
+        payment_date TIMESTAMP,
+        external_reference VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
       )
     `);
 
@@ -260,6 +306,15 @@ const initializeDatabase = async () => {
         document_url TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+
+    // Update existing dependents to have individual status
+    await pool.query(`
+      UPDATE dependents 
+      SET subscription_status = 'pending', 
+          billing_amount = 50.00,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE subscription_status IS NULL OR subscription_status = ''
     `);
 
     await pool.query(`
@@ -1128,7 +1183,11 @@ app.get("/api/dependents/lookup", authenticate, async (req, res) => {
 
     if (!cpf) {
       return res.status(400).json({ message: "CPF é obrigatório" });
-    }
+             CASE 
+               WHEN d.subscription_status = 'active' AND d.subscription_expiry > CURRENT_TIMESTAMP THEN 'active'
+               WHEN d.subscription_status = 'active' AND d.subscription_expiry <= CURRENT_TIMESTAMP THEN 'expired'
+               ELSE d.subscription_status
+             END as dependent_subscription_status
 
     const cleanCpf = cpf.replace(/\D/g, "");
 
@@ -1268,7 +1327,15 @@ app.put('/api/dependents/:id/activate', authenticate, authorize(['admin']), asyn
     }
     
     const result = await pool.query(
-      `UPDATE dependents 
+      `SELECT d.*, 
+              CASE 
+                WHEN d.subscription_status = 'active' AND d.subscription_expiry > CURRENT_TIMESTAMP THEN 'active'
+                WHEN d.subscription_status = 'active' AND d.subscription_expiry <= CURRENT_TIMESTAMP THEN 'expired'
+                ELSE d.subscription_status
+              END as current_status
+       FROM dependents d 
+       WHERE d.client_id = $1 
+       ORDER BY d.created_at DESC`,
        SET subscription_status = 'active', 
            subscription_expiry = $1,
            activated_at = NOW()
@@ -1365,7 +1432,12 @@ app.get('/api/admin/dependents', authenticate, authorize(['admin']), async (req,
         d.subscription_status, d.subscription_expiry, d.billing_amount,
         d.payment_reference, d.activated_at,
         u.name as client_name, u.cpf as client_cpf,
-        u.subscription_status as client_subscription_status
+             u.subscription_expiry as client_expiry,
+             CASE 
+               WHEN d.subscription_status = 'active' AND d.subscription_expiry > CURRENT_TIMESTAMP THEN 'active'
+               WHEN d.subscription_status = 'active' AND d.subscription_expiry <= CURRENT_TIMESTAMP THEN 'expired'
+               ELSE d.subscription_status
+             END as current_status
       FROM dependents d
       JOIN users u ON d.client_id = u.id
       WHERE 'client' = ANY(u.roles)
@@ -1378,6 +1450,60 @@ app.get('/api/admin/dependents', authenticate, authorize(['admin']), async (req,
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
+// Activate dependent manually (admin only)
+app.post('/api/admin/dependents/:id/activate', authenticate, authorize(['admin']), async (req, res) => {
+  try {
+    const dependentId = parseInt(req.params.id);
+    
+    const expiryDate = new Date();
+    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+    
+    await pool.query(
+      'UPDATE dependents SET subscription_status = $1, subscription_expiry = $2, activated_at = $3 WHERE id = $4',
+      ['active', expiryDate, new Date(), dependentId]
+    );
+    
+    res.json({ message: 'Dependente ativado com sucesso' });
+  } catch (error) {
+    console.error('Error activating dependent:', error);
+    res.status(500).json({ message: 'Erro ao ativar dependente' });
+  }
+});
+
+// Get payment status for dependent
+app.get('/api/dependents/:id/payment-status', authenticate, async (req, res) => {
+  try {
+    const dependentId = parseInt(req.params.id);
+    
+    const result = await pool.query(
+      'SELECT * FROM dependent_payments WHERE dependent_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [dependentId]
+    );
+    
+    res.json(result.rows[0] || null);
+  } catch (error) {
+    console.error('Error fetching dependent payment status:', error);
+    res.status(500).json({ message: 'Erro ao buscar status de pagamento' });
+  }
+});
+
+// Get payment status for agenda
+app.get('/api/agenda/:id/payment-status', authenticate, async (req, res) => {
+  try {
+    const appointmentId = parseInt(req.params.id);
+    
+    const result = await pool.query(
+      'SELECT * FROM agenda_payments WHERE appointment_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [appointmentId]
+    );
+    
+    res.json(result.rows[0] || null);
+  } catch (error) {
+    console.error('Error fetching agenda payment status:', error);
+    res.status(500).json({ message: 'Erro ao buscar status de pagamento' });
+  }
+});
+
 
 // Delete dependent
 app.delete("/api/dependents/:id", authenticate, async (req, res) => {
@@ -2466,11 +2592,10 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
     const titularPrice = 250;
     const dependentPrice = 50;
     const totalPeople = 1 + (dependent_ids ? dependent_ids.length : 0);
+    const baseUrl = getBaseUrl(req);
     const amount = titularPrice + ((dependent_ids ? dependent_ids.length : 0) * dependentPrice);
     
     const externalReference = `subscription_${user_id}_${Date.now()}`;
-    const baseUrl = getBaseUrl(req);
-    
     const preferenceData = {
       items: [
         {
@@ -2485,6 +2610,12 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
       payer: {
         name: req.user.name,
         email: 'cliente@cartaoquiroferreira.com.br'
+      back_urls: {
+        success: `${baseUrl}/client?payment=success`,
+        failure: `${baseUrl}/client?payment=failure`,
+        pending: `${baseUrl}/client?payment=pending`
+      },
+      auto_return: 'approved'
       },
       payment_methods: {
         excluded_payment_types: [],
@@ -2524,6 +2655,137 @@ app.post('/api/create-subscription', authenticate, authorize(['client']), async 
     );
 
     res.json({
+// Create dependent payment
+app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) => {
+  try {
+    const dependentId = parseInt(req.params.id);
+    const baseUrl = getBaseUrl(req);
+    
+    console.log('🔄 Creating dependent payment for ID:', dependentId);
+    
+    // Get dependent info
+    const dependentResult = await pool.query(
+      'SELECT d.*, u.name as client_name FROM dependents d JOIN users u ON d.client_id = u.id WHERE d.id = $1',
+      [dependentId]
+    );
+    
+    if (dependentResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Dependente não encontrado' });
+    }
+    
+    const dependent = dependentResult.rows[0];
+    
+    const preferenceData = {
+      items: [
+        {
+          title: `Ativação Dependente - ${dependent.name}`,
+          quantity: 1,
+          unit_price: dependent.billing_amount || 50,
+          currency_id: 'BRL',
+        },
+      ],
+      payer: {
+        email: 'cliente@quiroferreira.com.br',
+      },
+      external_reference: `dependent_${dependentId}_${Date.now()}`,
+      notification_url: `${process.env.MP_WEBHOOK_URL || 'https://www.cartaoquiroferreira.com.br'}/api/webhook/mercadopago`,
+      back_urls: {
+        success: `${baseUrl}/client?payment=success&type=dependent`,
+        failure: `${baseUrl}/client?payment=failure&type=dependent`,
+        pending: `${baseUrl}/client?payment=pending&type=dependent`
+      },
+      auto_return: 'approved'
+    };
+    
+    const response = await preference.create({ body: preferenceData });
+    
+    // Save payment record
+    await pool.query(
+      'INSERT INTO dependent_payments (dependent_id, preference_id, amount, external_reference) VALUES ($1, $2, $3, $4)',
+      [dependentId, response.id, dependent.billing_amount || 50, preferenceData.external_reference]
+    );
+    
+    console.log('✅ Dependent payment preference created:', response.id);
+    
+    res.json({
+      preference_id: response.id,
+      init_point: response.init_point,
+      sandbox_init_point: response.sandbox_init_point,
+    });
+  } catch (error) {
+    console.error('❌ Error creating dependent payment:', error);
+    res.status(500).json({ message: 'Erro ao criar pagamento do dependente' });
+  }
+});
+
+// Create agenda payment
+app.post('/api/agenda/:id/create-payment', authenticate, async (req, res) => {
+  try {
+    const appointmentId = parseInt(req.params.id);
+    const baseUrl = getBaseUrl(req);
+    
+    console.log('🔄 Creating agenda payment for appointment ID:', appointmentId);
+    
+    // Get appointment info
+    const appointmentResult = await pool.query(`
+      SELECT c.*, s.name as service_name, u.name as client_name, d.name as dependent_name
+      FROM consultations c
+      LEFT JOIN services s ON c.service_id = s.id
+      LEFT JOIN users u ON c.client_id = u.id
+      LEFT JOIN dependents d ON c.dependent_id = d.id
+      WHERE c.id = $1
+    `, [appointmentId]);
+    
+    if (appointmentResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Agendamento não encontrado' });
+    }
+    
+    const appointment = appointmentResult.rows[0];
+    const patientName = appointment.dependent_name || appointment.client_name || 'Paciente';
+    
+    const preferenceData = {
+      items: [
+        {
+          title: `Consulta - ${appointment.service_name} - ${patientName}`,
+          quantity: 1,
+          unit_price: parseFloat(appointment.value),
+          currency_id: 'BRL',
+        },
+      ],
+      payer: {
+        email: 'cliente@quiroferreira.com.br',
+      },
+      external_reference: `agenda_${appointmentId}_${Date.now()}`,
+      notification_url: `${process.env.MP_WEBHOOK_URL || 'https://www.cartaoquiroferreira.com.br'}/api/webhook/mercadopago`,
+      back_urls: {
+        success: `${baseUrl}/client?payment=success&type=agenda`,
+        failure: `${baseUrl}/client?payment=failure&type=agenda`,
+        pending: `${baseUrl}/client?payment=pending&type=agenda`
+      },
+      auto_return: 'approved'
+    };
+    
+    const response = await preference.create({ body: preferenceData });
+    
+    // Save payment record
+    await pool.query(
+      'INSERT INTO agenda_payments (appointment_id, client_id, dependent_id, preference_id, amount, external_reference) VALUES ($1, $2, $3, $4, $5, $6)',
+      [appointmentId, appointment.client_id, appointment.dependent_id, response.id, appointment.value, preferenceData.external_reference]
+    );
+    
+    console.log('✅ Agenda payment preference created:', response.id);
+    
+    res.json({
+      preference_id: response.id,
+      init_point: response.init_point,
+      sandbox_init_point: response.sandbox_init_point,
+    });
+  } catch (error) {
+    console.error('❌ Error creating agenda payment:', error);
+    res.status(500).json({ message: 'Erro ao criar pagamento da consulta' });
+  }
+});
+
       preference_id: result.id,
       init_point: result.init_point,
       sandbox_init_point: result.sandbox_init_point
@@ -3073,9 +3335,6 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
     if (type === 'payment') {
       const paymentId = data.id;
       
-      // Get payment details from MercadoPago
-      const paymentInfo = await payment.get({ id: paymentId });
-      console.log('💳 Payment details:', paymentInfo);
       
       if (paymentInfo.status === 'approved') {
         const externalReference = paymentInfo.external_reference;
@@ -3084,7 +3343,7 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
         // Check if it's a dependent payment
         if (externalReference && externalReference.startsWith('dependent_')) {
           const dependentId = externalReference.split('_')[1];
-          
+        // Determine payment type from external_reference
           // Activate dependent
           const expiryDate = new Date();
           expiryDate.setFullYear(expiryDate.getFullYear() + 1); // 1 year from now
@@ -3102,6 +3361,7 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
         }
         // Check if it's a subscription payment (client)
         else if (externalReference && externalReference.startsWith('subscription_')) {
+          console.log('💰 Processing client payment');
           const userId = externalReference.split('_')[1];
           
           // Activate user subscription
@@ -3114,9 +3374,49 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
                  subscription_expiry = $1
              WHERE id = $2`,
             [expiryDate, userId]
+          
+        } else if (externalReference.startsWith('dependent_')) {
+          console.log('👥 Processing dependent payment');
+          const dependentId = externalReference.split('_')[1];
+          
+          // Update dependent payment record
+          await pool.query(
+            'UPDATE dependent_payments SET status = $1, payment_id = $2, payment_date = $3, payment_method = $4 WHERE external_reference = $5',
+            ['approved', paymentId, new Date(), paymentData.payment_method_id, externalReference]
+          );
+          
+          // Activate dependent subscription
+          const expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+          
+          await pool.query(
+            'UPDATE dependents SET subscription_status = $1, subscription_expiry = $2, activated_at = $3 WHERE id = $4',
+            ['active', expiryDate, new Date(), dependentId]
+          );
+          
+          console.log('✅ Dependent subscription activated for ID:', dependentId);
+          
+        } else if (externalReference.startsWith('agenda_')) {
+          console.log('📅 Processing agenda payment');
+          const appointmentId = externalReference.split('_')[1];
+          
+          // Update agenda payment record
+          await pool.query(
+            'UPDATE agenda_payments SET status = $1, payment_id = $2, payment_date = $3, payment_method = $4 WHERE external_reference = $5',
+            ['approved', paymentId, new Date(), paymentData.payment_method_id, externalReference]
+          );
+          
+          // Confirm appointment
+          await pool.query(
+            'UPDATE consultations SET status = $1 WHERE id = $2',
+            ['confirmed', appointmentId]
+          );
+          
+          console.log('✅ Appointment confirmed for ID:', appointmentId);
           );
           
           console.log('✅ User subscription activated via webhook:', userId);
+          console.log('👨‍⚕️ Processing professional payment');
         }
       }
     }
@@ -3313,11 +3613,10 @@ app.post("/api/payment/scheduling/webhook", async (req, res) => {
           "❌ Error processing scheduling payment webhook:",
           paymentError
         );
+    const baseUrl = getBaseUrl(req);
       }
     }
 
-    res.status(200).send("OK");
-  } catch (error) {
     console.error("❌ Scheduling webhook error:", error);
     res.status(500).send("Error");
   }
@@ -3332,6 +3631,12 @@ app.get("/api/payments/client/:userId", authenticate, async (req, res) => {
 
     // Check authorization
     if (req.user.currentRole !== "admin" && req.user.id !== parseInt(userId)) {
+      back_urls: {
+        success: `${baseUrl}/professional?payment=success`,
+        failure: `${baseUrl}/professional?payment=failure`,
+        pending: `${baseUrl}/professional?payment=pending`
+      },
+      auto_return: 'approved'
       return res.status(403).json({ message: "Não autorizado" });
     }
 

@@ -12,6 +12,7 @@ type Dependent = {
   billing_amount: number;
   payment_reference: string | null;
   activated_at: string | null;
+  current_status?: string;
 };
 
 type DependentsSectionProps = {
@@ -234,7 +235,8 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
   };
   
   const getStatusDisplay = (dependent: Dependent) => {
-    switch (dependent.subscription_status) {
+    const status = dependent.current_status || dependent.subscription_status;
+    switch (status) {
       case 'active':
         return {
           text: 'Ativo',
@@ -466,25 +468,25 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div className="text-center">
               <div className="text-lg font-bold text-green-600">
-                {dependents.filter(d => d.subscription_status === 'active').length}
+                {dependents.filter(d => (d.current_status || d.subscription_status) === 'active').length}
               </div>
               <div className="text-green-700">Ativos</div>
             </div>
             <div className="text-center">
               <div className="text-lg font-bold text-yellow-600">
-                {dependents.filter(d => d.subscription_status === 'pending').length}
+                {dependents.filter(d => (d.current_status || d.subscription_status) === 'pending').length}
               </div>
               <div className="text-yellow-700">Aguardando</div>
             </div>
             <div className="text-center">
               <div className="text-lg font-bold text-red-600">
-                {dependents.filter(d => d.subscription_status === 'expired').length}
+                {dependents.filter(d => (d.current_status || d.subscription_status) === 'expired').length}
               </div>
               <div className="text-red-700">Vencidos</div>
             </div>
             <div className="text-center">
               <div className="text-lg font-bold text-blue-600">
-                {formatCurrency(dependents.filter(d => d.subscription_status === 'pending').length * 50)}
+                {formatCurrency(dependents.filter(d => (d.current_status || d.subscription_status) === 'pending').length * 50)}
               </div>
               <div className="text-blue-700">Total Pendente</div>
             </div>

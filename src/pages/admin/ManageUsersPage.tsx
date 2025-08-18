@@ -1,38 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { UserPlus, Edit, Trash2, User, Check, X, Search, Filter, UserCheck, Calendar, Users } from 'lucide-react';
+import { UserPlus, Edit, Trash2, User, Search, Filter, Users, Shield, Briefcase, Check, X, UserCheck, Clock, AlertCircle } from 'lucide-react';
 
-type UserData = {
+type User = {
   id: number;
   name: string;
   cpf: string;
   email: string;
   phone: string;
-  birth_date: string;
-  address: string;
-  address_number: string;
-  address_complement: string;
-  neighborhood: string;
-  city: string;
-  state: string;
   roles: string[];
-  percentage?: number;
-  category_id?: number;
-  subscription_status?: string;
-  subscription_expiry?: string;
+  subscription_status: string;
+  subscription_expiry: string | null;
   created_at: string;
 };
 
-type Category = {
+type Dependent = {
   id: number;
+  client_id: number;
   name: string;
-  description: string;
+  cpf: string;
+  birth_date: string;
+  subscription_status: string;
+  subscription_expiry: string | null;
+  billing_amount: number;
+  client_name: string;
+  client_status: string;
+  current_status: string;
+  activated_at: string | null;
+  created_at: string;
 };
 
 const ManageUsersPage: React.FC = () => {
-  const [users, setUsers] = useState<UserData[]>([]);
-  const [dependents, setDependents] = useState<any[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [dependents, setDependents] = useState<Dependent[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [filteredDependents, setFilteredDependents] = useState<Dependent[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'users' | 'dependents'>('users');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -40,56 +45,24 @@ const ManageUsersPage: React.FC = () => {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
-  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   
   // Form state
   const [name, setName] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [birthDate, setBirthDate] = useState('');
-  const [address, setAddress] = useState('');
-  const [addressNumber, setAddressNumber] = useState('');
-  const [addressComplement, setAddressComplement] = useState('');
-  const [neighborhood, setNeighborhood] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
   const [password, setPassword] = useState('');
-  const [roles, setRoles] = useState<string[]>([]);
-  const [percentage, setPercentage] = useState('50');
-  const [categoryId, setCategoryId] = useState<string>('');
+  const [roles, setRoles] = useState<string[]>(['client']);
   
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
-
-  // New filter state
-  const [filters, setFilters] = useState({
-    search: '',
-    role: '',
-    category: '',
-    state: '',
-  });
-
-  // Filtered users
-  const [filteredUsers, setFilteredUsers] = useState<UserData[]>([]);
-
-  // 🔥 NEW: Activation state
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  
+  // Dependent activation state
   const [isActivating, setIsActivating] = useState<number | null>(null);
-  const [showActivationModal, setShowActivationModal] = useState(false);
-  const [userToActivate, setUserToActivate] = useState<UserData | null>(null);
-  const [expiryDate, setExpiryDate] = useState('');
-  
-  // 🔥 NEW: View mode state
-  const [viewMode, setViewMode] = useState<'clients' | 'dependents'>('clients');
-  
-  // 🔥 NEW: Dependent activation state
-  const [isDependentActivating, setIsDependentActivating] = useState<number | null>(null);
-  const [showDependentActivationModal, setShowDependentActivationModal] = useState(false);
-  const [dependentToActivate, setDependentToActivate] = useState<any>(null);
-  const [dependentExpiryDate, setDependentExpiryDate] = useState('');
 
-  // Get API URL with fallback
+  // Get API URL
   const getApiUrl = () => {
     if (
       window.location.hostname === "cartaoquiroferreira.com.br" ||
@@ -97,122 +70,83 @@ const ManageUsersPage: React.FC = () => {
     ) {
       return "https://www.cartaoquiroferreira.com.br";
     }
-
     return "http://localhost:3001";
   };
 
-  // Apply filters
-  useEffect(() => {
-    if (!users) return;
-
-    let result = [...users];
-
-    // Search filter (name, email, or CPF)
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      result = result.filter(user => 
-        user.name.toLowerCase().includes(searchLower) ||
-        user.email?.toLowerCase().includes(searchLower) ||
-        user.cpf.includes(filters.search.replace(/\D/g, ''))
-      );
-    }
-
-    // Role filter
-    if (filters.role) {
-      result = result.filter(user => 
-        user.roles && user.roles.includes(filters.role)
-      );
-    }
-
-    // Category filter (for professionals)
-    if (filters.category) {
-      result = result.filter(user => 
-        user.category_id === parseInt(filters.category)
-      );
-    }
-
-    // State filter
-    if (filters.state) {
-      result = result.filter(user => user.state === filters.state);
-    }
-
-    setFilteredUsers(result);
-  }, [users, filters]);
-
-  // Reset filters
-  const resetFilters = () => {
-    setFilters({
-      search: '',
-      role: '',
-      category: '',
-      state: '',
-    });
-  };
-  
   useEffect(() => {
     fetchData();
   }, []);
-  
+
+  useEffect(() => {
+    // Filter users
+    let filtered = users;
+
+    if (searchTerm) {
+      filtered = filtered.filter(user =>
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.cpf?.includes(searchTerm.replace(/\D/g, '')) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (roleFilter) {
+      filtered = filtered.filter(user => user.roles.includes(roleFilter));
+    }
+
+    if (statusFilter) {
+      filtered = filtered.filter(user => user.subscription_status === statusFilter);
+    }
+
+    setFilteredUsers(filtered);
+  }, [users, searchTerm, roleFilter, statusFilter]);
+
+  useEffect(() => {
+    // Filter dependents
+    let filtered = dependents;
+
+    if (searchTerm) {
+      filtered = filtered.filter(dependent =>
+        dependent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        dependent.cpf?.includes(searchTerm.replace(/\D/g, '')) ||
+        dependent.client_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (statusFilter) {
+      filtered = filtered.filter(dependent => dependent.current_status === statusFilter);
+    }
+
+    setFilteredDependents(filtered);
+  }, [dependents, searchTerm, statusFilter]);
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      setError('');
-      
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
-      
-      console.log('Fetching users data from:', apiUrl);
-      
-      // Fetch categories
-      const categoriesResponse = await fetch(`${apiUrl}/api/service-categories`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (categoriesResponse.ok) {
-        const categoriesData = await categoriesResponse.json();
-        console.log("Categories loaded:", categoriesData.length);
-        setCategories(categoriesData);
-      } else {
-        console.warn("Categories not available:", categoriesResponse.status);
-      }
-      
+
       // Fetch users
       const usersResponse = await fetch(`${apiUrl}/api/users`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (!usersResponse.ok) {
-        console.error("Users response error:", usersResponse.status);
         throw new Error('Falha ao carregar usuários');
       }
-      
+
       const usersData = await usersResponse.json();
-      console.log("Users data loaded:", usersData.length);
       setUsers(usersData);
-      
-      // Fetch dependents for admin view
+
+      // Fetch dependents
       const dependentsResponse = await fetch(`${apiUrl}/api/admin/dependents`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (dependentsResponse.ok) {
         const dependentsData = await dependentsResponse.json();
-        console.log("Dependents data loaded:", dependentsData.length);
         setDependents(dependentsData);
       } else {
-        console.error("Dependents response error:", dependentsResponse.status);
+        console.warn('Dependents not available');
         setDependents([]);
       }
     } catch (error) {
@@ -223,259 +157,77 @@ const ManageUsersPage: React.FC = () => {
     }
   };
 
-  // 🔥 NEW: Function to open activation modal
-  const openActivationModal = (user: UserData) => {
-    setUserToActivate(user);
-    
-    // Set default expiry date to 1 year from now
-    const defaultExpiry = new Date();
-    defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
-    setExpiryDate(defaultExpiry.toISOString().split('T')[0]);
-    
-    setShowActivationModal(true);
-  };
-
-  // 🔥 NEW: Function to activate client with custom expiry date
-  const activateClient = async () => {
-    if (!userToActivate || !expiryDate) return;
-    
+  const activateDependent = async (dependentId: number) => {
     try {
-      setIsActivating(userToActivate.id);
+      setIsActivating(dependentId);
       setError('');
       setSuccess('');
-      
+
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
-      
-      const response = await fetch(`${apiUrl}/api/users/${userToActivate.id}/activate`, {
-        method: 'PUT',
+
+      const response = await fetch(`${apiUrl}/api/admin/dependents/${dependentId}/activate`, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          expiry_date: expiryDate
-        }),
+          'Content-Type': 'application/json'
+        }
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Falha ao ativar cliente');
+        throw new Error(errorData.message || 'Erro ao ativar dependente');
       }
-      
-      // Close modal and refresh data
-      setShowActivationModal(false);
-      setUserToActivate(null);
-      setExpiryDate('');
-      
-      // Refresh users list
+
       await fetchData();
-      
-      setSuccess('Cliente ativado com sucesso!');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess('');
-      }, 3000);
+      setSuccess('Dependente ativado com sucesso!');
     } catch (error) {
-      console.error('Error activating client:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError('Ocorreu um erro ao ativar o cliente');
-      }
+      setError(error instanceof Error ? error.message : 'Erro ao ativar dependente');
     } finally {
       setIsActivating(null);
     }
   };
 
-  // 🔥 NEW: Function to cancel activation
-  const cancelActivation = () => {
-    setShowActivationModal(false);
-    setUserToActivate(null);
-    setExpiryDate('');
-  };
-  
-  // 🔥 NEW: Function to open dependent activation modal
-  const openDependentActivationModal = (dependent: any) => {
-    setDependentToActivate(dependent);
-    
-    // Set default expiry date to 1 year from now
-    const defaultExpiry = new Date();
-    defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
-    setDependentExpiryDate(defaultExpiry.toISOString().split('T')[0]);
-    
-    setShowDependentActivationModal(true);
-  };
-
-  // 🔥 NEW: Function to activate dependent
-  const activateDependent = async () => {
-    if (!dependentToActivate || !dependentExpiryDate) return;
-    
-    try {
-      setIsDependentActivating(dependentToActivate.id);
-      setError('');
-      setSuccess('');
-      
-      const token = localStorage.getItem('token');
-      const apiUrl = getApiUrl();
-      
-      const response = await fetch(`${apiUrl}/api/dependents/${dependentToActivate.id}/activate`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          expiry_date: dependentExpiryDate
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Falha ao ativar dependente');
-      }
-      
-      // Close modal and refresh data
-      setShowDependentActivationModal(false);
-      setDependentToActivate(null);
-      setDependentExpiryDate('');
-      
-      // Refresh data
-      await fetchData();
-      
-      setSuccess('Dependente ativado com sucesso!');
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        setSuccess('');
-      }, 3000);
-    } catch (error) {
-      console.error('Error activating dependent:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError('Ocorreu um erro ao ativar o dependente');
-      }
-    } finally {
-      setIsDependentActivating(null);
-    }
-  };
-
-  // 🔥 NEW: Function to cancel dependent activation
-  const cancelDependentActivation = () => {
-    setShowDependentActivationModal(false);
-    setDependentToActivate(null);
-    setDependentExpiryDate('');
-  };
-  
-  // 🔥 NEW: Function to get dependent status display
-  const getDependentStatusDisplay = (status?: string) => {
-    switch (status) {
-      case 'active':
-        return {
-          text: 'Ativo',
-          className: 'bg-green-100 text-green-800'
-        };
-      case 'pending':
-        return {
-          text: 'Aguardando Pagamento',
-          className: 'bg-yellow-100 text-yellow-800'
-        };
-      case 'expired':
-        return {
-          text: 'Vencido',
-          className: 'bg-red-100 text-red-800'
-        };
-      default:
-        return {
-          text: 'Inativo',
-          className: 'bg-gray-100 text-gray-800'
-        };
-    }
-  };
-  
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
-  
   const openCreateModal = () => {
     setModalMode('create');
     setName('');
     setCpf('');
     setEmail('');
     setPhone('');
-    setBirthDate('');
-    setAddress('');
-    setAddressNumber('');
-    setAddressComplement('');
-    setNeighborhood('');
-    setCity('');
-    setState('');
     setPassword('');
-    setRoles([]);
-    setPercentage('50');
-    setCategoryId('');
+    setRoles(['client']);
     setSelectedUser(null);
     setIsModalOpen(true);
   };
-  
-  const openEditModal = (user: UserData) => {
+
+  const openEditModal = (user: User) => {
     setModalMode('edit');
     setName(user.name);
+    setCpf(user.cpf || '');
     setEmail(user.email || '');
     setPhone(user.phone || '');
-    setBirthDate(user.birth_date || '');
-    setAddress(user.address || '');
-    setAddressNumber(user.address_number || '');
-    setAddressComplement(user.address_complement || '');
-    setNeighborhood(user.neighborhood || '');
-    setCity(user.city || '');
-    setState(user.state || '');
-    setRoles(user.roles || []);
-    setPercentage(user.percentage?.toString() || '50');
-    setCategoryId(user.category_id?.toString() || '');
+    setPassword('');
+    setRoles(user.roles);
     setSelectedUser(user);
     setIsModalOpen(true);
   };
-  
+
   const closeModal = () => {
     setIsModalOpen(false);
     setSuccess('');
     setError('');
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
-    
+
     try {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
-      
+
       if (modalMode === 'create') {
-        // Validate CPF format
-        if (!/^\d{11}$/.test(cpf.replace(/\D/g, ''))) {
-          setError('CPF deve conter 11 dígitos numéricos');
-          return;
-        }
-        
-        // Validate roles
-        if (roles.length === 0) {
-          setError('Pelo menos uma role deve ser selecionada');
-          return;
-        }
-        
-        // Validate category for professionals
-        if (roles.includes('professional') && !categoryId) {
-          setError('É necessário selecionar uma categoria para profissionais');
-          return;
-        }
-        
         // Create user
         const response = await fetch(`${apiUrl}/api/users`, {
           method: 'POST',
@@ -485,77 +237,53 @@ const ManageUsersPage: React.FC = () => {
           },
           body: JSON.stringify({
             name,
-            cpf: cpf.replace(/\D/g, ''),
-            email,
-            phone,
-            birth_date: birthDate,
-            address,
-            address_number: addressNumber,
-            address_complement: addressComplement,
-            neighborhood,
-            city,
-            state,
+            cpf: cpf.replace(/\D/g, '') || null,
+            email: email || null,
+            phone: phone.replace(/\D/g, '') || null,
             password,
             roles,
-            percentage: roles.includes('professional') ? Number(percentage) : null,
-            category_id: roles.includes('professional') ? Number(categoryId) : null,
           }),
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Falha ao criar usuário');
         }
-        
+
         setSuccess('Usuário criado com sucesso!');
       } else if (modalMode === 'edit' && selectedUser) {
-        // Validate roles
-        if (roles.length === 0) {
-          setError('Pelo menos uma role deve ser selecionada');
-          return;
-        }
-        
-        // Validate category for professionals
-        if (roles.includes('professional') && !categoryId) {
-          setError('É necessário selecionar uma categoria para profissionais');
-          return;
-        }
-        
         // Update user
+        const updateData: any = {
+          name,
+          email: email || null,
+          phone: phone.replace(/\D/g, '') || null,
+          roles,
+        };
+
+        if (password) {
+          updateData.password = password;
+        }
+
         const response = await fetch(`${apiUrl}/api/users/${selectedUser.id}`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            name,
-            email,
-            phone,
-            birth_date: birthDate,
-            address,
-            address_number: addressNumber,
-            address_complement: addressComplement,
-            neighborhood,
-            city,
-            state,
-            roles,
-            percentage: roles.includes('professional') ? Number(percentage) : null,
-            category_id: roles.includes('professional') ? Number(categoryId) : null,
-          }),
+          body: JSON.stringify(updateData),
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Falha ao atualizar usuário');
         }
-        
+
         setSuccess('Usuário atualizado com sucesso!');
       }
-      
+
       // Refresh users list
       await fetchData();
-      
+
       // Close modal after short delay
       setTimeout(() => {
         closeModal();
@@ -568,39 +296,39 @@ const ManageUsersPage: React.FC = () => {
       }
     }
   };
-  
-  const confirmDelete = (user: UserData) => {
+
+  const confirmDelete = (user: User) => {
     setUserToDelete(user);
     setShowDeleteConfirm(true);
   };
-  
+
   const cancelDelete = () => {
     setUserToDelete(null);
     setShowDeleteConfirm(false);
   };
-  
+
   const deleteUser = async () => {
     if (!userToDelete) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
-      
+
       const response = await fetch(`${apiUrl}/api/users/${userToDelete.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Falha ao excluir usuário');
       }
-      
+
       // Refresh users list
       await fetchData();
-      
+
       setSuccess('Usuário excluído com sucesso!');
     } catch (error) {
       if (error instanceof Error) {
@@ -613,85 +341,70 @@ const ManageUsersPage: React.FC = () => {
       setShowDeleteConfirm(false);
     }
   };
-  
-  const formatCpf = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
-    const limitedValue = numericValue.slice(0, 11);
-    setCpf(limitedValue);
-  };
-  
-  const formatPhone = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
-    const limitedValue = numericValue.slice(0, 11);
-    let formattedValue = limitedValue;
-    
-    if (limitedValue.length > 2) {
-      formattedValue = `(${limitedValue.slice(0, 2)}) ${limitedValue.slice(2)}`;
-      if (limitedValue.length > 7) {
-        formattedValue = `(${limitedValue.slice(0, 2)}) ${limitedValue.slice(2, 7)}-${limitedValue.slice(7)}`;
-      }
-    }
-    
-    setPhone(formattedValue);
-  };
-  
-  const formattedCpf = (cpfValue: string) => {
-    return cpfValue.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  };
-  
-  const getRoleName = (role: string) => {
-    switch (role) {
-      case 'client':
-        return 'Cliente';
-      case 'professional':
-        return 'Profissional';
-      case 'admin':
-        return 'Administrador';
-      default:
-        return role;
-    }
-  };
-  
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR');
+
+  const formatCpf = (cpf: string) => {
+    if (!cpf) return '';
+    return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
 
-  // 🔥 NEW: Function to get subscription status display
-  const getSubscriptionStatusDisplay = (status?: string) => {
+  const formatPhone = (phone: string) => {
+    if (!phone) return '';
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 11) {
+      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
+    } else if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+    }
+    return phone;
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  const getRoleInfo = (roles: string[]) => {
+    const roleLabels = roles.map(role => {
+      switch (role) {
+        case 'client': return 'Cliente';
+        case 'professional': return 'Profissional';
+        case 'admin': return 'Admin';
+        default: return role;
+      }
+    });
+    return roleLabels.join(', ');
+  };
+
+  const getStatusInfo = (status: string) => {
     switch (status) {
       case 'active':
-        return {
-          text: 'Ativo',
-          className: 'bg-green-100 text-green-800'
-        };
+        return { text: 'Ativo', className: 'bg-green-100 text-green-800' };
       case 'pending':
-        return {
-          text: 'Pendente',
-          className: 'bg-yellow-100 text-yellow-800'
-        };
+        return { text: 'Pendente', className: 'bg-yellow-100 text-yellow-800' };
       case 'expired':
-        return {
-          text: 'Vencido',
-          className: 'bg-red-100 text-red-800'
-        };
+        return { text: 'Vencido', className: 'bg-red-100 text-red-800' };
       default:
-        return {
-          text: 'N/A',
-          className: 'bg-gray-100 text-gray-800'
-        };
+        return { text: 'Inativo', className: 'bg-gray-100 text-gray-800' };
     }
   };
 
-  const handleRoleChange = (role: string, checked: boolean) => {
-    if (checked) {
-      setRoles([...roles, role]);
-    } else {
-      setRoles(roles.filter(r => r !== role));
-    }
+  const resetFilters = () => {
+    setSearchTerm('');
+    setRoleFilter('');
+    setStatusFilter('');
   };
-  
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -700,146 +413,86 @@ const ManageUsersPage: React.FC = () => {
           <p className="text-gray-600">Adicione, edite ou remova usuários do sistema</p>
         </div>
         
-        <div className="flex items-center space-x-3">
-          {/* View mode toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('clients')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'clients'
-                  ? 'bg-white text-red-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <User className="h-4 w-4 inline mr-2" />
-              Clientes
-            </button>
-            <button
-              onClick={() => setViewMode('dependents')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'dependents'
-                  ? 'bg-white text-red-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Users className="h-4 w-4 inline mr-2" />
-              Dependentes
-            </button>
-          </div>
-          
-          {viewMode === 'clients' && (
-            <button
-              onClick={openCreateModal}
-              className="btn btn-primary flex items-center"
-            >
-              <UserPlus className="h-5 w-5 mr-2" />
-              Novo Usuário
-            </button>
-          )}
+        <button
+          onClick={openCreateModal}
+          className="btn btn-primary flex items-center"
+        >
+          <UserPlus className="h-5 w-5 mr-2" />
+          Novo Usuário
+        </button>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+              activeTab === 'users'
+                ? 'border-red-600 text-red-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <User className="h-5 w-5 inline mr-2" />
+            Usuários ({users.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('dependents')}
+            className={`px-6 py-4 font-medium text-sm border-b-2 transition-colors ${
+              activeTab === 'dependents'
+                ? 'border-red-600 text-red-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Users className="h-5 w-5 inline mr-2" />
+            Dependentes ({dependents.length})
+          </button>
         </div>
       </div>
 
-      {/* Filters section */}
-      <div className="card mb-6">
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
         <div className="flex items-center mb-4">
           <Filter className="h-5 w-5 text-red-600 mr-2" />
           <h2 className="text-lg font-semibold">Filtros</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Buscar
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={filters.search}
-                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                placeholder="Nome, email ou CPF"
-                className="input pl-10"
-              />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nome, CPF ou email..."
+              className="input pl-10"
+            />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tipo de Usuário
-            </label>
+          {activeTab === 'users' && (
             <select
-              value={filters.role}
-              onChange={(e) => setFilters(prev => ({ ...prev, role: e.target.value }))}
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
               className="input"
             >
-              <option value="">Todos</option>
-              <option value="client">Cliente</option>
-              <option value="professional">Profissional</option>
-              <option value="admin">Administrador</option>
+              <option value="">Todas as funções</option>
+              <option value="client">Clientes</option>
+              <option value="professional">Profissionais</option>
+              <option value="admin">Administradores</option>
             </select>
-          </div>
+          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Categoria
-            </label>
-            <select
-              value={filters.category}
-              onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))}
-              className="input"
-              disabled={filters.role !== 'professional'}
-            >
-              <option value="">Todas</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="input"
+          >
+            <option value="">Todos os status</option>
+            <option value="active">Ativo</option>
+            <option value="pending">Pendente</option>
+            <option value="expired">Vencido</option>
+          </select>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Estado
-            </label>
-            <select
-              value={filters.state}
-              onChange={(e) => setFilters(prev => ({ ...prev, state: e.target.value }))}
-              className="input"
-            >
-              <option value="">Todos</option>
-              <option value="AC">Acre</option>
-              <option value="AL">Alagoas</option>
-              <option value="AP">Amapá</option>
-              <option value="AM">Amazonas</option>
-              <option value="BA">Bahia</option>
-              <option value="CE">Ceará</option>
-              <option value="DF">Distrito Federal</option>
-              <option value="ES">Espírito Santo</option>
-              <option value="GO">Goiás</option>
-              <option value="MA">Maranhão</option>
-              <option value="MT">Mato Grosso</option>
-              <option value="MS">Mato Grosso do Sul</option>
-              <option value="MG">Minas Gerais</option>
-              <option value="PA">Pará</option>
-              <option value="PB">Paraíba</option>
-              <option value="PR">Paraná</option>
-              <option value="PE">Pernambuco</option>
-              <option value="PI">Piauí</option>
-              <option value="RJ">Rio de Janeiro</option>
-              <option value="RN">Rio Grande do Norte</option>
-              <option value="RS">Rio Grande do Sul</option>
-              <option value="RO">Rondônia</option>
-              <option value="RR">Roraima</option>
-              <option value="SC">Santa Catarina</option>
-              <option value="SP">São Paulo</option>
-              <option value="SE">Sergipe</option>
-              <option value="TO">Tocantins</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="flex justify-end mt-4">
           <button
             onClick={resetFilters}
             className="btn btn-secondary"
@@ -850,212 +503,141 @@ const ManageUsersPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-md mb-6">
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
           {error}
         </div>
       )}
-      
+
       {success && (
-        <div className="bg-green-50 text-green-600 p-4 rounded-md mb-6">
+        <div className="bg-green-50 text-green-600 p-4 rounded-lg mb-6">
           {success}
         </div>
       )}
-      
-      <div className="card">
-        {viewMode === 'clients' ? (
-          // Clients view
-          isLoading ? (
-            <div className="text-center py-8">
+
+      {/* Users Tab */}
+      {activeTab === 'users' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
               <p className="text-gray-600">Carregando usuários...</p>
             </div>
           ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-8 bg-gray-50 rounded-lg">
-              <p className="text-gray-600">Nenhum usuário encontrado.</p>
-              <button
-                onClick={openCreateModal}
-                className="btn btn-primary mt-4 inline-flex items-center"
-              >
-                <UserPlus className="h-5 w-5 mr-2" />
-                Adicionar Usuário
-              </button>
-            </div>
-          ) : (
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>CPF</th>
-                    <th>Email</th>
-                    <th>Telefone</th>
-                    <th>Roles</th>
-                    <th>Status Assinatura</th>
-                    <th>Categoria</th>
-                    <th>Porcentagem</th>
-                    <th>Data de Cadastro</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id}>
-                      <td className="flex items-center">
-                        <User className="h-5 w-5 mr-2 text-gray-500" />
-                        {user.name}
-                      </td>
-                      <td>{formattedCpf(user.cpf)}</td>
-                      <td>{user.email || '-'}</td>
-                      <td>{user.phone || '-'}</td>
-                      <td>
-                        <div className="flex flex-wrap gap-1">
-                          {user.roles?.map((role) => (
-                            <span
-                              key={role}
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                role === 'admin' 
-                                  ? 'bg-purple-100 text-purple-800'
-                                  : role === 'professional'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-green-100 text-green-800'
-                              }`}
-                            >
-                              {getRoleName(role)}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td>
-                        {user.roles?.includes('client') ? (
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            getSubscriptionStatusDisplay(user.subscription_status).className
-                          }`}>
-                            {getSubscriptionStatusDisplay(user.subscription_status).text}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500">-</span>
-                        )}
-                      </td>
-                      <td>
-                        {user.roles?.includes('professional') && user.category_id
-                          ? categories.find(c => c.id === user.category_id)?.name || '-'
-                          : '-'}
-                      </td>
-                      <td>
-                        {user.roles?.includes('professional') ? `${user.percentage}%` : '-'}
-                      </td>
-                      <td>{formatDate(user.created_at)}</td>
-                      <td>
-                        <div className="flex space-x-2">
-                          {/* 🔥 NEW: Activate button for clients with pending status */}
-                          {user.roles?.includes('client') && user.subscription_status === 'pending' && (
-                            <button
-                              onClick={() => openActivationModal(user)}
-                              className={`p-1 text-green-600 hover:text-green-800 ${
-                                isActivating === user.id ? 'opacity-50 cursor-not-allowed' : ''
-                              }`}
-                              title="Ativar Cliente"
-                              disabled={isActivating === user.id}
-                            >
-                              <UserCheck className="h-5 w-5" />
-                            </button>
-                          )}
-                          
-                          <button
-                            onClick={() => openEditModal(user)}
-                            className="p-1 text-blue-600 hover:text-blue-800"
-                            title="Editar"
-                          >
-                            <Edit className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => confirmDelete(user)}
-                            className="p-1 text-red-600 hover:text-red-800"
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
-        ) : (
-          // Dependents view
-          isLoading ? (
-            <div className="text-center py-8">
-              <p className="text-gray-600">Carregando dependentes...</p>
-            </div>
-          ) : dependents.length === 0 ? (
-            <div className="text-center py-8 bg-gray-50 rounded-lg">
-              <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <div className="text-center py-12">
+              <User className="h-16 w-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Nenhum dependente cadastrado
+                {searchTerm || roleFilter || statusFilter ? 'Nenhum usuário encontrado' : 'Nenhum usuário cadastrado'}
               </h3>
               <p className="text-gray-600">
-                Os dependentes aparecerão aqui quando os clientes os cadastrarem.
+                {searchTerm || roleFilter || statusFilter
+                  ? 'Tente ajustar os filtros de busca.'
+                  : 'Comece adicionando o primeiro usuário.'
+                }
               </p>
             </div>
           ) : (
-            <div className="table-container">
-              <table className="table">
-                <thead>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="bg-gray-50">
                   <tr>
-                    <th>Dependente</th>
-                    <th>CPF</th>
-                    <th>Cliente Titular</th>
-                    <th>Status</th>
-                    <th>Valor</th>
-                    <th>Data de Cadastro</th>
-                    <th>Ações</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Usuário
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Contato
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Funções
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Data de Cadastro
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Ações
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {dependents.map((dependent) => {
-                    const statusInfo = getDependentStatusDisplay(dependent.subscription_status);
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredUsers.map((user) => {
+                    const statusInfo = getStatusInfo(user.subscription_status);
                     return (
-                      <tr key={dependent.id}>
-                        <td className="flex items-center">
-                          <Users className="h-5 w-5 mr-2 text-blue-500" />
-                          {dependent.name}
-                        </td>
-                        <td>{formattedCpf(dependent.cpf)}</td>
-                        <td>
-                          <div>
-                            <div className="font-medium">{dependent.client_name}</div>
-                            <div className="text-xs text-gray-500">
-                              {formattedCpf(dependent.client_cpf)}
+                      <tr key={user.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
+                                <User className="h-5 w-5 text-red-600" />
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {user.name}
+                              </div>
+                              {user.cpf && (
+                                <div className="text-sm text-gray-500">
+                                  CPF: {formatCpf(user.cpf)}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
-                        <td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {user.email && <div>{user.email}</div>}
+                            {user.phone && <div>{formatPhone(user.phone)}</div>}
+                            {!user.email && !user.phone && (
+                              <span className="text-gray-400">Não informado</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex flex-wrap gap-1">
+                            {user.roles.map((role) => (
+                              <span
+                                key={role}
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  role === 'admin'
+                                    ? 'bg-red-100 text-red-800'
+                                    : role === 'professional'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-green-100 text-green-800'
+                                }`}
+                              >
+                                {getRoleInfo([role])}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}>
                             {statusInfo.text}
                           </span>
-                          {dependent.subscription_expiry && dependent.subscription_status === 'active' && (
+                          {user.subscription_expiry && user.subscription_status === 'active' && (
                             <div className="text-xs text-gray-500 mt-1">
-                              Expira: {formatDate(dependent.subscription_expiry)}
+                              Expira: {formatDate(user.subscription_expiry)}
                             </div>
                           )}
                         </td>
-                        <td>{formatCurrency(dependent.billing_amount || 50)}</td>
-                        <td>{formatDate(dependent.created_at)}</td>
-                        <td>
-                          <div className="flex space-x-2">
-                            {dependent.subscription_status === 'pending' && (
-                              <button
-                                onClick={() => openDependentActivationModal(dependent)}
-                                className={`p-1 text-green-600 hover:text-green-800 ${
-                                  isDependentActivating === dependent.id ? 'opacity-50 cursor-not-allowed' : ''
-                                }`}
-                                title="Ativar Dependente"
-                                disabled={isDependentActivating === dependent.id}
-                              >
-                                <UserCheck className="h-5 w-5" />
-                              </button>
-                            )}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(user.created_at)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => openEditModal(user)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => confirmDelete(user)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1064,173 +646,176 @@ const ManageUsersPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          )
-        )}
-      </div>
-
-      {/* 🔥 NEW: Activation modal */}
-      {showActivationModal && userToActivate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold flex items-center">
-                <Calendar className="h-6 w-6 text-green-600 mr-2" />
-                Ativar Cliente
-              </h2>
-              <button
-                onClick={cancelActivation}
-                className="text-gray-500 hover:text-gray-700"
-                disabled={isActivating === userToActivate.id}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <p className="text-gray-700 mb-2">
-                <span className="font-medium">Cliente:</span> {userToActivate.name}
-              </p>
-              <p className="text-gray-700 mb-4">
-                <span className="font-medium">CPF:</span> {formattedCpf(userToActivate.cpf)}
-              </p>
-            </div>
-
-            <div className="mb-6">
-              <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Data de Expiração da Assinatura *
-              </label>
-              <input
-                id="expiryDate"
-                type="date"
-                value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
-                className="input"
-                min={new Date().toISOString().split('T')[0]}
-                disabled={isActivating === userToActivate.id}
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                A assinatura ficará ativa até a data selecionada
-              </p>
-            </div>
-            
-            <div className="flex justify-end">
-              <button
-                onClick={cancelActivation}
-                className="btn btn-secondary mr-2"
-                disabled={isActivating === userToActivate.id}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={activateClient}
-                className={`btn btn-primary flex items-center ${
-                  isActivating === userToActivate.id ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
-                disabled={isActivating === userToActivate.id || !expiryDate}
-              >
-                {isActivating === userToActivate.id ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Ativando...
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="h-5 w-5 mr-2" />
-                    Ativar Cliente
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
-      
-      {/* 🔥 NEW: Dependent activation modal */}
-      {showDependentActivationModal && dependentToActivate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold flex items-center">
-                <Calendar className="h-6 w-6 text-green-600 mr-2" />
-                Ativar Dependente
-              </h2>
-              <button
-                onClick={cancelDependentActivation}
-                className="text-gray-500 hover:text-gray-700"
-                disabled={isDependentActivating === dependentToActivate.id}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <p className="text-gray-700 mb-2">
-                <span className="font-medium">Dependente:</span> {dependentToActivate.name}
-              </p>
-              <p className="text-gray-700 mb-2">
-                <span className="font-medium">CPF:</span> {formattedCpf(dependentToActivate.cpf)}
-              </p>
-              <p className="text-gray-700 mb-4">
-                <span className="font-medium">Cliente Titular:</span> {dependentToActivate.client_name}
-              </p>
-            </div>
 
-            <div className="mb-6">
-              <label htmlFor="dependentExpiryDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Data de Expiração da Assinatura *
-              </label>
-              <input
-                id="dependentExpiryDate"
-                type="date"
-                value={dependentExpiryDate}
-                onChange={(e) => setDependentExpiryDate(e.target.value)}
-                className="input"
-                min={new Date().toISOString().split('T')[0]}
-                disabled={isDependentActivating === dependentToActivate.id}
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                A assinatura do dependente ficará ativa até a data selecionada
+      {/* Dependents Tab */}
+      {activeTab === 'dependents' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          {isLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Carregando dependentes...</p>
+            </div>
+          ) : filteredDependents.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm || statusFilter ? 'Nenhum dependente encontrado' : 'Nenhum dependente cadastrado'}
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm || statusFilter
+                  ? 'Tente ajustar os filtros de busca.'
+                  : 'Dependentes são cadastrados pelos próprios clientes.'
+                }
               </p>
             </div>
-            
-            <div className="flex justify-end">
-              <button
-                onClick={cancelDependentActivation}
-                className="btn btn-secondary mr-2"
-                disabled={isDependentActivating === dependentToActivate.id}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={activateDependent}
-                className={`btn btn-primary flex items-center ${
-                  isDependentActivating === dependentToActivate.id ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
-                disabled={isDependentActivating === dependentToActivate.id || !dependentExpiryDate}
-              >
-                {isDependentActivating === dependentToActivate.id ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Ativando...
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="h-5 w-5 mr-2" />
-                    Ativar Dependente
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* Statistics Cards for Dependents */}
+              <div className="p-6 border-b border-gray-200">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-green-50 p-4 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {dependents.filter(d => d.current_status === 'active').length}
+                    </div>
+                    <div className="text-sm text-green-700">Ativos</div>
+                  </div>
+                  <div className="bg-yellow-50 p-4 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {dependents.filter(d => d.current_status === 'pending').length}
+                    </div>
+                    <div className="text-sm text-yellow-700">Aguardando Pagamento</div>
+                  </div>
+                  <div className="bg-red-50 p-4 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-red-600">
+                      {dependents.filter(d => d.current_status === 'expired').length}
+                    </div>
+                    <div className="text-sm text-red-700">Vencidos</div>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-lg text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(dependents.filter(d => d.current_status === 'pending').length * 50)}
+                    </div>
+                    <div className="text-sm text-blue-700">Receita Pendente</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Dependente
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Titular
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Valor
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Data de Cadastro
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredDependents.map((dependent) => {
+                      const statusInfo = getStatusInfo(dependent.current_status);
+                      return (
+                        <tr key={dependent.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-10 w-10">
+                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                  <Users className="h-5 w-5 text-blue-600" />
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {dependent.name}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  CPF: {formatCpf(dependent.cpf)}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {dependent.client_name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Status: {getStatusInfo(dependent.client_status).text}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}>
+                              {statusInfo.text}
+                            </span>
+                            {dependent.subscription_expiry && dependent.current_status === 'active' && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Expira: {formatDate(dependent.subscription_expiry)}
+                              </div>
+                            )}
+                            {dependent.activated_at && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Ativado: {formatDate(dependent.activated_at)}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatCurrency(dependent.billing_amount)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {formatDate(dependent.created_at)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                              {dependent.current_status !== 'active' && (
+                                <button
+                                  onClick={() => activateDependent(dependent.id)}
+                                  className={`text-green-600 hover:text-green-900 flex items-center ${
+                                    isActivating === dependent.id ? 'opacity-50 cursor-not-allowed' : ''
+                                  }`}
+                                  title="Ativar Dependente"
+                                  disabled={isActivating === dependent.id}
+                                >
+                                  {isActivating === dependent.id ? (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                                  ) : (
+                                    <>
+                                      <UserCheck className="h-4 w-4 mr-1" />
+                                      Ativar
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
-      
+
       {/* User form modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">
                 {modalMode === 'create' ? 'Adicionar Usuário' : 'Editar Usuário'}
@@ -1242,298 +827,120 @@ const ManageUsersPage: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             {error && (
               <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4">
                 {error}
               </div>
             )}
-            
+
             {success && (
               <div className="bg-green-50 text-green-600 p-3 rounded-md mb-4">
                 {success}
               </div>
             )}
-            
+
             <form onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                    Nome
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="input"
-                    required
-                  />
-                </div>
-                
-                {modalMode === 'create' && (
-                  <div>
-                    <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-1">
-                      CPF
-                    </label>
-                    <input
-                      id="cpf"
-                      type="text"
-                      value={cpf ? formattedCpf(cpf) : ''}
-                      onChange={(e) => formatCpf(e.target.value)}
-                      placeholder="000.000.000-00"
-                      className="input"
-                      required
-                    />
-                  </div>
-                )}
-                
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="input"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                    Telefone
-                  </label>
-                  <input
-                    id="phone"
-                    type="text"
-                    value={phone}
-                    onChange={(e) => formatPhone(e.target.value)}
-                    placeholder="(00) 00000-0000"
-                    className="input"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700 mb-1">
-                    Data de Nascimento
-                  </label>
-                  <input
-                    id="birthDate"
-                    type="date"
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    className="input"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                    Endereço
-                  </label>
-                  <input
-                    id="address"
-                    type="text"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="input"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="addressNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                    Número
-                  </label>
-                  <input
-                    id="addressNumber"
-                    type="text"
-                    value={addressNumber}
-                    onChange={(e) => setAddressNumber(e.target.value)}
-                    className="input"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="addressComplement" className="block text-sm font-medium text-gray-700 mb-1">
-                    Complemento
-                  </label>
-                  <input
-                    id="addressComplement"
-                    type="text"
-                    value={addressComplement}
-                    onChange={(e) => setAddressComplement(e.target.value)}
-                    className="input"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="neighborhood" className="block text-sm font-medium text-gray-700 mb-1">
-                    Bairro
-                  </label>
-                  <input
-                    id="neighborhood"
-                    type="text"
-                    value={neighborhood}
-                    onChange={(e) => setNeighborhood(e.target.value)}
-                    className="input"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-                    Cidade
-                  </label>
-                  <input
-                    id="city"
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    className="input"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
-                    Estado
-                  </label>
-                  <select
-                    id="state"
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    className="input"
-                  >
-                    <option value="">Selecione...</option>
-                    <option value="AC">Acre</option>
-                    <option value="AL">Alagoas</option>
-                    <option value="AP">Amapá</option>
-                    <option value="AM">Amazonas</option>
-                    <option value="BA">Bahia</option>
-                    <option value="CE">Ceará</option>
-                    <option value="DF">Distrito Federal</option>
-                    <option value="ES">Espírito Santo</option>
-                    <option value="GO">Goiás</option>
-                    <option value="MA">Maranhão</option>
-                    <option value="MT">Mato Grosso</option>
-                    <option value="MS">Mato Grosso do Sul</option>
-                    <option value="MG">Minas Gerais</option>
-                    <option value="PA">Pará</option>
-                    <option value="PB">Paraíba</option>
-                    <option value="PR">Paraná</option>
-                    <option value="PE">Pernambuco</option>
-                    <option value="PI">Piauí</option>
-                    <option value="RJ">Rio de Janeiro</option>
-                    <option value="RN">Rio Grande do Norte</option>
-                    <option value="RS">Rio Grande do Sul</option>
-                    <option value="RO">Rondônia</option>
-                    <option value="RR">Roraima</option>
-                    <option value="SC">Santa Catarina</option>
-                    <option value="SP">São Paulo</option>
-                    <option value="SE">Sergipe</option>
-                    <option value="TO">Tocantins</option>
-                  </select>
-                </div>
-                
-                {modalMode === 'create' && (
-                  <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                      Senha
-                    </label>
-                    <input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="input"
-                      required
-                    />
-                  </div>
-                )}
+              <div className="mb-4">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="input"
+                  required
+                />
               </div>
 
-              {/* Roles Section */}
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Tipos de Acesso (Roles)
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={roles.includes('client')}
-                      onChange={(e) => handleRoleChange('client', e.target.checked)}
-                      className="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
-                    />
-                    <span className="ml-2 text-sm text-gray-600">Cliente</span>
+              {modalMode === 'create' && (
+                <div className="mb-4">
+                  <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-1">
+                    CPF (opcional)
                   </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={roles.includes('professional')}
-                      onChange={(e) => handleRoleChange('professional', e.target.checked)}
-                      className="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
-                    />
-                    <span className="ml-2 text-sm text-gray-600">Profissional</span>
-                  </label>
-                  
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={roles.includes('admin')}
-                      onChange={(e) => handleRoleChange('admin', e.target.checked)}
-                      className="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
-                    />
-                    <span className="ml-2 text-sm text-gray-600">Administrador</span>
-                  </label>
-                </div>
-              </div>
-              
-              {/* Professional specific fields */}
-              {roles.includes('professional') && (
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
-                      Categoria de Serviço
-                    </label>
-                    <select
-                      id="category"
-                      value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
-                      className="input"
-                      required
-                    >
-                      <option value="">Selecione uma categoria</option>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="percentage" className="block text-sm font-medium text-gray-700 mb-1">
-                      Porcentagem de Comissão (%)
-                    </label>
-                    <input
-                      id="percentage"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={percentage}
-                      onChange={(e) => setPercentage(e.target.value)}
-                      className="input"
-                      required
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Porcentagem que o profissional receberá do valor das consultas.
-                    </p>
-                  </div>
+                  <input
+                    id="cpf"
+                    type="text"
+                    value={formatCpf(cpf)}
+                    onChange={(e) => setCpf(e.target.value.replace(/\D/g, ''))}
+                    className="input"
+                    placeholder="000.000.000-00"
+                  />
                 </div>
               )}
-              
-              <div className="flex justify-end mt-6">
+
+              <div className="mb-4">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email (opcional)
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Telefone (opcional)
+                </label>
+                <input
+                  id="phone"
+                  type="text"
+                  value={formatPhone(phone)}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                  className="input"
+                  placeholder="(00) 00000-0000"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Funções
+                </label>
+                <div className="space-y-2">
+                  {['client', 'professional', 'admin'].map((role) => (
+                    <label key={role} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={roles.includes(role)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setRoles([...roles, role]);
+                          } else {
+                            setRoles(roles.filter(r => r !== role));
+                          }
+                        }}
+                        className="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
+                      />
+                      <span className="ml-2 text-sm text-gray-600">
+                        {getRoleInfo([role])}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  {modalMode === 'create' ? 'Senha' : 'Nova Senha (deixe em branco para manter)'}
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input"
+                  required={modalMode === 'create'}
+                  minLength={6}
+                />
+              </div>
+
+              <div className="flex justify-end">
                 <button
                   type="button"
                   onClick={closeModal}
@@ -1549,18 +956,18 @@ const ManageUsersPage: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {/* Delete confirmation modal */}
       {showDeleteConfirm && userToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Confirmar Exclusão</h2>
-            
+
             <p className="mb-6">
               Tem certeza que deseja excluir o usuário <strong>{userToDelete.name}</strong>?
               Esta ação não pode ser desfeita.
             </p>
-            
+
             <div className="flex justify-end">
               <button
                 onClick={cancelDelete}
