@@ -113,7 +113,6 @@ const initializeDatabase = async () => {
         subscription_expiry TIMESTAMP,
         percentage DECIMAL(5,2) DEFAULT 50.00,
         photo_url TEXT,
-        crm VARCHAR(50),
         has_scheduling_access BOOLEAN DEFAULT false,
         access_expires_at TIMESTAMP,
         access_granted_by INTEGER,
@@ -661,7 +660,7 @@ app.get('/api/users/:id', authenticate, async (req, res) => {
     const result = await pool.query(`
       SELECT 
         id, name, cpf, email, phone, roles, 
-        subscription_status, subscription_expiry, photo_url, crm,
+        subscription_status, subscription_expiry, photo_url,
         has_scheduling_access, access_expires_at, created_at
       FROM users 
       WHERE id = $1
