@@ -101,6 +101,15 @@ const initializeDatabase = async () => {
       END $$;
     `);
 
+    -- Add percentage column for professionals if it doesn't exist
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS percentage DECIMAL(5,2) DEFAULT 50.00;
+    
+    -- Update existing professionals to have default percentage if null
+    UPDATE users 
+    SET percentage = 50.00 
+    WHERE percentage IS NULL 
+    AND (roles::jsonb ? 'professional' OR roles @> ARRAY['professional']);
+
     // Create service_categories table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS service_categories (
