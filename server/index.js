@@ -14,6 +14,381 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Database setup and table creation
+const createTables = async () => {
+  try {
+    console.log('🔄 Creating database tables...');
+    
+    // Create users table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        cpf VARCHAR(11) UNIQUE,
+        email VARCHAR(255),
+        phone VARCHAR(20),
+        birth_date DATE,
+        address TEXT,
+        address_number VARCHAR(20),
+        address_complement VARCHAR(100),
+        neighborhood VARCHAR(100),
+        city VARCHAR(100),
+        state VARCHAR(2),
+        zip_code VARCHAR(8),
+        password_hash VARCHAR(255) NOT NULL,
+        roles TEXT[] DEFAULT ARRAY['client'],
+        subscription_status VARCHAR(20) DEFAULT 'pending',
+        subscription_expiry TIMESTAMP,
+        professional_percentage INTEGER DEFAULT 50,
+        photo_url TEXT,
+        crm VARCHAR(20),
+        has_scheduling_access BOOLEAN DEFAULT false,
+        scheduling_access_expires_at TIMESTAMP,
+        scheduling_access_granted_by INTEGER,
+        scheduling_access_granted_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create service_categories table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS service_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create services table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS services (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        base_price DECIMAL(10,2) NOT NULL,
+        category_id INTEGER REFERENCES service_categories(id) ON DELETE SET NULL,
+        is_base_service BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create dependents table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dependents (
+        id SERIAL PRIMARY KEY,
+        client_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        cpf VARCHAR(11) NOT NULL UNIQUE,
+        birth_date DATE,
+        subscription_status VARCHAR(20) DEFAULT 'pending',
+        subscription_expiry TIMESTAMP,
+        billing_amount DECIMAL(10,2) DEFAULT 50.00,
+        payment_reference VARCHAR(255),
+        activated_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create private_patients table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS private_patients (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        cpf VARCHAR(11),
+        email VARCHAR(255),
+        phone VARCHAR(20),
+        birth_date DATE,
+        address TEXT,
+        address_number VARCHAR(20),
+        address_complement VARCHAR(100),
+        neighborhood VARCHAR(100),
+        city VARCHAR(100),
+        state VARCHAR(2),
+        zip_code VARCHAR(8),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create attendance_locations table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS attendance_locations (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        address TEXT,
+        address_number VARCHAR(20),
+        address_complement VARCHAR(100),
+        neighborhood VARCHAR(100),
+        city VARCHAR(100),
+        state VARCHAR(2),
+        zip_code VARCHAR(8),
+        phone VARCHAR(20),
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create consultations table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS consultations (
+        id SERIAL PRIMARY KEY,
+        client_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        dependent_id INTEGER REFERENCES dependents(id) ON DELETE SET NULL,
+        private_patient_id INTEGER REFERENCES private_patients(id) ON DELETE SET NULL,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        service_id INTEGER NOT NULL REFERENCES services(id) ON DELETE RESTRICT,
+        location_id INTEGER REFERENCES attendance_locations(id) ON DELETE SET NULL,
+        value DECIMAL(10,2) NOT NULL,
+        date TIMESTAMP NOT NULL,
+        status VARCHAR(20) DEFAULT 'completed',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create medical_records table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS medical_records (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER NOT NULL REFERENCES private_patients(id) ON DELETE CASCADE,
+        chief_complaint TEXT,
+        history_present_illness TEXT,
+        past_medical_history TEXT,
+        medications TEXT,
+        allergies TEXT,
+        physical_examination TEXT,
+        diagnosis TEXT,
+        treatment_plan TEXT,
+        notes TEXT,
+        vital_signs JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create medical_documents table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS medical_documents (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        private_patient_id INTEGER REFERENCES private_patients(id) ON DELETE SET NULL,
+        title VARCHAR(255) NOT NULL,
+        document_type VARCHAR(50) NOT NULL,
+        document_url TEXT NOT NULL,
+        template_data JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create payments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        dependent_id INTEGER REFERENCES dependents(id) ON DELETE SET NULL,
+        payment_type VARCHAR(50) NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        payment_method VARCHAR(50),
+        external_payment_id VARCHAR(255),
+        payment_reference VARCHAR(255),
+        paid_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create audit_logs table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action VARCHAR(100) NOT NULL,
+        table_name VARCHAR(100),
+        record_id INTEGER,
+        old_values JSONB,
+        new_values JSONB,
+        ip_address INET,
+        user_agent TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create notifications table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'info',
+        is_read BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create system_settings table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        id SERIAL PRIMARY KEY,
+        key VARCHAR(100) NOT NULL UNIQUE,
+        value TEXT,
+        description TEXT,
+        updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create indexes for better performance
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_cpf ON users(cpf);
+      CREATE INDEX IF NOT EXISTS idx_users_roles ON users USING GIN(roles);
+      CREATE INDEX IF NOT EXISTS idx_users_subscription_status ON users(subscription_status);
+      CREATE INDEX IF NOT EXISTS idx_dependents_client_id ON dependents(client_id);
+      CREATE INDEX IF NOT EXISTS idx_dependents_cpf ON dependents(cpf);
+      CREATE INDEX IF NOT EXISTS idx_consultations_client_id ON consultations(client_id);
+      CREATE INDEX IF NOT EXISTS idx_consultations_professional_id ON consultations(professional_id);
+      CREATE INDEX IF NOT EXISTS idx_consultations_date ON consultations(date);
+      CREATE INDEX IF NOT EXISTS idx_consultations_status ON consultations(status);
+      CREATE INDEX IF NOT EXISTS idx_medical_records_professional_id ON medical_records(professional_id);
+      CREATE INDEX IF NOT EXISTS idx_medical_records_patient_id ON medical_records(private_patient_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+      CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+    `);
+    
+    // Insert default service categories
+    await pool.query(`
+      INSERT INTO service_categories (name, description) VALUES
+      ('Fisioterapia', 'Serviços de fisioterapia e reabilitação'),
+      ('Psicologia', 'Atendimento psicológico e terapias'),
+      ('Nutrição', 'Consultas nutricionais e acompanhamento'),
+      ('Medicina Geral', 'Consultas médicas gerais'),
+      ('Odontologia', 'Serviços odontológicos'),
+      ('Estética', 'Procedimentos estéticos e bem-estar'),
+      ('Educação Física', 'Personal training e atividades físicas'),
+      ('Outros', 'Outros serviços de saúde e bem-estar')
+      ON CONFLICT (name) DO NOTHING
+    `);
+    
+    // Insert default services
+    await pool.query(`
+      INSERT INTO services (name, description, base_price, category_id, is_base_service)
+      SELECT 
+        'Consulta de Fisioterapia', 
+        'Consulta inicial de fisioterapia com avaliação completa', 
+        120.00, 
+        sc.id, 
+        true
+      FROM service_categories sc WHERE sc.name = 'Fisioterapia'
+      ON CONFLICT DO NOTHING;
+      
+      INSERT INTO services (name, description, base_price, category_id, is_base_service)
+      SELECT 
+        'Sessão de Fisioterapia', 
+        'Sessão de fisioterapia para tratamento', 
+        80.00, 
+        sc.id, 
+        false
+      FROM service_categories sc WHERE sc.name = 'Fisioterapia'
+      ON CONFLICT DO NOTHING;
+      
+      INSERT INTO services (name, description, base_price, category_id, is_base_service)
+      SELECT 
+        'Consulta Psicológica', 
+        'Sessão de psicoterapia individual', 
+        150.00, 
+        sc.id, 
+        true
+      FROM service_categories sc WHERE sc.name = 'Psicologia'
+      ON CONFLICT DO NOTHING;
+      
+      INSERT INTO services (name, description, base_price, category_id, is_base_service)
+      SELECT 
+        'Consulta Nutricional', 
+        'Consulta com nutricionista e plano alimentar', 
+        100.00, 
+        sc.id, 
+        true
+      FROM service_categories sc WHERE sc.name = 'Nutrição'
+      ON CONFLICT DO NOTHING;
+      
+      INSERT INTO services (name, description, base_price, category_id, is_base_service)
+      SELECT 
+        'Consulta Médica', 
+        'Consulta médica geral', 
+        200.00, 
+        sc.id, 
+        true
+      FROM service_categories sc WHERE sc.name = 'Medicina Geral'
+      ON CONFLICT DO NOTHING;
+    `);
+    
+    // Insert default system settings
+    await pool.query(`
+      INSERT INTO system_settings (key, value, description) VALUES
+      ('subscription_price', '250', 'Preço da assinatura mensal do titular'),
+      ('dependent_price', '50', 'Preço da assinatura mensal do dependente'),
+      ('default_professional_percentage', '50', 'Porcentagem padrão do profissional'),
+      ('max_dependents_per_client', '10', 'Número máximo de dependentes por cliente'),
+      ('system_maintenance_mode', 'false', 'Modo de manutenção do sistema'),
+      ('backup_enabled', 'true', 'Backup automático habilitado'),
+      ('notification_email', 'admin@quiroferreira.com.br', 'Email para notificações do sistema')
+      ON CONFLICT (key) DO NOTHING
+    `);
+    
+    // Create admin user if not exists
+    const adminExists = await pool.query(
+      'SELECT id FROM users WHERE roles @> ARRAY[\'admin\'] LIMIT 1'
+    );
+    
+    if (adminExists.rows.length === 0) {
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      await pool.query(`
+        INSERT INTO users (
+          name, 
+          cpf, 
+          email, 
+          password_hash, 
+          roles, 
+          subscription_status,
+          professional_percentage
+        ) VALUES (
+          'Administrador do Sistema',
+          '00000000000',
+          'admin@quiroferreira.com.br',
+          $1,
+          ARRAY['admin'],
+          'active',
+          0
+        )
+      `, [hashedPassword]);
+      
+      console.log('✅ Admin user created with credentials:');
+      console.log('   CPF: 000.000.000-00');
+      console.log('   Password: admin123');
+    }
+    
+    console.log('✅ Database tables created successfully');
+  } catch (error) {
+    console.error('❌ Error creating tables:', error);
+    throw error;
+  }
+};
+
 // 🔥 CORS CONFIGURATION FOR PRODUCTION
 const corsOptions = {
   origin: function (origin, callback) {
@@ -3369,6 +3744,12 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('🔄 SIGINT received, shutting down gracefully');
   process.exit(0);
+});
+
+// Initialize database tables on startup
+createTables().catch(error => {
+  console.error('❌ Failed to create database tables:', error);
+  process.exit(1);
 });
 
 // 🔥 START SERVER
