@@ -480,7 +480,8 @@ const mercadoPagoClient = new MercadoPagoConfig({
 });
 
 // 🔥 AUTHENTICATION MIDDLEWARE
-const payment = new Payment(client);
+const payment = new Payment(mercadoPagoClient);
+const preference = new Preference(mercadoPagoClient);
 const authenticate = async (req, res, next) => {
   try {
     const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
@@ -663,7 +664,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT id, name, cpf, password, roles, subscription_status, subscription_expiry FROM users WHERE cpf = $1',
+      'SELECT id, name, cpf, password_hash, roles, subscription_status, subscription_expiry FROM users WHERE cpf = $1',
       [cleanCpf]
     );
 
@@ -674,7 +675,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
       console.log('❌ Invalid password for user:', user.id);
       return res.status(401).json({ message: 'Credenciais inválidas' });
@@ -860,7 +861,7 @@ app.post('/api/auth/register', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (
         name, cpf, email, phone, birth_date, address, address_number, 
-        address_complement, neighborhood, city, state, password, roles, 
+        address_complement, neighborhood, city, state, password_hash, roles, 
         subscription_status, professional_percentage
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
       RETURNING id, name, cpf, email, roles, subscription_status, subscription_expiry`,
@@ -1042,7 +1043,7 @@ app.post('/api/users', authenticate, authorize(['admin']), async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO users (
-        name, cpf, email, phone, password, roles, subscription_status, professional_percentage
+        name, cpf, email, phone, password_hash, roles, subscription_status, professional_percentage
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
       RETURNING id, name, cpf, email, phone, roles, subscription_status, subscription_expiry, created_at`,
       [
@@ -1078,7 +1079,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
 
     // Get current user data
     const currentUser = await pool.query(
-      'SELECT password FROM users WHERE id = $1',
+      'SELECT password_hash FROM users WHERE id = $1',
       [userId]
     );
 
@@ -1126,7 +1127,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
         return res.status(400).json({ message: 'Senha atual é obrigatória para alterar a senha' });
       }
 
-      const isValidPassword = await bcrypt.compare(currentPassword, currentUser.rows[0].password);
+      const isValidPassword = await bcrypt.compare(currentPassword, currentUser.rows[0].password_hash);
       if (!isValidPassword) {
         return res.status(400).json({ message: 'Senha atual incorreta' });
       }
@@ -1136,7 +1137,7 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      updateFields.push(`password = $${paramCount}`);
+      updateFields.push(`password_hash = $${paramCount}`);
       updateValues.push(hashedPassword);
       paramCount++;
     }
@@ -2994,13 +2995,12 @@ app.get('/api/admin/professionals-scheduling-access', authenticate, authorize(['
     const result = await pool.query(
       `SELECT u.id, u.name, u.email, u.phone,
        COALESCE(sc.name, 'Sem categoria') as category_name,
-       COALESCE(sa.has_access, false) as has_scheduling_access,
-       sa.expires_at as access_expires_at,
-       sa.granted_by as access_granted_by,
-       sa.granted_at as access_granted_at
+       COALESCE(u.has_scheduling_access, false) as has_scheduling_access,
+       u.scheduling_access_expires_at as access_expires_at,
+       u.scheduling_access_granted_by as access_granted_by,
+       u.scheduling_access_granted_at as access_granted_at
        FROM users u
        LEFT JOIN service_categories sc ON CAST(u.professional_percentage AS INTEGER) = sc.id
-       LEFT JOIN scheduling_access sa ON u.id = sa.professional_id
        WHERE 'professional' = ANY(u.roles)
        ORDER BY u.name`
     );
@@ -3024,18 +3024,15 @@ app.post('/api/admin/grant-scheduling-access', authenticate, authorize(['admin']
       return res.status(400).json({ message: 'ID do profissional e data de expiração são obrigatórios' });
     }
 
-    // Upsert scheduling access
+    // Update user scheduling access
     await pool.query(
-      `INSERT INTO scheduling_access (professional_id, has_access, expires_at, granted_by, granted_at, reason)
-       VALUES ($1, true, $2, $3, CURRENT_TIMESTAMP, $4)
-       ON CONFLICT (professional_id) 
-       DO UPDATE SET 
-         has_access = true,
-         expires_at = $2,
-         granted_by = $3,
-         granted_at = CURRENT_TIMESTAMP,
-         reason = $4`,
-      [professional_id, expires_at, req.user.name, reason]
+      `UPDATE users 
+       SET has_scheduling_access = true,
+           scheduling_access_expires_at = $1,
+           scheduling_access_granted_by = $2,
+           scheduling_access_granted_at = CURRENT_TIMESTAMP
+       WHERE id = $3`,
+      [expires_at, req.user.id, professional_id]
     );
 
     console.log('✅ Scheduling access granted to professional:', professional_id);
@@ -3058,10 +3055,11 @@ app.post('/api/admin/revoke-scheduling-access', authenticate, authorize(['admin'
     }
 
     await pool.query(
-      `UPDATE scheduling_access 
-       SET has_access = false, revoked_at = CURRENT_TIMESTAMP, revoked_by = $1
-       WHERE professional_id = $2`,
-      [req.user.name, professional_id]
+      `UPDATE users 
+       SET has_scheduling_access = false,
+           scheduling_access_expires_at = NULL
+       WHERE id = $1`,
+      [professional_id]
     );
 
     console.log('✅ Scheduling access revoked for professional:', professional_id);
@@ -3167,8 +3165,6 @@ app.post('/api/create-subscription', authenticate, preventPaymentForActiveClient
       status: user.subscription_status
     });
 
-    const preference = new Preference(mercadoPagoClient);
-
     const preferenceData = {
       items: [
         {
@@ -3245,8 +3241,6 @@ app.post('/api/dependents/:id/create-payment', authenticate, async (req, res) =>
       return res.status(400).json({ message: 'Dependente já está ativo' });
     }
 
-    const preference = new Preference(mercadoPagoClient);
-
     const preferenceData = {
       items: [
         {
@@ -3301,9 +3295,7 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
       return res.status(400).json({ message: 'Valor inválido' });
     }
 
-    const preference = new Preference(mercadoPagoClient);
-
-    // 🔥 MERCADOPAGO SDK V2 - Create preference for professional payment
+    const preferenceData = {
       items: [
         {
           id: `professional_payment_${req.user.id}`,
@@ -3319,9 +3311,9 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
         identification: {
           type: 'CPF',
           number: req.user.cpf || '00000000000'
-        success: 'https://cartaoquiroferreira.com.br/professional?payment=success&type=professional',
-        failure: 'https://cartaoquiroferreira.com.br/professional?payment=failure&type=professional',
-        pending: 'https://cartaoquiroferreira.com.br/professional?payment=pending&type=professional',
+        }
+      },
+      back_urls: {
         success: `${req.protocol}://${req.get('host')}/api/payment/success?type=professional&professional_id=${req.user.id}`,
         failure: `${req.protocol}://${req.get('host')}/api/payment/failure?type=professional&professional_id=${req.user.id}`,
         pending: `${req.protocol}://${req.get('host')}/api/payment/pending?type=professional&professional_id=${req.user.id}`
@@ -3333,24 +3325,102 @@ app.post('/api/professional/create-payment', authenticate, authorize(['professio
 
     const result = await preference.create({ body: preferenceData });
 
-    // 🔥 Save to professional_payments table
-    const currentDate = new Date();
-    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-    
-    const paymentResult = await pool.query(
-      `INSERT INTO professional_payments 
-       (professional_id, amount, mp_preference_id, period_start, period_end, professional_percentage) 
-    console.log('✅ Professional payment record created:', paymentResult.rows[0].id);
-    
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [professionalId, amount, result.id, firstDay, lastDay, req.user.professional_percentage || 50]
+    console.log('✅ Professional payment preference created:', result.id);
+
+    res.json({
+      id: result.id,
       init_point: result.init_point,
       sandbox_init_point: result.sandbox_init_point
     });
   } catch (error) {
     console.error('❌ Error creating professional payment:', error);
     res.status(500).json({ message: 'Erro ao criar pagamento' });
+  }
+});
+
+// 🔥 CREATE AGENDA ACCESS PAYMENT
+app.post('/api/professional/create-agenda-payment', authenticate, authorize(['professional']), async (req, res) => {
+  try {
+    const { months = 1 } = req.body;
+    const professionalId = req.user.id;
+    
+    console.log('🔄 Creating agenda access payment for:', professionalId, 'Months:', months);
+    
+    // Check if professional already has active access
+    const accessResult = await pool.query(
+      'SELECT has_scheduling_access, scheduling_access_expires_at FROM users WHERE id = $1',
+      [professionalId]
+    );
+    
+    if (accessResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Profissional não encontrado' });
+    }
+    
+    const user = accessResult.rows[0];
+    
+    // If already has access and not expired, don't allow payment
+    if (user.has_scheduling_access && user.scheduling_access_expires_at && new Date(user.scheduling_access_expires_at) > new Date()) {
+      return res.status(400).json({ 
+        message: 'Você já possui acesso ativo à agenda',
+        expires_at: user.scheduling_access_expires_at
+      });
+    }
+    
+    const amount = months * 100; // R$ 100 per month
+    
+    // Get professional info
+    const professionalResult = await pool.query(
+      'SELECT name, email FROM users WHERE id = $1',
+      [professionalId]
+    );
+    
+    const professional = professionalResult.rows[0];
+    
+    // 🔥 MERCADOPAGO SDK V2 - Create preference for agenda access
+    const preferenceData = {
+      items: [
+        {
+          title: `Acesso à Agenda - ${months} mês(es)`,
+          quantity: 1,
+          unit_price: amount,
+          currency_id: 'BRL',
+        },
+      ],
+      payer: {
+        name: professional.name,
+        email: professional.email || `professional${professionalId}@quiroferreira.com.br`,
+      },
+      back_urls: {
+        success: 'https://cartaoquiroferreira.com.br/professional?payment=success&type=agenda',
+        failure: 'https://cartaoquiroferreira.com.br/professional?payment=failure&type=agenda',
+        pending: 'https://cartaoquiroferreira.com.br/professional?payment=pending&type=agenda',
+      },
+      auto_return: 'approved',
+      external_reference: `agenda_${professionalId}_${Date.now()}`,
+      notification_url: `${process.env.WEBHOOK_URL || 'https://cartaoquiroferreira.com.br'}/api/webhooks/mercadopago`,
+    };
+    
+    const result = await preference.create({ body: preferenceData });
+    
+    // 🔥 Save to agenda_payments table
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + months);
+    
+    const paymentResult = await pool.query(
+      'INSERT INTO agenda_payments (professional_id, amount, mp_preference_id, access_months, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [professionalId, amount, result.id, months, expiresAt]
+    );
+    
+    console.log('✅ Agenda payment record created:', paymentResult.rows[0].id);
+    
+    res.json({
+      preference_id: result.id,
+      init_point: result.init_point,
+      sandbox_init_point: result.sandbox_init_point,
+    });
+  } catch (error) {
+    console.error('Error creating agenda payment:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });
 
@@ -3570,7 +3640,7 @@ app.post('/api/system/backup', authenticate, authorize(['admin']), async (req, r
     const tables = [
       'users', 'dependents', 'services', 'service_categories', 
       'consultations', 'private_patients', 'medical_records', 
-      'medical_documents', 'attendance_locations', 'scheduling_access'
+      'medical_documents', 'attendance_locations'
     ];
 
     const backup = {};
@@ -3693,10 +3763,10 @@ app.post('/api/notifications', authenticate, authorize(['admin']), async (req, r
     if (user_id) {
       // Send to specific user
       const result = await pool.query(
-        `INSERT INTO notifications (user_id, title, message, type, created_by)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO notifications (user_id, title, message, type)
+         VALUES ($1, $2, $3, $4)
          RETURNING id, title, message, type, created_at`,
-        [user_id, title.trim(), message.trim(), type || 'info', req.user.id]
+        [user_id, title.trim(), message.trim(), type || 'info']
       );
 
       console.log('✅ Notification created for user:', user_id);
@@ -3712,10 +3782,10 @@ app.post('/api/notifications', authenticate, authorize(['admin']), async (req, r
       const notifications = [];
       for (const user of users.rows) {
         const result = await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, created_by)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO notifications (user_id, title, message, type)
+           VALUES ($1, $2, $3, $4)
            RETURNING id`,
-          [user.id, title.trim(), message.trim(), type || 'info', req.user.id]
+          [user.id, title.trim(), message.trim(), type || 'info']
         );
         notifications.push(result.rows[0]);
       }
@@ -3729,10 +3799,10 @@ app.post('/api/notifications', authenticate, authorize(['admin']), async (req, r
     } else {
       // Send to all users
       const result = await pool.query(
-        `INSERT INTO notifications (title, message, type, created_by)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO notifications (title, message, type)
+         VALUES ($1, $2, $3)
          RETURNING id, title, message, type, created_at`,
-        [title.trim(), message.trim(), type || 'info', req.user.id]
+        [title.trim(), message.trim(), type || 'info']
       );
 
       console.log('✅ Global notification created');
@@ -3751,7 +3821,7 @@ app.put('/api/notifications/:id/read', authenticate, async (req, res) => {
 
     const result = await pool.query(
       `UPDATE notifications 
-       SET is_read = true, read_at = CURRENT_TIMESTAMP
+       SET is_read = true
        WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)
        RETURNING id`,
       [notificationId, req.user.id]
