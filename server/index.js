@@ -1456,9 +1456,41 @@ app.post('/api/admin/dependents/:id/activate', authenticate, authorize(['admin']
 
     console.log('🔄 Admin activating dependent:', dependentId);
 
-    // Set expiry to 1 year from now
+    // Calculate expiry date (1 year from now)
     const expiryDate = new Date();
     expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+    
+    // Update dependent status
+    await pool.query(`
+      UPDATE dependents 
+      SET 
+        subscription_status = 'active',
+        subscription_expiry = $2,
+        activated_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $1
+    `, [dependentId, expiryDate]);
+    
+    // Get dependent and client info
+    const dependentResult = await pool.query(`
+      SELECT d.*, u.id as client_id 
+      FROM dependents d 
+      JOIN users u ON d.client_id = u.id 
+      WHERE d.id = $1
+    `, [dependentId]);
+    
+    if (dependentResult.rows.length === 0) {
+      throw new Error('Dependent not found');
+    }
+    
+    const dependent = dependentResult.rows[0];
+    
+    // Insert payment record
+    await pool.query(`
+      INSERT INTO dependent_payments (dependent_id, client_id, mp_payment_id, mp_preference_id, amount, status, payment_method, activated_at, processed_at)
+      VALUES ($1, $2, $3, $4, 50.00, 'approved', $5, NOW(), NOW())
+      ON CONFLICT (mp_payment_id) DO NOTHING
+    `, [dependentId, dependent.client_id, paymentId, preferenceId, paymentMethod]);
 
     const result = await pool.query(
       `UPDATE dependents 
