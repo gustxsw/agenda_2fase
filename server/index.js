@@ -486,8 +486,7 @@ app.get("/api/users/:id", authenticate, async (req, res) => {
         subscription_status, subscription_expiry, 
         percentage, photo_url, category_name, crm,
         created_at, updated_at
-      'SELECT id, name, cpf, email, phone, roles, subscription_status, subscription_expiry FROM users WHERE id = $1',
-      WHERE id = $1`,
+      FROM users WHERE id = $1`,
       [id]
     );
 
@@ -1163,7 +1162,7 @@ app.get("/api/professionals", authenticate, async (req, res) => {
       SELECT 
         id, name, email, phone, roles, address, address_number, 
         address_complement, neighborhood, city, state, 
-        category_name, photo_url
+        COALESCE(category_name, 'Sem categoria') as category_name, photo_url
       FROM users 
       WHERE 'professional' = ANY(roles)
       ORDER BY name
