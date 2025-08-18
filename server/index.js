@@ -987,7 +987,10 @@ app.get('/api/users/:id', authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT id, name, cpf, email, phone, roles, subscription_status, subscription_expiry, created_at, zip_code FROM users WHERE id = $1',
+      `SELECT id, name, cpf, email, phone, birth_date, address, address_number,
+       address_complement, neighborhood, city, state, zip_code, roles, subscription_status,
+       subscription_expiry, professional_percentage, photo_url, created_at
+       FROM users WHERE id = $1`,
       [userId]
     );
 
@@ -2990,19 +2993,17 @@ app.get('/api/admin/professionals-scheduling-access', authenticate, authorize(['
   try {
     console.log('🔄 Fetching professionals scheduling access');
 
-    const result = await pool.query(
-      `SELECT u.id, u.name, u.email, u.phone,
-       COALESCE(sc.name, 'Sem categoria') as category_name,
-       COALESCE(sa.has_access, false) as has_scheduling_access,
-       sa.expires_at as access_expires_at,
-       sa.granted_by as access_granted_by,
-       sa.granted_at as access_granted_at
-       FROM users u
-       LEFT JOIN service_categories sc ON CAST(u.professional_percentage AS INTEGER) = sc.id
-       LEFT JOIN scheduling_access sa ON u.id = sa.professional_id
-       WHERE 'professional' = ANY(u.roles)
-       ORDER BY u.name`
-    );
+    const result = await pool.query(`
+      SELECT 
+        u.id, u.name, u.email, u.phone, u.category_name,
+        CASE WHEN u.scheduling_access_expires_at IS NOT NULL AND u.scheduling_access_expires_at > NOW() THEN true ELSE false END as has_scheduling_access,
+        u.scheduling_access_expires_at as access_expires_at,
+        u.scheduling_access_granted_by as access_granted_by,
+        u.scheduling_access_granted_at as access_granted_at
+      FROM users u
+      WHERE 'professional' = ANY(u.roles)
+      ORDER BY u.name
+    `);
 
     console.log('✅ Professionals scheduling access fetched:', result.rows.length);
 
