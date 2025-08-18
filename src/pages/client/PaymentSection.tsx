@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Calendar, AlertCircle } from 'lucide-react';
+import { CreditCard, Calendar, AlertCircle, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -23,35 +23,10 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Don't render payment section for active clients
-  if (subscriptionStatus === 'active') {
-    return (
-      <div className="card mb-6">
-        <div className="flex items-center mb-4">
-          <CreditCard className="h-6 w-6 text-red-600 mr-2" />
-          <h2 className="text-xl font-semibold">Assinatura</h2>
-        </div>
-        
-        <div className="bg-green-50 p-4 rounded-lg">
-          <div className="flex items-center mb-2">
-            <Calendar className="h-5 w-5 text-green-600 mr-2" />
-            <p className="text-green-700 font-medium">
-              Assinatura ativa até {subscriptionExpiry ? formatDate(subscriptionExpiry) : 'data não informada'}
-            </p>
-          </div>
-          <p className="text-sm text-green-600">
-            Sua assinatura está ativa e será renovada automaticamente.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // Get API URL - PRODUCTION READY
   const getApiUrl = () => {
     if (window.location.hostname === 'www.cartaoquiroferreira.com.br' || 
-      window.location.hostname === "cartaoquiroferreira.com.br" ||
-      window.location.hostname === "www.cartaoquiroferreira.com.br") {
+      window.location.hostname === "cartaoquiroferreira.com.br") {
       return 'https://www.cartaoquiroferreira.com.br';
     }
     
@@ -130,18 +105,43 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
     }
   };
   
-  const totalAmount = 250; // Only R$250 for the client (titular)
-  
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   };
+
+  // Don't render anything for active clients
+  if (subscriptionStatus === 'active') {
+    return (
+      <div className="card mb-6">
+        <div className="flex items-center mb-4">
+          <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
+          <h2 className="text-xl font-semibold">Assinatura Ativa</h2>
+        </div>
+        
+        <div className="bg-green-50 p-4 rounded-lg">
+          <div className="flex items-center mb-2">
+            <Calendar className="h-5 w-5 text-green-600 mr-2" />
+            <p className="text-green-700 font-medium">
+              Sua assinatura está ativa até {subscriptionExpiry ? formatDate(subscriptionExpiry) : 'data não informada'}
+            </p>
+          </div>
+          <p className="text-sm text-green-600">
+            Aproveite todos os benefícios do seu convênio. A renovação será feita automaticamente.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render payment form for non-active clients
+  const totalAmount = 250;
   
   return (
     <div className="card mb-6">
       <div className="flex items-center mb-4">
         <CreditCard className="h-6 w-6 text-red-600 mr-2" />
-        <h2 className="text-xl font-semibold">Assinatura</h2>
+        <h2 className="text-xl font-semibold">Ativar Assinatura</h2>
       </div>
       
       <div className="space-y-4">
@@ -157,7 +157,6 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
                 <strong>Nota:</strong> Dependentes têm cobrança separada de R$ 50,00 cada.
                 Eles podem ser ativados individualmente após o cadastro.
               </p>
-              </div>
             </div>
           </div>
         </div>
