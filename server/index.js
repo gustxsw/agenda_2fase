@@ -3376,7 +3376,7 @@ app.get('/api/payment/success', async (req, res) => {
     } else if (type === 'dependent' && dependent_id) {
       redirectUrl += `/client?payment=success&type=dependent`;
     } else if (type === 'professional' && professional_id) {
-      redirectUrl += `?payment=success&type=professional`;
+      redirectUrl += `/professional?payment=success&type=professional`;
     } else {
       redirectUrl += `/?payment=success`;
     }
@@ -3406,7 +3406,7 @@ app.get('/api/payment/failure', async (req, res) => {
     } else if (type === 'dependent' && dependent_id) {
       redirectUrl += `/client?payment=failure&type=dependent`;
     } else if (type === 'professional' && professional_id) {
-      redirectUrl += `?payment=failure&type=professional`;
+      redirectUrl += `/professional?payment=failure&type=professional`;
     } else {
       redirectUrl += `/?payment=failure`;
     }
@@ -3436,7 +3436,7 @@ app.get('/api/payment/pending', async (req, res) => {
     } else if (type === 'dependent' && dependent_id) {
       redirectUrl += `/client?payment=pending&type=dependent`;
     } else if (type === 'professional' && professional_id) {
-      redirectUrl += `?payment=pending&type=professional`;
+      redirectUrl += `/professional?payment=pending&type=professional`;
     } else {
       redirectUrl += `/?payment=pending`;
     }
