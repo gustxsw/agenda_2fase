@@ -2757,7 +2757,7 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
     // Get revenue by professional
     const professionalResult = await pool.query(
       `SELECT u.name as professional_name,
-       COALESCE(u.professional_percentage, 50) as professional_percentage,
+       COALESCE(u.professional_percentage, 50) as percentage,
        COALESCE(SUM(c.value), 0) as revenue,
        COUNT(c.id) as consultation_count,
        COALESCE(SUM(c.value * (COALESCE(u.professional_percentage, 50) / 100.0)), 0) as professional_payment,
@@ -2773,8 +2773,8 @@ app.get('/api/reports/revenue', authenticate, authorize(['admin']), async (req, 
 
     // Convert percentages to integers
     const revenueByProfessional = professionalResult.rows.map(row => ({
-      ...row,
-      professional_percentage: parseInt(row.professional_percentage) || 50,
+      professional_name: row.professional_name,
+      professional_percentage: row.percentage || 50,
       revenue: parseFloat(row.revenue) || 0,
       consultation_count: parseInt(row.consultation_count) || 0,
       professional_payment: parseFloat(row.professional_payment) || 0,
@@ -3026,16 +3026,15 @@ app.get('/api/admin/professionals-scheduling-access', authenticate, authorize(['
     console.log('🔄 Fetching professionals scheduling access');
 
     const result = await pool.query(
-      `SELECT u.id, 
-       u.name, 
-       u.email, 
-       u.phone, 
-       u.percentage,
-       u.has_scheduling_access,
-       u.scheduling_access_expires_at,
-       u.scheduling_access_granted_by,
-       u.scheduling_access_granted_at
+      `SELECT u.id, u.name, u.email, u.phone,
+       COALESCE(sc.name, 'Sem categoria') as category_name,
+       COALESCE(sa.has_access, false) as has_scheduling_access,
+       sa.expires_at as access_expires_at,
+       sa.granted_by as access_granted_by,
+       sa.granted_at as access_granted_at
        FROM users u
+       LEFT JOIN service_categories sc ON CAST(u.professional_percentage AS INTEGER) = sc.id
+       LEFT JOIN scheduling_access sa ON u.id = sa.professional_id
        WHERE 'professional' = ANY(u.roles)
        ORDER BY u.name`
     );
