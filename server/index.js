@@ -1571,15 +1571,13 @@ app.post(
       // Insert payment record
       await pool.query(
         `
-      INSERT INTO dependent_payments (dependent_id, client_id, mp_payment_id, mp_preference_id, amount, status, payment_method, activated_at, processed_at)
-      VALUES ($1, $2, $3, $4, 50.00, 'approved', $5, NOW(), NOW())
+      INSERT INTO dependent_payments (dependent_id, client_id, amount, payment_status, payment_method, activated_at, processed_at)
+      VALUES ($1, $2, 50.00, 'approved', $3, NOW(), NOW())
       ON CONFLICT (mp_payment_id) DO NOTHING
     `,
         [
           dependentId,
           dependent.client_id,
-          paymentId,
-          preferenceId,
           paymentMethod,
         ]
       );
@@ -3324,7 +3322,6 @@ app.get(
       const result = await pool.query(
         `SELECT u.id, u.name, u.email, u.phone,
        COALESCE(sc.name, 'Sem categoria') as category_name,
-       COALESCE(sa.has_access, false) as has_scheduling_access,
         CASE 
           WHEN u.scheduling_access_expires_at IS NOT NULL AND u.scheduling_access_expires_at > NOW() THEN true
           ELSE false
@@ -3332,6 +3329,7 @@ app.get(
         u.scheduling_access_expires_at as access_expires_at,
         u.scheduling_access_granted_by as access_granted_by,
         u.scheduling_access_granted_at as access_granted_at
+       FROM users u
        LEFT JOIN service_categories sc ON CAST(u.professional_percentage AS INTEGER) = sc.id
        WHERE 'professional' = ANY(u.roles)
        ORDER BY u.name`
@@ -3372,18 +3370,15 @@ app.post(
         });
       }
 
-      // Upsert scheduling access
+      // Update user record directly
       await pool.query(
-        `INSERT INTO scheduling_access (professional_id, has_access, expires_at, granted_by, granted_at, reason)
-       VALUES ($1, true, $2, $3, CURRENT_TIMESTAMP, $4)
-       ON CONFLICT (professional_id) 
-       DO UPDATE SET 
-         has_access = true,
-         expires_at = $2,
-         granted_by = $3,
-         granted_at = CURRENT_TIMESTAMP,
-         reason = $4`,
-        [professional_id, expires_at, req.user.name, reason]
+        `UPDATE users SET 
+         has_scheduling_access = true,
+         scheduling_access_expires_at = $1,
+         scheduling_access_granted_by = $2,
+         scheduling_access_granted_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [expires_at, req.user.id, professional_id]
       );
 
       console.log(
@@ -3419,10 +3414,11 @@ app.post(
       }
 
       await pool.query(
-        `UPDATE scheduling_access 
-       SET has_access = false, revoked_at = CURRENT_TIMESTAMP, revoked_by = $1
-       WHERE professional_id = $2`,
-        [req.user.name, professional_id]
+        `UPDATE users SET 
+         has_scheduling_access = false,
+         scheduling_access_expires_at = NULL
+         WHERE id = $1`,
+        [professional_id]
       );
 
       console.log(
