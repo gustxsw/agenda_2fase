@@ -1627,17 +1627,9 @@ app.get("/api/service-categories", authenticate, async (req, res) => {
       "SELECT id, name, description, created_at FROM service_categories ORDER BY name"
     );
 
-    // Convert to plain objects to avoid buffer issues
-    const categories = result.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      created_at: row.created_at
-    }));
-
     console.log("✅ Service categories fetched:", result.rows.length);
 
-    res.status(200).json(categories);
+    res.json(result.rows);
   } catch (error) {
     console.error("❌ Error fetching service categories:", error);
     res.status(500).json({ message: "Erro interno do servidor" });
@@ -2372,9 +2364,26 @@ app.get(
 
       const result = await pool.query(query, params);
 
+      // Convert to plain objects to avoid buffer issues
+      const locations = result.rows.map(row => ({
+        id: row.id,
+        professional_id: row.professional_id,
+        name: row.name,
+        address: row.address,
+        address_number: row.address_number,
+        address_complement: row.address_complement,
+        neighborhood: row.neighborhood,
+        city: row.city,
+        state: row.state,
+        zip_code: row.zip_code,
+        phone: row.phone,
+        is_default: Boolean(row.is_default),
+        created_at: row.created_at
+      }));
+
       console.log("✅ Attendance locations fetched:", result.rows.length);
 
-      res.json(result.rows);
+      res.status(200).json(locations);
     } catch (error) {
       console.error("❌ Error fetching attendance locations:", error);
       res.status(500).json({ message: "Erro interno do servidor" });
