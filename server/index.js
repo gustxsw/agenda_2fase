@@ -318,10 +318,10 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_client_payments_status ON client_payments(status);
       CREATE INDEX IF NOT EXISTS idx_dependent_payments_dependent_id ON dependent_payments(dependent_id);
       CREATE INDEX IF NOT EXISTS idx_dependent_payments_status ON dependent_payments(status);
-      CREATE INDEX IF NOT EXISTS idx_professional_payments_professional_id ON professional_payments(professional_id);
-      CREATE INDEX IF NOT EXISTS idx_professional_payments_status ON professional_payments(status);
-      CREATE INDEX IF NOT EXISTS idx_agenda_payments_client_id ON agenda_payments(client_id);
-      CREATE INDEX IF NOT EXISTS idx_agenda_payments_status ON agenda_payments(status);
+      CREATE INDEX IF NOT EXISTS idx_client_payments_status ON client_payments(payment_status);
+      CREATE INDEX IF NOT EXISTS idx_dependent_payments_status ON dependent_payments(payment_status);
+      CREATE INDEX IF NOT EXISTS idx_professional_payments_status ON professional_payments(payment_status);
+      CREATE INDEX IF NOT EXISTS idx_agenda_payments_status ON agenda_payments(payment_status);
       CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
       CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
