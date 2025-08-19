@@ -35,46 +35,6 @@ const createTables = async () => {
         city VARCHAR(100),
         state VARCHAR(2),
         zip_code VARCHAR(8),
-        password VARCHAR(255) NOT NULL,
-        roles TEXT[] DEFAULT ARRAY['client'],
-        subscription_status VARCHAR(20) DEFAULT 'pending',
-        subscription_expiry TIMESTAMP,
-        professional_percentage INTEGER DEFAULT 50,
-        zip_code TEXT,
-        photo_url TEXT,
-        has_scheduling_access BOOLEAN DEFAULT false,
-        scheduling_access_expires_at TIMESTAMP,
-        scheduling_access_granted_by INTEGER,
-        scheduling_access_granted_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create service_categories table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS service_categories (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create services table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS services (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        base_price DECIMAL(10,2) NOT NULL,
-        category_id INTEGER REFERENCES service_categories(id) ON DELETE SET NULL,
-        is_base_service BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
 
     // Create dependents table
     await pool.query(`
