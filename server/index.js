@@ -4058,10 +4058,10 @@ app.post(
 
       for (const table of tables) {
         try {
-          const result = await pool.query(`SELECT * FROM ${table}`);
-          backup[table] = result.rows;
-          console.log(
-            `✅ Backed up table ${table}: ${result.rows.length} records`
+          const result = await pool.query(
+            `SELECT * FROM ${table.name} WHERE mp_payment_id = $1`,
+            [paymentId]
+          );
           );
         } catch (error) {
           console.warn(`⚠️ Could not backup table ${table}:`, error.message);
