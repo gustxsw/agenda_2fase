@@ -3370,6 +3370,7 @@ app.post(
       console.log("🔄 Granting scheduling access:", {
         professional_id,
         expires_at,
+        reason,
       });
 
       if (!professional_id || !expires_at) {
@@ -3380,25 +3381,20 @@ app.post(
           });
       }
 
-      // Upsert scheduling access
+      // Update user with scheduling access
       await pool.query(
-        `INSERT INTO scheduling_access (professional_id, has_access, expires_at, granted_by, granted_at, reason)
-       VALUES ($1, true, $2, $3, CURRENT_TIMESTAMP, $4)
-       ON CONFLICT (professional_id) 
-       DO UPDATE SET 
-         has_access = true,
-         expires_at = $2,
-         granted_by = $3,
-         granted_at = CURRENT_TIMESTAMP,
-         reason = $4`,
-        [professional_id, expires_at, req.user.name, reason]
+        `
+      UPDATE users 
+      SET 
+        scheduling_access_expires_at = $1,
+        scheduling_access_granted_by = $2,
+        scheduling_access_granted_at = NOW()
+      WHERE id = $3 AND roles @> '["professional"]'
+    `,
+        [expires_at, req.user.name, professional_id]
       );
 
-      console.log(
-        "✅ Scheduling access granted to professional:",
-        professional_id
-      );
-
+      console.log("✅ Scheduling access granted successfully");
       res.json({ message: "Acesso à agenda concedido com sucesso" });
     } catch (error) {
       console.error("❌ Error granting scheduling access:", error);
