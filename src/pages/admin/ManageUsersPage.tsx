@@ -88,12 +88,6 @@ const ManageUsersPage: React.FC = () => {
   
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [userToActivate, setUserToActivate] = useState<User | null>(null);
-  const [activationEndDate, setActivationEndDate] = useState('');
-  const [isActivating, setIsActivating] = useState(false);
-  
-  // Dependent activation state
-  const [isActivating, setIsActivating] = useState<number | null>(null);
-  
   // Password visibility
   const [showPassword, setShowPassword] = useState(false);
 
