@@ -1004,20 +1004,7 @@ app.get("/api/users", authenticate, authorize(["admin"]), async (req, res) => {
 
     console.log("✅ Users fetched:", result.rows.length);
 
-    // Convert to plain objects to avoid buffer issues
-    const users = result.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      cpf: row.cpf,
-      email: row.email,
-      phone: row.phone,
-      roles: row.roles,
-      subscription_status: row.subscription_status,
-      subscription_expiry: row.subscription_expiry,
-      created_at: row.created_at
-    }));
-    
-    res.status(200).json(users);
+    res.json(result.rows);
   } catch (error) {
     console.error("❌ Error fetching users:", error);
     res.status(500).json({ message: "Erro interno do servidor" });
@@ -1690,7 +1677,19 @@ app.get("/api/services", authenticate, async (req, res) => {
        LEFT JOIN service_categories sc ON s.category_id = sc.id
        ORDER BY sc.name, s.name`
     );
-
+    
+    // Convert to plain objects to avoid buffer issues
+    const services = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      base_price: parseFloat(row.base_price) || 0,
+      category_id: row.category_id,
+      category_name: row.category_name,
+      is_base_service: Boolean(row.is_base_service)
+    }));
+    
+    res.status(200).json(services);
     console.log("✅ Services fetched:", result.rows.length);
 
     res.json(result.rows);
