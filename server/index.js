@@ -1314,9 +1314,23 @@ app.get("/api/dependents/:clientId", authenticate, async (req, res) => {
       [clientId]
     );
 
-    console.log("✅ Dependents fetched:", result.rows.length);
-
-    res.json(result.rows);
+    // Convert to plain objects to avoid buffer issues
+    const dependents = result.rows.map(row => ({
+      id: row.id,
+      client_id: row.client_id,
+      name: row.name,
+      cpf: row.cpf,
+      birth_date: row.birth_date,
+      subscription_status: row.subscription_status,
+      subscription_expiry: row.subscription_expiry,
+      billing_amount: parseFloat(row.billing_amount) || 50,
+      payment_reference: row.payment_reference,
+      activated_at: row.activated_at,
+      created_at: row.created_at,
+      current_status: row.current_status
+    }));
+    
+    res.status(200).json(dependents);
   } catch (error) {
     console.error("❌ Error fetching dependents:", error);
     res.status(500).json({ message: "Erro interno do servidor" });
@@ -1677,19 +1691,7 @@ app.get("/api/services", authenticate, async (req, res) => {
        LEFT JOIN service_categories sc ON s.category_id = sc.id
        ORDER BY sc.name, s.name`
     );
-    
-    // Convert to plain objects to avoid buffer issues
-    const services = result.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      base_price: parseFloat(row.base_price) || 0,
-      category_id: row.category_id,
-      category_name: row.category_name,
-      is_base_service: Boolean(row.is_base_service)
-    }));
-    
-    res.status(200).json(services);
+
     console.log("✅ Services fetched:", result.rows.length);
 
     res.json(result.rows);
