@@ -444,92 +444,6 @@ const createTables = async () => {
   }
 };
 
-// Helper function to process subscription payments
-async function processSubscriptionPayment(payment, paymentId) {
-  try {
-    console.log('🔄 Processing subscription payment:', payment);
-    
-    // Update payment status
-    await pool.query(
-      'UPDATE client_payments SET status = $1, updated_at = NOW() WHERE mp_payment_id = $2',
-      ['approved', paymentId]
-    );
-    
-    // Activate user subscription
-    const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 1);
-    
-    await pool.query(
-      'UPDATE users SET subscription_status = $1, subscription_expiry = $2 WHERE id = $3',
-      ['active', expiryDate.toISOString(), payment.user_id]
-    );
-    
-    console.log('✅ Subscription activated for user:', payment.user_id);
-  } catch (error) {
-    console.error('❌ Error processing subscription payment:', error);
-  }
-}
-
-// Helper function to process dependent payments
-async function processDependentPayment(payment, paymentId) {
-  try {
-    console.log('🔄 Processing dependent payment:', payment);
-    
-    // Update payment status
-    await pool.query(
-      'UPDATE dependent_payments SET status = $1, updated_at = NOW() WHERE mp_payment_id = $2',
-      ['approved', paymentId]
-    );
-    
-    // Activate dependent subscription
-    const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 1);
-    
-    await pool.query(
-      'UPDATE dependents SET subscription_status = $1, subscription_expiry = $2, activated_at = NOW() WHERE id = $3',
-      ['active', expiryDate.toISOString(), payment.dependent_id]
-    );
-    
-    console.log('✅ Dependent subscription activated:', payment.dependent_id);
-  } catch (error) {
-    console.error('❌ Error processing dependent payment:', error);
-  }
-}
-
-// Helper function to process professional payments
-async function processProfessionalPayment(payment, paymentId) {
-  try {
-    console.log('🔄 Processing professional payment:', payment);
-    
-    // Update payment status
-    await pool.query(
-      'UPDATE professional_payments SET status = $1, updated_at = NOW() WHERE mp_payment_id = $2',
-      ['approved', paymentId]
-    );
-    
-    console.log('✅ Professional payment processed:', payment.user_id);
-  } catch (error) {
-    console.error('❌ Error processing professional payment:', error);
-  }
-}
-
-// Helper function to process agenda payments
-async function processAgendaPayment(payment, paymentId) {
-  try {
-    console.log('🔄 Processing agenda payment:', payment);
-    
-    // Update payment status
-    await pool.query(
-      'UPDATE agenda_payments SET status = $1, updated_at = NOW() WHERE mp_payment_id = $2',
-      ['approved', paymentId]
-    );
-    
-    console.log('✅ Agenda payment processed:', payment.user_id);
-  } catch (error) {
-    console.error('❌ Error processing agenda payment:', error);
-  }
-}
-
 // 🔥 CORS CONFIGURATION FOR PRODUCTION
 const corsOptions = {
   origin: function (origin, callback) {
@@ -1657,7 +1571,7 @@ app.post(
       // Insert payment record
       await pool.query(
         `
-      INSERT INTO dependent_payments (dependent_id, client_id, mp_payment_id, mp_preference_id, amount, status, payment_method, activated_at, processed_at)
+      INSERT INTO dependent_payments (dependent_id, client_id, mp_payment_id, mp_preference_id, amount, payment_status, payment_method, activated_at, processed_at)
       VALUES ($1, $2, $3, $4, 50.00, 'approved', $5, NOW(), NOW())
       ON CONFLICT (mp_payment_id) DO NOTHING
     `,
@@ -3418,6 +3332,7 @@ app.get(
         u.scheduling_access_expires_at as access_expires_at,
         u.scheduling_access_granted_by as access_granted_by,
         u.scheduling_access_granted_at as access_granted_at
+       FROM users u
        LEFT JOIN service_categories sc ON CAST(u.professional_percentage AS INTEGER) = sc.id
        WHERE 'professional' = ANY(u.roles)
        ORDER BY u.name`
