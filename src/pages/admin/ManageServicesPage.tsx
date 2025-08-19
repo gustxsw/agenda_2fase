@@ -49,16 +49,14 @@ const ManageServicesPage: React.FC = () => {
 
   // Get API URL with fallback
   const getApiUrl = () => {
-    if (import.meta.env.VITE_API_URL) {
-      return import.meta.env.VITE_API_URL;
+    if (
+      window.location.hostname === "cartaoquiroferreira.com.br" ||
+      window.location.hostname === "www.cartaoquiroferreira.com.br"
+    ) {
+      return "https://www.cartaoquiroferreira.com.br";
     }
     
-    if (window.location.hostname === 'cartaoquiroferreira.com.br' || 
-        window.location.hostname === 'www.cartaoquiroferreira.com.br') {
-      return 'https://convenioquiroferreira.onrender.com';
-    }
-    
-    return 'http://localhost:3001';
+    return "http://localhost:3001";
   };
   
   useEffect(() => {
@@ -73,7 +71,7 @@ const ManageServicesPage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
       
-      console.log('Fetching services data from:', apiUrl);
+      console.log('🔄 Fetching services data from:', `${apiUrl}/api/services`);
       
       try {
         // Fetch categories
@@ -81,15 +79,19 @@ const ManageServicesPage: React.FC = () => {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
         });
+        
+        console.log('📡 Categories response status:', categoriesResponse.status);
         
         if (categoriesResponse.ok) {
           const categoriesData = await categoriesResponse.json();
           console.log('✅ Categories loaded:', categoriesData.length);
           setCategories(categoriesData);
         } else {
-          console.warn('⚠️ Categories not available:', categoriesResponse.status);
+          const errorText = await categoriesResponse.text();
+          console.warn('⚠️ Categories not available:', categoriesResponse.status, errorText);
           setCategories([]);
         }
       } catch (error) {
@@ -103,19 +105,26 @@ const ManageServicesPage: React.FC = () => {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
         });
+        
+        console.log('📡 Services response status:', servicesResponse.status);
         
         if (servicesResponse.ok) {
           const servicesData = await servicesResponse.json();
           console.log('✅ Services loaded:', servicesData.length);
+          console.log('✅ Services data:', servicesData);
           setServices(servicesData);
         } else {
-          console.warn('⚠️ Services not available:', servicesResponse.status);
+          const errorText = await servicesResponse.text();
+          console.error('❌ Services not available:', servicesResponse.status, errorText);
+          setError(`Erro ao carregar serviços: ${servicesResponse.status}`);
           setServices([]);
         }
       } catch (error) {
         console.error('❌ Error fetching services:', error);
+        setError('Erro de conexão ao carregar serviços');
         setServices([]);
       }
     } catch (error) {
