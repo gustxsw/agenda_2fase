@@ -35,6 +35,16 @@ const createTables = async () => {
         city VARCHAR(100),
         state VARCHAR(2),
         zip_code VARCHAR(8),
+        password VARCHAR(255) NOT NULL,
+        roles TEXT[] DEFAULT ARRAY['client'],
+        subscription_status VARCHAR(20) DEFAULT 'pending',
+        subscription_expiry TIMESTAMP,
+        professional_percentage INTEGER DEFAULT 50,
+        photo_url TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     // Create dependents table
     await pool.query(`
@@ -74,6 +84,31 @@ const createTables = async () => {
         scheduling_access_expires_at TIMESTAMP,
         scheduling_access_granted_by VARCHAR(255),
         scheduling_access_granted_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create service_categories table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS service_categories (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create services table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS services (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        base_price DECIMAL(10,2) NOT NULL,
+        category_id INTEGER REFERENCES service_categories(id) ON DELETE SET NULL,
+        is_base_service BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -155,6 +190,23 @@ const createTables = async () => {
 
     // Create payments table
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        payment_method VARCHAR(50),
+        external_payment_id VARCHAR(255),
+        payment_reference VARCHAR(255),
+        subscription_months INTEGER DEFAULT 12,
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create client_payments table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS client_payments (
         id SERIAL PRIMARY KEY,
         client_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -221,6 +273,23 @@ const createTables = async () => {
       )
     `);
 
+    // Create scheduling_access table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS scheduling_access (
+        id SERIAL PRIMARY KEY,
+        professional_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+        has_access BOOLEAN DEFAULT false,
+        expires_at TIMESTAMP,
+        granted_by VARCHAR(255),
+        granted_at TIMESTAMP,
+        revoked_by VARCHAR(255),
+        revoked_at TIMESTAMP,
+        reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create audit_logs table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS audit_logs (
@@ -241,11 +310,13 @@ const createTables = async () => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         title VARCHAR(255) NOT NULL,
         message TEXT NOT NULL,
         type VARCHAR(50) DEFAULT 'info',
         is_read BOOLEAN DEFAULT false,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        read_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -846,7 +917,7 @@ app.post("/api/auth/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO users (
+      \`INSERT INTO users (
         name, cpf, email, phone, birth_date, address, address_number, 
         address_complement, neighborhood, city, state, zip_code, password, roles, 
         subscription_status, professional_percentage
@@ -951,7 +1022,7 @@ app.get("/api/users", authenticate, authorize(["admin"]), async (req, res) => {
     console.log("🔄 Fetching all users for admin");
 
     const result = await pool.query(
-      `SELECT id, name, cpf, email, phone, roles, subscription_status, 
+      \`SELECT id, name, cpf, email, phone, roles, subscription_status, 
        subscription_expiry, created_at 
        FROM users 
        ORDER BY created_at DESC`
@@ -978,7 +1049,7 @@ app.get("/api/users/:id", authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, name, cpf, email, phone, birth_date, address, address_number,
+      \`SELECT id, name, cpf, email, phone, birth_date, address, address_number,
        address_complement, neighborhood, city, state, zip_code, roles, subscription_status,
        subscription_expiry, professional_percentage, photo_url, created_at
        FROM users WHERE id = $1`,
@@ -1038,7 +1109,7 @@ app.post("/api/users", authenticate, authorize(["admin"]), async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO users (
+      \`INSERT INTO users (
         name, cpf, email, phone, password, roles, subscription_status, professional_percentage
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
       RETURNING id, name, cpf, email, phone, roles, subscription_status, subscription_expiry, created_at`,
@@ -1097,25 +1168,25 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
     let paramCount = 1;
 
     if (name) {
-      updateFields.push(`name = $${paramCount}`);
+      updateFields.push(\`name = $${paramCount}`);
       updateValues.push(name.trim());
       paramCount++;
     }
 
     if (email !== undefined) {
-      updateFields.push(`email = $${paramCount}`);
+      updateFields.push(\`email = $${paramCount}`);
       updateValues.push(email?.trim() || null);
       paramCount++;
     }
 
     if (phone !== undefined) {
-      updateFields.push(`phone = $${paramCount}`);
+      updateFields.push(\`phone = $${paramCount}`);
       updateValues.push(phone?.replace(/\D/g, "") || null);
       paramCount++;
     }
 
     if (roles && req.user.currentRole === "admin") {
-      updateFields.push(`roles = $${paramCount}`);
+      updateFields.push(\`roles = $${paramCount}`);
       updateValues.push(roles);
       paramCount++;
     }
@@ -1124,7 +1195,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
       professional_percentage !== undefined &&
       req.user.currentRole === "admin"
     ) {
-      updateFields.push(`professional_percentage = $${paramCount}`);
+      updateFields.push(\`professional_percentage = $${paramCount}`);
       updateValues.push(parseInt(professional_percentage)); // Convert to integer
       paramCount++;
     }
@@ -1152,7 +1223,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      updateFields.push(`password = $${paramCount}`);
+      updateFields.push(\`password = $${paramCount}`);
       updateValues.push(hashedPassword);
       paramCount++;
     }
@@ -1164,7 +1235,7 @@ app.put("/api/users/:id", authenticate, async (req, res) => {
     updateValues.push(userId);
 
     const result = await pool.query(
-      `UPDATE users SET ${updateFields.join(
+      \`UPDATE users SET ${updateFields.join(
         ", "
       )}, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $${paramCount} 
@@ -1224,7 +1295,7 @@ app.get("/api/clients/lookup", authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, name, cpf, subscription_status, subscription_expiry 
+      \`SELECT id, name, cpf, subscription_status, subscription_expiry 
        FROM users 
        WHERE cpf = $1 AND 'client' = ANY(roles)`,
       [cleanCpf]
@@ -1262,7 +1333,7 @@ app.get("/api/dependents/:clientId", authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, name, cpf, birth_date, subscription_status, subscription_expiry,
+      \`SELECT id, name, cpf, birth_date, subscription_status, subscription_expiry,
        billing_amount, payment_reference, activated_at, created_at,
        subscription_status as current_status
        FROM dependents 
@@ -1295,7 +1366,7 @@ app.get("/api/dependents/lookup", authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT d.id, d.name, d.cpf, d.client_id, d.subscription_status as dependent_subscription_status,
+      \`SELECT d.id, d.name, d.cpf, d.client_id, d.subscription_status as dependent_subscription_status,
        u.name as client_name, u.subscription_status as client_subscription_status
        FROM dependents d
        JOIN users u ON d.client_id = u.id
@@ -1369,7 +1440,7 @@ app.post("/api/dependents", authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO dependents (client_id, name, cpf, birth_date, subscription_status, billing_amount)
+      \`INSERT INTO dependents (client_id, name, cpf, birth_date, subscription_status, billing_amount)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, name, cpf, birth_date, subscription_status, billing_amount, created_at`,
       [client_id, name.trim(), cleanCpf, birth_date || null, "pending", 50]
@@ -1408,7 +1479,7 @@ app.put("/api/dependents/:id", authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE dependents 
+      \`UPDATE dependents 
        SET name = $1, birth_date = $2, updated_at = CURRENT_TIMESTAMP
        WHERE id = $3
        RETURNING id, name, cpf, birth_date, subscription_status, billing_amount, created_at`,
@@ -1467,7 +1538,7 @@ app.get(
       console.log("🔄 Fetching all dependents for admin");
 
       const result = await pool.query(
-        `SELECT d.id, d.client_id, d.name, d.cpf, d.birth_date, d.subscription_status,
+        \`SELECT d.id, d.client_id, d.name, d.cpf, d.birth_date, d.subscription_status,
        d.subscription_expiry, d.billing_amount, d.activated_at, d.created_at,
        u.name as client_name, u.subscription_status as client_status,
        d.subscription_status as current_status
@@ -1534,21 +1605,21 @@ app.post(
       // Insert payment record
       await pool.query(
         `
-      INSERT INTO dependent_payments (dependent_id, client_id, mp_payment_id, mp_preference_id, amount, status, payment_method, activated_at, processed_at)
+      INSERT INTO dependent_payments (dependent_id, client_id, mp_payment_id, mp_preference_id, amount, payment_status, payment_method, activated_at, processed_at)
       VALUES ($1, $2, $3, $4, 50.00, 'approved', $5, NOW(), NOW())
       ON CONFLICT (mp_payment_id) DO NOTHING
     `,
         [
           dependentId,
           dependent.client_id,
-          paymentId,
-          preferenceId,
-          paymentMethod,
+          "admin_activation_" + dependentId,
+          "admin_preference_" + dependentId,
+          "admin_activation",
         ]
       );
 
       const result = await pool.query(
-        `UPDATE dependents 
+        \`UPDATE dependents 
        SET subscription_status = 'active', 
            subscription_expiry = $1,
            activated_at = CURRENT_TIMESTAMP,
@@ -1606,7 +1677,7 @@ app.post(
       }
 
       const result = await pool.query(
-        `INSERT INTO service_categories (name, description)
+        \`INSERT INTO service_categories (name, description)
        VALUES ($1, $2)
        RETURNING id, name, description, created_at`,
         [name.trim(), description?.trim() || null]
@@ -1628,7 +1699,7 @@ app.get("/api/services", authenticate, async (req, res) => {
     console.log("🔄 Fetching services");
 
     const result = await pool.query(
-      `SELECT s.id, s.name, s.description, s.base_price, s.category_id, s.is_base_service,
+      \`SELECT s.id, s.name, s.description, s.base_price, s.category_id, s.is_base_service,
        sc.name as category_name
        FROM services s
        LEFT JOIN service_categories sc ON s.category_id = sc.id
@@ -1666,7 +1737,7 @@ app.post(
       }
 
       const result = await pool.query(
-        `INSERT INTO services (name, description, base_price, category_id, is_base_service)
+        \`INSERT INTO services (name, description, base_price, category_id, is_base_service)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, name, description, base_price, category_id, is_base_service`,
         [
@@ -1711,7 +1782,7 @@ app.put(
       }
 
       const result = await pool.query(
-        `UPDATE services 
+        \`UPDATE services 
        SET name = $1, description = $2, base_price = $3, category_id = $4, is_base_service = $5, updated_at = CURRENT_TIMESTAMP
        WHERE id = $6
        RETURNING id, name, description, base_price, category_id, is_base_service`,
@@ -1772,7 +1843,7 @@ app.get("/api/professionals", authenticate, async (req, res) => {
     console.log("🔄 Fetching professionals");
 
     const result = await pool.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.address, u.address_number,
+      \`SELECT u.id, u.name, u.email, u.phone, u.address, u.address_number,
        u.address_complement, u.neighborhood, u.city, u.state, u.roles, u.photo_url,
        COALESCE(sc.name, 'Sem categoria') as category_name
        FROM users u
@@ -1885,7 +1956,7 @@ app.get(
       }
 
       const result = await pool.query(
-        `SELECT c.id, c.date, c.value, c.notes, c.status,
+        \`SELECT c.id, c.date, c.value, c.notes, c.status,
        COALESCE(u.name, d.name) as client_name,
        s.name as service_name,
        prof.name as professional_name,
@@ -1957,7 +2028,7 @@ app.post("/api/consultations", authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO consultations (
+      \`INSERT INTO consultations (
         client_id, dependent_id, private_patient_id, professional_id, service_id,
         location_id, value, date, status, notes
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -2019,7 +2090,7 @@ app.put("/api/consultations/:id/status", authenticate, async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE consultations 
+      \`UPDATE consultations 
        SET status = $1, updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
        RETURNING id, status`,
@@ -2130,7 +2201,7 @@ app.post(
       }
 
       const result = await pool.query(
-        `INSERT INTO private_patients (
+        \`INSERT INTO private_patients (
         professional_id, name, cpf, email, phone, birth_date, address,
         address_number, address_complement, neighborhood, city, state, zip_code
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -2205,7 +2276,7 @@ app.put(
       }
 
       const result = await pool.query(
-        `UPDATE private_patients 
+        \`UPDATE private_patients 
        SET name = $1, email = $2, phone = $3, birth_date = $4, address = $5,
        address_number = $6, address_complement = $7, neighborhood = $8,
        city = $9, state = $10, zip_code = $11, updated_at = CURRENT_TIMESTAMP
@@ -2365,7 +2436,7 @@ app.post(
       }
 
       const result = await pool.query(
-        `INSERT INTO attendance_locations (
+        \`INSERT INTO attendance_locations (
         professional_id, name, address, address_number, address_complement,
         neighborhood, city, state, zip_code, phone, is_default
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -2457,7 +2528,7 @@ app.put(
       }
 
       const result = await pool.query(
-        `UPDATE attendance_locations 
+        \`UPDATE attendance_locations 
        SET name = $1, address = $2, address_number = $3, address_complement = $4,
        neighborhood = $5, city = $6, state = $7, zip_code = $8, phone = $9,
        is_default = $10, updated_at = CURRENT_TIMESTAMP
@@ -2627,7 +2698,7 @@ app.post(
       }
 
       const result = await pool.query(
-        `INSERT INTO medical_records (
+        \`INSERT INTO medical_records (
         professional_id, private_patient_id, chief_complaint, history_present_illness,
         past_medical_history, medications, allergies, physical_examination,
         diagnosis, treatment_plan, notes, vital_signs
@@ -2696,7 +2767,7 @@ app.put(
       }
 
       const result = await pool.query(
-        `UPDATE medical_records 
+        \`UPDATE medical_records 
        SET chief_complaint = $1, history_present_illness = $2, past_medical_history = $3,
        medications = $4, allergies = $5, physical_examination = $6, diagnosis = $7,
        treatment_plan = $8, notes = $9, vital_signs = $10, updated_at = CURRENT_TIMESTAMP
@@ -2920,7 +2991,7 @@ app.post(
 
       // Save document record
       const result = await pool.query(
-        `INSERT INTO medical_documents (
+        \`INSERT INTO medical_documents (
         professional_id, private_patient_id, title, document_type, document_url, template_data
       ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id, title, document_type, document_url, created_at`,
@@ -2967,7 +3038,7 @@ app.get(
 
       // Get total revenue
       const totalResult = await pool.query(
-        `SELECT COALESCE(SUM(value), 0) as total_revenue
+        \`SELECT COALESCE(SUM(value), 0) as total_revenue
        FROM consultations 
        WHERE date >= $1 AND date <= $2`,
         [start_date, end_date]
@@ -2977,7 +3048,7 @@ app.get(
 
       // Get revenue by professional
       const professionalResult = await pool.query(
-        `SELECT u.name as professional_name,
+        \`SELECT u.name as professional_name,
        COALESCE(u.professional_percentage, 50) as professional_percentage,
        COALESCE(SUM(c.value), 0) as revenue,
        COUNT(c.id) as consultation_count,
@@ -3004,7 +3075,7 @@ app.get(
 
       // Get revenue by service
       const serviceResult = await pool.query(
-        `SELECT s.name as service_name,
+        \`SELECT s.name as service_name,
        COALESCE(SUM(c.value), 0) as revenue,
        COUNT(c.id) as consultation_count
        FROM services s
@@ -3077,7 +3148,7 @@ app.get(
 
       // Get consultations for the professional
       const result = await pool.query(
-        `SELECT c.date, c.value,
+        \`SELECT c.date, c.value,
        COALESCE(u.name, d.name, pp.name) as client_name,
        s.name as service_name,
        c.value * ($3 / 100.0) as amount_to_pay
@@ -3159,7 +3230,7 @@ app.get(
 
       // Get consultations breakdown
       const consultationsResult = await pool.query(
-        `SELECT 
+        \`SELECT 
        COUNT(*) as total_consultations,
        COUNT(CASE WHEN c.client_id IS NOT NULL OR c.dependent_id IS NOT NULL THEN 1 END) as convenio_consultations,
        COUNT(CASE WHEN c.private_patient_id IS NOT NULL THEN 1 END) as private_consultations,
@@ -3206,13 +3277,13 @@ app.get(
       console.log("🔄 Generating clients by city report");
 
       const result = await pool.query(
-        `SELECT 
+        \`SELECT 
        city,
        state,
        COUNT(*) as client_count,
-       COUNT(CASE WHEN subscription_status = 'active' THEN 1 END) as active_clients,
-       COUNT(CASE WHEN subscription_status = 'pending' THEN 1 END) as pending_clients,
-       COUNT(CASE WHEN subscription_status = 'expired' THEN 1 END) as expired_clients
+       COUNT(CASE WHEN subscription_status = 'active\' THEN 1 END) as active_clients,
+       COUNT(CASE WHEN subscription_status = 'pending\' THEN 1 END) as pending_clients,
+       COUNT(CASE WHEN subscription_status = 'expired\' THEN 1 END) as expired_clients
        FROM users 
        WHERE 'client' = ANY(roles) AND city IS NOT NULL AND city != ''
        GROUP BY city, state
@@ -3247,7 +3318,7 @@ app.get(
       console.log("🔄 Generating professionals by city report");
 
       const result = await pool.query(
-        `SELECT 
+        \`SELECT 
        u.city,
        u.state,
        COUNT(*) as total_professionals,
@@ -3291,17 +3362,19 @@ app.get(
       console.log("🔄 Fetching professionals scheduling access");
 
       const result = await pool.query(
-        `SELECT u.id, u.name, u.email, u.phone,
+        \`SELECT u.id, u.name, u.email, u.phone,
        COALESCE(sc.name, 'Sem categoria') as category_name,
        COALESCE(sa.has_access, false) as has_scheduling_access,
         CASE 
-          WHEN u.scheduling_access_expires_at IS NOT NULL AND u.scheduling_access_expires_at > NOW() THEN true
+          WHEN sa.expires_at IS NOT NULL AND sa.expires_at > NOW() THEN true
           ELSE false
         END as has_scheduling_access,
-        u.scheduling_access_expires_at as access_expires_at,
-        u.scheduling_access_granted_by as access_granted_by,
-        u.scheduling_access_granted_at as access_granted_at
+        sa.expires_at as access_expires_at,
+        sa.granted_by as access_granted_by,
+        sa.granted_at as access_granted_at
+       FROM users u
        LEFT JOIN service_categories sc ON CAST(u.professional_percentage AS INTEGER) = sc.id
+       LEFT JOIN scheduling_access sa ON u.id = sa.professional_id
        WHERE 'professional' = ANY(u.roles)
        ORDER BY u.name`
       );
@@ -3345,7 +3418,7 @@ app.post(
 
       // Upsert scheduling access
       await pool.query(
-        `INSERT INTO scheduling_access (professional_id, has_access, expires_at, granted_by, granted_at, reason)
+        \`INSERT INTO scheduling_access (professional_id, has_access, expires_at, granted_by, granted_at, reason)
        VALUES ($1, true, $2, $3, CURRENT_TIMESTAMP, $4)
        ON CONFLICT (professional_id) 
        DO UPDATE SET 
@@ -3390,7 +3463,7 @@ app.post(
       }
 
       await pool.query(
-        `UPDATE scheduling_access 
+        \`UPDATE scheduling_access 
        SET has_access = false, revoked_at = CURRENT_TIMESTAMP, revoked_by = $1
        WHERE professional_id = $2`,
         [req.user.name, professional_id]
@@ -3515,7 +3588,7 @@ app.post(
       const preferenceData = {
         items: [
           {
-            id: `subscription_${user_id}`,
+            id: \`subscription_${user_id}`,
             title: "Assinatura Convênio Quiro Ferreira",
             description: "Assinatura mensal do convênio de saúde",
             quantity: 1,
@@ -3531,19 +3604,19 @@ app.post(
           },
         },
         back_urls: {
-          success: `${req.protocol}://${req.get(
+          success: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/success?type=subscription&user_id=${user_id}`,
-          failure: `${req.protocol}://${req.get(
+          failure: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/failure?type=subscription&user_id=${user_id}`,
-          pending: `${req.protocol}://${req.get(
+          pending: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/pending?type=subscription&user_id=${user_id}`,
         },
         auto_return: "approved",
-        external_reference: `subscription_${user_id}_${Date.now()}`,
-        notification_url: `${req.protocol}://${req.get(
+        external_reference: \`subscription_${user_id}_${Date.now()}`,
+        notification_url: \`${req.protocol}://${req.get(
           "host"
         )}/api/webhooks/mercadopago`,
       };
@@ -3576,7 +3649,7 @@ app.post(
 
       // Get dependent data
       const dependentResult = await pool.query(
-        `SELECT d.id, d.name, d.cpf, d.client_id, d.subscription_status, d.billing_amount,
+        \`SELECT d.id, d.name, d.cpf, d.client_id, d.subscription_status, d.billing_amount,
        u.name as client_name
        FROM dependents d
        JOIN users u ON d.client_id = u.id
@@ -3609,8 +3682,8 @@ app.post(
       const preferenceData = {
         items: [
           {
-            id: `dependent_${dependentId}`,
-            title: `Ativação de Dependente - ${dependent.name}`,
+            id: \`dependent_${dependentId}`,
+            title: \`Ativação de Dependente - ${dependent.name}`,
             description: "Ativação de dependente no convênio de saúde",
             quantity: 1,
             unit_price: dependent.billing_amount || 50,
@@ -3625,25 +3698,19 @@ app.post(
           },
         },
         back_urls: {
-          success:
-            "https://cartaoquiroferreira.com.br/client?payment=success&type=dependent",
-          failure:
-            "https://cartaoquiroferreira.com.br/client?payment=failure&type=dependent",
-          pending:
-            "https://cartaoquiroferreira.com.br/client?payment=pending&type=dependent",
-          success: `${req.protocol}://${req.get(
+          success: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/success?type=dependent&dependent_id=${dependentId}`,
-          failure: `${req.protocol}://${req.get(
+          failure: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/failure?type=dependent&dependent_id=${dependentId}`,
-          pending: `${req.protocol}://${req.get(
+          pending: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/pending?type=dependent&dependent_id=${dependentId}`,
         },
         auto_return: "approved",
-        external_reference: `dependent_${dependentId}_${Date.now()}`,
-        notification_url: `${req.protocol}://${req.get(
+        external_reference: \`dependent_${dependentId}_${Date.now()}`,
+        notification_url: \`${req.protocol}://${req.get(
           "host"
         )}/api/webhooks/mercadopago`,
       };
@@ -3705,7 +3772,7 @@ app.post(
       const preferenceData = {
         items: [
           {
-            id: `professional_payment_${req.user.id}`,
+            id: \`professional_payment_${req.user.id}`,
             title: "Repasse ao Convênio Quiro Ferreira",
             description:
               "Pagamento de repasse ao convênio referente às consultas realizadas",
@@ -3722,25 +3789,25 @@ app.post(
           },
         },
         back_urls: {
-          success: `${req.protocol}://${req.get(
+          success: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/success?type=professional&professional_id=${
             req.user.id
           }`,
-          failure: `${req.protocol}://${req.get(
+          failure: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/failure?type=professional&professional_id=${
             req.user.id
           }`,
-          pending: `${req.protocol}://${req.get(
+          pending: \`${req.protocol}://${req.get(
             "host"
           )}/api/payment/pending?type=professional&professional_id=${
             req.user.id
           }`,
         },
         auto_return: "approved",
-        external_reference: `professional_${req.user.id}_${Date.now()}`,
-        notification_url: `${req.protocol}://${req.get(
+        external_reference: \`professional_${req.user.id}_${Date.now()}`,
+        notification_url: \`${req.protocol}://${req.get(
           "host"
         )}/api/webhooks/mercadopago`,
       };
@@ -3924,9 +3991,9 @@ app.get(
         (SELECT COUNT(*) FROM medical_records) as total_medical_records,
         (SELECT COUNT(*) FROM medical_documents) as total_medical_documents,
         (SELECT COALESCE(SUM(value), 0) FROM consultations) as total_revenue,
-        (SELECT COUNT(*) FROM users WHERE subscription_status = 'active' AND 'client' = ANY(roles)) as active_clients,
-        (SELECT COUNT(*) FROM users WHERE subscription_status = 'pending' AND 'client' = ANY(roles)) as pending_clients,
-        (SELECT COUNT(*) FROM users WHERE subscription_status = 'expired' AND 'client' = ANY(roles)) as expired_clients,
+        (SELECT COUNT(*) FROM users WHERE subscription_status = 'active\' AND 'client' = ANY(roles)) as active_clients,
+        (SELECT COUNT(*) FROM users WHERE subscription_status = 'pending\' AND 'client' = ANY(roles)) as pending_clients,
+        (SELECT COUNT(*) FROM users WHERE subscription_status = 'expired\' AND 'client' = ANY(roles)) as expired_clients,
         (SELECT COUNT(*) FROM dependents WHERE subscription_status = 'active') as active_dependents,
         (SELECT COUNT(*) FROM dependents WHERE subscription_status = 'pending') as pending_dependents
     `);
@@ -3985,7 +4052,7 @@ app.get(
       console.log("🔄 Fetching audit logs");
 
       const result = await pool.query(
-        `SELECT id, user_id, action, table_name, record_id, old_values, new_values, 
+        \`SELECT id, user_id, action, table_name, record_id, old_values, new_values, 
        ip_address, user_agent, created_at
        FROM audit_logs 
        ORDER BY created_at DESC 
@@ -4029,13 +4096,13 @@ app.post(
 
       for (const table of tables) {
         try {
-          const result = await pool.query(`SELECT * FROM ${table}`);
+          const result = await pool.query(\`SELECT * FROM ${table}`);
           backup[table] = result.rows;
           console.log(
-            `✅ Backed up table ${table}: ${result.rows.length} records`
+            \`✅ Backed up table ${table}: ${result.rows.length} records`
           );
         } catch (error) {
-          console.warn(`⚠️ Could not backup table ${table}:`, error.message);
+          console.warn(\`⚠️ Could not backup table ${table}:`, error.message);
           backup[table] = [];
         }
       }
@@ -4091,7 +4158,7 @@ app.post(
         );
         cleanupResults.old_audit_logs = auditResult.rowCount || 0;
         console.log(
-          `✅ Cleaned ${cleanupResults.old_audit_logs} old audit logs`
+          \`✅ Cleaned ${cleanupResults.old_audit_logs} old audit logs`
         );
       } catch (error) {
         console.warn("⚠️ Could not clean audit logs:", error.message);
@@ -4100,12 +4167,12 @@ app.post(
       // Clean orphaned dependents (where client no longer exists)
       try {
         const orphanResult = await pool.query(
-          `DELETE FROM dependents 
+          \`DELETE FROM dependents 
          WHERE client_id NOT IN (SELECT id FROM users WHERE 'client' = ANY(roles))`
         );
         cleanupResults.orphaned_records = orphanResult.rowCount || 0;
         console.log(
-          `✅ Cleaned ${cleanupResults.orphaned_records} orphaned dependents`
+          \`✅ Cleaned ${cleanupResults.orphaned_records} orphaned dependents`
         );
       } catch (error) {
         console.warn("⚠️ Could not clean orphaned records:", error.message);
@@ -4130,7 +4197,7 @@ app.get("/api/notifications", authenticate, async (req, res) => {
     console.log("🔄 Fetching notifications for user:", req.user.id);
 
     const result = await pool.query(
-      `SELECT id, title, message, type, is_read, created_at
+      \`SELECT id, title, message, type, is_read, created_at
        FROM notifications 
        WHERE user_id = $1 OR user_id IS NULL
        ORDER BY created_at DESC 
@@ -4171,7 +4238,7 @@ app.post(
       if (user_id) {
         // Send to specific user
         const result = await pool.query(
-          `INSERT INTO notifications (user_id, title, message, type, created_by)
+          \`INSERT INTO notifications (user_id, title, message, type, created_by)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id, title, message, type, created_at`,
           [user_id, title.trim(), message.trim(), type || "info", req.user.id]
@@ -4190,7 +4257,7 @@ app.post(
         const notifications = [];
         for (const user of users.rows) {
           const result = await pool.query(
-            `INSERT INTO notifications (user_id, title, message, type, created_by)
+            \`INSERT INTO notifications (user_id, title, message, type, created_by)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING id`,
             [user.id, title.trim(), message.trim(), type || "info", req.user.id]
@@ -4206,13 +4273,13 @@ app.post(
         );
 
         res.status(201).json({
-          message: `${notifications.length} notificações criadas`,
+          message: \`${notifications.length} notificações criadas`,
           count: notifications.length,
         });
       } else {
         // Send to all users
         const result = await pool.query(
-          `INSERT INTO notifications (title, message, type, created_by)
+          \`INSERT INTO notifications (title, message, type, created_by)
          VALUES ($1, $2, $3, $4)
          RETURNING id, title, message, type, created_at`,
           [title.trim(), message.trim(), type || "info", req.user.id]
@@ -4234,7 +4301,7 @@ app.put("/api/notifications/:id/read", authenticate, async (req, res) => {
     const notificationId = parseInt(req.params.id);
 
     const result = await pool.query(
-      `UPDATE notifications 
+      \`UPDATE notifications 
        SET is_read = true, read_at = CURRENT_TIMESTAMP
        WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)
        RETURNING id`,
@@ -4297,9 +4364,9 @@ createTables().catch((error) => {
 
 // 🔥 START SERVER
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+  console.log(\`🚀 Server running on port ${PORT}`);
+  console.log(\`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(\`🔗 Health check: http://localhost:${PORT}/health`);
 });
 
 export default app;
