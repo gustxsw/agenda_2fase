@@ -44,6 +44,7 @@ type Category = {
   name: string;
   description: string;
 };
+
 const ManageUsersPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
@@ -319,16 +320,6 @@ const ManageUsersPage: React.FC = () => {
           name,
           email: email || null,
           phone: phone.replace(/\D/g, '') || null,
-          birth_date: birthDate || null,
-          address: address || null,
-          address_number: addressNumber || null,
-          address_complement: addressComplement || null,
-          neighborhood: neighborhood || null,
-          city: city || null,
-          state: state || null,
-          zip_code: zipCode.replace(/\D/g, '') || null,
-          category_id: roles.includes('professional') && categoryId ? parseInt(categoryId) : null,
-          professional_percentage: roles.includes('professional') ? parseInt(professionalPercentage) : null,
           birth_date: birthDate || null,
           address: address || null,
           address_number: addressNumber || null,
@@ -1266,11 +1257,47 @@ const ManageUsersPage: React.FC = () => {
 
                 {/* Security */}
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Shield className="h-5 w-5 mr-2 text-green-600" />
                     Segurança
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                        {modalMode === 'create' ? 'Senha *' : 'Nova Senha (deixe em branco para manter a atual)'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="input pr-10"
+                          required={modalMode === 'create'}
+                          minLength={6}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-5 w-5 text-gray-400" />
+                          ) : (
+                            <Eye className="h-5 w-5 text-gray-400" />
+                          )}
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Mínimo de 6 caracteres
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end mt-6">
                 <button
                   type="button"
                   onClick={closeModal}
