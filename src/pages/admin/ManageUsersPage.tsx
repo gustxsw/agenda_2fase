@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Edit, Trash2, User, Search, Phone, Mail, MapPin, Calendar, X, Check, Eye, EyeOff, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { UserPlus, Edit, Trash2, User, Search, Phone, Mail, MapPin, Calendar, X, Check, Eye, EyeOff, CheckCircle, Clock, AlertTriangle, Users } from 'lucide-react';
 
 type User = {
   id: number;
@@ -17,6 +17,16 @@ type User = {
   roles: string[];
   category_name: string;
   professional_percentage: number;
+  subscription_status: string;
+  subscription_expiry: string;
+  created_at: string;
+};
+
+type Dependent = {
+  id: number;
+  name: string;
+  cpf: string;
+  birth_date: string;
   subscription_status: string;
   subscription_expiry: string;
   created_at: string;
@@ -74,6 +84,12 @@ const ManageUsersPage: React.FC = () => {
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  // Dependents modal state
+  const [isDependentsModalOpen, setIsDependentsModalOpen] = useState(false);
+  const [selectedUserDependents, setSelectedUserDependents] = useState<Dependent[]>([]);
+  const [dependentsLoading, setDependentsLoading] = useState(false);
+  const [selectedUserForDependents, setSelectedUserForDependents] = useState<User | null>(null);
 
   // Get API URL
   const getApiUrl = () => {
@@ -196,6 +212,39 @@ const ManageUsersPage: React.FC = () => {
     setActivationExpiryDate(defaultExpiry.toISOString().split('T')[0]);
     
     setIsActivationModalOpen(true);
+  };
+
+  const openDependentsModal = async (user: User) => {
+    setSelectedUserForDependents(user);
+    setIsDependentsModalOpen(true);
+    
+    try {
+      setDependentsLoading(true);
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/api/dependents/${user.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const dependentsData = await response.json();
+        setSelectedUserDependents(dependentsData);
+      } else {
+        setSelectedUserDependents([]);
+      }
+    } catch (error) {
+      console.error('Error fetching dependents:', error);
+      setSelectedUserDependents([]);
+    } finally {
+      setDependentsLoading(false);
+    }
+  };
+
+  const closeDependentsModal = () => {
+    setIsDependentsModalOpen(false);
+    setSelectedUserDependents([]);
+    setSelectedUserForDependents(null);
   };
 
   const closeModal = () => {
@@ -672,6 +721,16 @@ const ManageUsersPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-2">
+                          {user.roles.includes('client') && (
+                            <button
+                              onClick={() => openDependentsModal(user)}
+                              className="text-purple-600 hover:text-purple-900 flex items-center"
+                              title="Ver Dependentes"
+                            >
+                              <Users className="h-4 w-4 mr-1" />
+                              Dependentes
+                            </button>
+                          )}
                           {statusInfo.showActivateButton && (
                             <button
                               onClick={() => openActivationModal(user)}
@@ -1164,6 +1223,150 @@ const ManageUsersPage: React.FC = () => {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dependents modal */}
+      {isDependentsModalOpen && selectedUserForDependents && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold flex items-center">
+                <Users className="h-6 w-6 text-purple-600 mr-2" />
+                Dependentes de {selectedUserForDependents.name}
+              </h2>
+              <button
+                onClick={closeDependentsModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {dependentsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Carregando dependentes...</p>
+                </div>
+              ) : selectedUserDependents.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Nenhum dependente cadastrado
+                  </h3>
+                  <p className="text-gray-600">
+                    Este cliente ainda não possui dependentes.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Nome
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          CPF
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Data de Nascimento
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Data de Cadastro
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {selectedUserDependents.map((dependent) => {
+                        const depStatusInfo = getSubscriptionStatusDisplay({
+                          ...dependent,
+                          roles: ['client'],
+                          subscription_status: dependent.subscription_status
+                        } as User);
+                        
+                        return (
+                          <tr key={dependent.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-8 w-8">
+                                  <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                    <User className="h-4 w-4 text-purple-600" />
+                                  </div>
+                                </div>
+                                <div className="ml-3">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {dependent.name}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatCpfDisplay(dependent.cpf)}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(dependent.birth_date)}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center w-fit ${depStatusInfo.className}`}>
+                                {depStatusInfo.icon}
+                                {depStatusInfo.text}
+                              </span>
+                              {dependent.subscription_expiry && dependent.subscription_status === 'active' && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Expira: {formatDate(dependent.subscription_expiry)}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(dependent.created_at)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Summary */}
+              {selectedUserDependents.length > 0 && (
+                <div className="mt-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <h4 className="font-medium text-purple-900 mb-2">Resumo dos Dependentes</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-green-600">
+                        {selectedUserDependents.filter(d => d.subscription_status === 'active').length}
+                      </div>
+                      <div className="text-green-700">Ativos</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-yellow-600">
+                        {selectedUserDependents.filter(d => d.subscription_status === 'pending').length}
+                      </div>
+                      <div className="text-yellow-700">Pendentes</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-red-600">
+                        {selectedUserDependents.filter(d => d.subscription_status === 'expired').length}
+                      </div>
+                      <div className="text-red-700">Vencidos</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-purple-600">
+                        {selectedUserDependents.length}
+                      </div>
+                      <div className="text-purple-700">Total</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
