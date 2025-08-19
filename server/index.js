@@ -32,6 +32,7 @@ const corsOptions = {
     'https://cartaoquiroferreira.com.br',
     'https://www.cartaoquiroferreira.com.br'
   ],
+}
 
 // Security headers
 app.use((req, res, next) => {
