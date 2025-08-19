@@ -323,6 +323,11 @@ const ManageUsersPage: React.FC = () => {
       const token = localStorage.getItem('token');
       const apiUrl = getApiUrl();
 
+      console.log('🔄 Activating client:', {
+        user_id: userToActivate.id,
+        expiry_date: activationExpiryDate,
+        user_name: userToActivate.name
+      });
       const response = await fetch(`${apiUrl}/api/admin/activate-client`, {
         method: 'POST',
         headers: {
@@ -335,6 +340,7 @@ const ManageUsersPage: React.FC = () => {
         })
       });
 
+      console.log('📡 Activation response status:', response.status);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Erro ao ativar cliente');
@@ -377,12 +383,16 @@ const ManageUsersPage: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('❌ Activation error:', errorData);
         throw new Error(errorData.message || 'Erro ao excluir usuário');
       }
 
+      const responseData = await response.json();
+      console.log('✅ Client activated successfully:', responseData);
       await fetchData();
       setSuccess('Usuário excluído com sucesso!');
     } catch (error) {
+      console.error('❌ Error in handleActivateClient:', error);
       setError(error instanceof Error ? error.message : 'Erro ao excluir usuário');
     } finally {
       setUserToDelete(null);
