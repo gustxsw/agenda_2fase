@@ -1314,23 +1314,9 @@ app.get("/api/dependents/:clientId", authenticate, async (req, res) => {
       [clientId]
     );
 
-    // Convert to plain objects to avoid buffer issues
-    const dependents = result.rows.map(row => ({
-      id: row.id,
-      client_id: row.client_id,
-      name: row.name,
-      cpf: row.cpf,
-      birth_date: row.birth_date,
-      subscription_status: row.subscription_status,
-      subscription_expiry: row.subscription_expiry,
-      billing_amount: parseFloat(row.billing_amount) || 50,
-      payment_reference: row.payment_reference,
-      activated_at: row.activated_at,
-      created_at: row.created_at,
-      current_status: row.current_status
-    }));
-    
-    res.status(200).json(dependents);
+    console.log("✅ Dependents fetched:", result.rows.length);
+
+    res.json(result.rows);
   } catch (error) {
     console.error("❌ Error fetching dependents:", error);
     res.status(500).json({ message: "Erro interno do servidor" });
@@ -1641,9 +1627,17 @@ app.get("/api/service-categories", authenticate, async (req, res) => {
       "SELECT id, name, description, created_at FROM service_categories ORDER BY name"
     );
 
+    // Convert to plain objects to avoid buffer issues
+    const categories = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      created_at: row.created_at
+    }));
+
     console.log("✅ Service categories fetched:", result.rows.length);
 
-    res.json(result.rows);
+    res.status(200).json(categories);
   } catch (error) {
     console.error("❌ Error fetching service categories:", error);
     res.status(500).json({ message: "Erro interno do servidor" });
