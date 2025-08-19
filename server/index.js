@@ -3331,12 +3331,14 @@ app.get(
         `SELECT u.id, u.name, u.email, u.phone,
        COALESCE(sc.name, 'Sem categoria') as category_name,
        COALESCE(sa.has_access, false) as has_scheduling_access,
-       sa.expires_at as access_expires_at,
-       sa.granted_by as access_granted_by,
-       sa.granted_at as access_granted_at
-       FROM users u
+        CASE 
+          WHEN u.scheduling_access_expires_at IS NOT NULL AND u.scheduling_access_expires_at > NOW() THEN true
+          ELSE false
+        END as has_scheduling_access,
+        u.scheduling_access_expires_at as access_expires_at,
+        u.scheduling_access_granted_by as access_granted_by,
+        u.scheduling_access_granted_at as access_granted_at
        LEFT JOIN service_categories sc ON CAST(u.professional_percentage AS INTEGER) = sc.id
-       LEFT JOIN scheduling_access sa ON u.id = sa.professional_id
        WHERE 'professional' = ANY(u.roles)
        ORDER BY u.name`
       );
