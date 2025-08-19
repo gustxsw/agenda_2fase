@@ -86,7 +86,6 @@ const ManageUsersPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   
-  // Activation modal state
   const [showActivationModal, setShowActivationModal] = useState(false);
   const [userToActivate, setUserToActivate] = useState<User | null>(null);
   const [activationEndDate, setActivationEndDate] = useState('');
