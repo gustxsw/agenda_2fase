@@ -110,7 +110,10 @@ const createTables = async () => {
         neighborhood VARCHAR(100),
         city VARCHAR(100),
         state VARCHAR(2),
-        zip_code VARCHAR(8),
+        zip_code VARCHAR(10),
+        scheduling_access_expires_at TIMESTAMP,
+        scheduling_access_granted_by VARCHAR(255),
+        scheduling_access_granted_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -3370,7 +3373,6 @@ app.post(
       console.log("🔄 Granting scheduling access:", {
         professional_id,
         expires_at,
-        reason,
       });
 
       if (!professional_id || !expires_at) {
@@ -3381,20 +3383,25 @@ app.post(
           });
       }
 
-      // Update user with scheduling access
+      // Upsert scheduling access
       await pool.query(
-        `
-      UPDATE users 
-      SET 
-        scheduling_access_expires_at = $1,
-        scheduling_access_granted_by = $2,
-        scheduling_access_granted_at = NOW()
-      WHERE id = $3 AND roles @> '["professional"]'
-    `,
-        [expires_at, req.user.name, professional_id]
+        `INSERT INTO scheduling_access (professional_id, has_access, expires_at, granted_by, granted_at, reason)
+       VALUES ($1, true, $2, $3, CURRENT_TIMESTAMP, $4)
+       ON CONFLICT (professional_id) 
+       DO UPDATE SET 
+         has_access = true,
+         expires_at = $2,
+         granted_by = $3,
+         granted_at = CURRENT_TIMESTAMP,
+         reason = $4`,
+        [professional_id, expires_at, req.user.name, reason]
       );
 
-      console.log("✅ Scheduling access granted successfully");
+      console.log(
+        "✅ Scheduling access granted to professional:",
+        professional_id
+      );
+
       res.json({ message: "Acesso à agenda concedido com sucesso" });
     } catch (error) {
       console.error("❌ Error granting scheduling access:", error);
