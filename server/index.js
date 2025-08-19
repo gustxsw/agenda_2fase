@@ -625,6 +625,60 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ message: 'Logout realizado com sucesso' });
 });
 
+// Activate client
+app.post('/api/admin/activate-client', authenticate, authorize(['admin']), async (req, res) => {
+  try {
+    const { user_id, subscription_expiry } = req.body;
+
+    console.log('🔄 Admin activating client:', { user_id, subscription_expiry });
+
+    // Validate input
+    if (!user_id || !subscription_expiry) {
+      return safeJsonResponse(res, 400, { message: 'ID do usuário e data de expiração são obrigatórios' });
+    }
+
+    // Validate that user exists and is a client
+    const userResult = await pool.query(
+      'SELECT id, name, roles FROM users WHERE id = $1',
+      [user_id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return safeJsonResponse(res, 404, { message: 'Usuário não encontrado' });
+    }
+
+    const user = userResult.rows[0];
+    if (!user.roles || !user.roles.includes('client')) {
+      return safeJsonResponse(res, 400, { message: 'Usuário não é um cliente' });
+    }
+
+    // Update user subscription status
+    await pool.query(
+      `UPDATE users 
+       SET subscription_status = 'active', 
+           subscription_expiry = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [subscription_expiry, user_id]
+    );
+
+    console.log('✅ Client activated successfully:', user.name);
+
+    safeJsonResponse(res, 200, { 
+      message: 'Cliente ativado com sucesso',
+      user: {
+        id: user.id,
+        name: user.name,
+        subscription_status: 'active',
+        subscription_expiry
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error activating client:', error);
+    safeJsonResponse(res, 500, { message: 'Erro interno do servidor' });
+  }
+});
+
 // Users routes
 app.get('/api/users', authenticate, authorize(['admin']), async (req, res) => {
   try {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Edit, Trash2, User, Search, Filter, Users, Shield, Briefcase, Check, X, UserCheck, Clock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Edit, Trash2, User, Search, Filter, Users, Shield, Briefcase, Check, X, UserCheck, Clock, AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
 
 type User = {
   id: number;
@@ -85,6 +85,12 @@ const ManageUsersPage: React.FC = () => {
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  
+  // Activation modal state
+  const [showActivationModal, setShowActivationModal] = useState(false);
+  const [userToActivate, setUserToActivate] = useState<User | null>(null);
+  const [activationEndDate, setActivationEndDate] = useState('');
+  const [isActivating, setIsActivating] = useState(false);
   
   // Dependent activation state
   const [isActivating, setIsActivating] = useState<number | null>(null);
@@ -281,6 +287,66 @@ const ManageUsersPage: React.FC = () => {
     setError('');
   };
 
+  const openActivationModal = (user: User) => {
+    setUserToActivate(user);
+    
+    // Set default end date to 1 year from now
+    const defaultEndDate = new Date();
+    defaultEndDate.setFullYear(defaultEndDate.getFullYear() + 1);
+    setActivationEndDate(defaultEndDate.toISOString().split('T')[0]);
+    
+    setShowActivationModal(true);
+  };
+
+  const closeActivationModal = () => {
+    setShowActivationModal(false);
+    setUserToActivate(null);
+    setActivationEndDate('');
+    setError('');
+    setSuccess('');
+  };
+
+  const activateClient = async () => {
+    if (!userToActivate || !activationEndDate) return;
+
+    try {
+      setIsActivating(true);
+      setError('');
+      setSuccess('');
+
+      const token = localStorage.getItem('token');
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/api/admin/activate-client`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: userToActivate.id,
+          subscription_expiry: activationEndDate
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erro ao ativar cliente');
+      }
+
+      await fetchUsers();
+      setSuccess(`Cliente ${userToActivate.name} ativado com sucesso até ${new Date(activationEndDate).toLocaleDateString('pt-BR')}!`);
+
+      setTimeout(() => {
+        closeActivationModal();
+      }, 1500);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Erro ao ativar cliente');
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -434,6 +500,39 @@ const ManageUsersPage: React.FC = () => {
   const formatZipCode = (zipCode: string) => {
     if (!zipCode) return '';
     return zipCode.replace(/(\d{5})(\d{3})/, '$1-$2');
+  };
+
+  const getSubscriptionStatusDisplay = (user: User) => {
+    if (!user.roles.includes('client')) {
+      return null;
+    }
+
+    switch (user.subscription_status) {
+      case 'active':
+        return {
+          text: 'Ativo',
+          className: 'bg-green-100 text-green-800',
+          icon: <CheckCircle className="h-3 w-3 mr-1" />
+        };
+      case 'pending':
+        return {
+          text: 'Pendente',
+          className: 'bg-yellow-100 text-yellow-800',
+          icon: <Clock className="h-3 w-3 mr-1" />
+        };
+      case 'expired':
+        return {
+          text: 'Vencido',
+          className: 'bg-red-100 text-red-800',
+          icon: <X className="h-3 w-3 mr-1" />
+        };
+      default:
+        return {
+          text: 'Inativo',
+          className: 'bg-gray-100 text-gray-800',
+          icon: <Clock className="h-3 w-3 mr-1" />
+        };
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -625,13 +724,13 @@ const ManageUsersPage: React.FC = () => {
                       Contato
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Endereço
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Funções
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Status Convênio
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Endereço
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Data de Cadastro
@@ -675,24 +774,6 @@ const ManageUsersPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {user.address && (
-                              <div>
-                                {user.address}
-                                {user.address_number && `, ${user.address_number}`}
-                              </div>
-                            )}
-                            {user.city && user.state && (
-                              <div className="text-xs text-gray-500">
-                                {user.city}, {user.state}
-                              </div>
-                            )}
-                            {!user.address && (
-                              <span className="text-gray-400">Não informado</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-wrap gap-1">
                             {user.roles.map((role) => (
                               <span
@@ -716,20 +797,58 @@ const ManageUsersPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}>
-                            {statusInfo.text}
-                          </span>
-                          {user.subscription_expiry && user.subscription_status === 'active' && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              Expira: {formatDate(user.subscription_expiry)}
-                            </div>
-                          )}
+                          {(() => {
+                            const statusInfo = getSubscriptionStatusDisplay(user);
+                            if (!statusInfo) {
+                              return <span className="text-gray-400 text-sm">N/A</span>;
+                            }
+                            return (
+                              <div>
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center w-fit ${statusInfo.className}`}>
+                                  {statusInfo.icon}
+                                  {statusInfo.text}
+                                </span>
+                                {user.subscription_expiry && user.subscription_status === 'active' && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Expira: {formatDate(user.subscription_expiry)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {user.address && (
+                              <div>
+                                {user.address}
+                                {user.address_number && `, ${user.address_number}`}
+                              </div>
+                            )}
+                            {user.city && user.state && (
+                              <div className="text-xs text-gray-500">
+                                {user.city}, {user.state}
+                              </div>
+                            )}
+                            {!user.address && (
+                              <span className="text-gray-400">Não informado</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(user.created_at)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end space-x-2">
+                            {user.roles.includes('client') && user.subscription_status !== 'active' && (
+                              <button
+                                onClick={() => openActivationModal(user)}
+                                className="text-green-600 hover:text-green-900"
+                                title="Ativar Cliente"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => openEditModal(user)}
                               className="text-blue-600 hover:text-blue-900"
@@ -1340,6 +1459,100 @@ const ManageUsersPage: React.FC = () => {
                 <Check className="h-5 w-5 mr-1" />
                 Confirmar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Client activation modal */}
+      {showActivationModal && userToActivate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold flex items-center">
+                <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
+                Ativar Cliente
+              </h2>
+            </div>
+
+            {error && (
+              <div className="mx-6 mt-4 bg-red-50 text-red-600 p-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mx-6 mt-4 bg-green-50 text-green-600 p-3 rounded-lg">
+                {success}
+              </div>
+            )}
+
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="text-gray-700 mb-2">
+                  <span className="font-medium">Cliente:</span> {userToActivate.name}
+                </p>
+                <p className="text-gray-700 mb-4">
+                  <span className="font-medium">CPF:</span> {formatCpf(userToActivate.cpf)}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data de Encerramento do Convênio *
+                  </label>
+                  <input
+                    type="date"
+                    value={activationEndDate}
+                    onChange={(e) => setActivationEndDate(e.target.value)}
+                    className="input"
+                    min={new Date().toISOString().split('T')[0]}
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    O convênio ficará ativo até a data selecionada (padrão: 1 ano)
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg mt-4 border border-green-200">
+                <h4 className="font-medium text-green-900 mb-2">O que acontecerá:</h4>
+                <ul className="text-sm text-green-700 space-y-1">
+                  <li>• O status do cliente mudará para "Ativo"</li>
+                  <li>• O cliente poderá agendar consultas</li>
+                  <li>• Os dependentes poderão ser ativados individualmente</li>
+                  <li>• O convênio expirará na data selecionada</li>
+                </ul>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={closeActivationModal}
+                  className="btn btn-secondary"
+                  disabled={isActivating}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={activateClient}
+                  className={`btn btn-primary ${isActivating ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  disabled={isActivating || !activationEndDate}
+                >
+                  {isActivating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Ativando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Ativar Cliente
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
