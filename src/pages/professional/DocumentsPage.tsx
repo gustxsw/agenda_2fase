@@ -373,42 +373,6 @@ const DocumentsPage: React.FC = () => {
         );
     }
   };
-        return (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Conteúdo da Declaração *
-            </label>
-            <textarea
-              name="content"
-              value={formData.content}
-              onChange={handleInputChange}
-              className="input min-h-[200px]"
-              placeholder="Digite o conteúdo da declaração médica..."
-              required
-            />
-          </div>
-        );
-
-      case 'lgpd':
-        return (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Observações Adicionais
-            </label>
-            <textarea
-              name="content"
-              value={formData.content}
-              onChange={handleInputChange}
-              className="input min-h-[100px]"
-              placeholder="Observações específicas sobre o tratamento de dados (opcional)..."
-            />
-            <p className="text-sm text-gray-500 mt-1">
-              O termo LGPD padrão será gerado automaticamente. Use este campo apenas para observações específicas.
-            </p>
-          </div>
-        );
-
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
