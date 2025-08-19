@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Edit, Trash2, User, Search, Filter, Users, Shield, Briefcase, Check, X, UserCheck, Clock, AlertCircle } from 'lucide-react';
+import { UserPlus, Edit, Trash2, User, Search, Filter, Users, Shield, Briefcase, Check, X, UserCheck, Clock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 type User = {
   id: number;
@@ -7,6 +7,16 @@ type User = {
   cpf: string;
   email: string;
   phone: string;
+  birth_date: string;
+  address: string;
+  address_number: string;
+  address_complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  category_name: string;
+  professional_percentage: number;
   roles: string[];
   subscription_status: string;
   subscription_expiry: string | null;
@@ -29,9 +39,15 @@ type Dependent = {
   created_at: string;
 };
 
+type Category = {
+  id: number;
+  name: string;
+  description: string;
+};
 const ManageUsersPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [filteredDependents, setFilteredDependents] = useState<Dependent[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,6 +68,16 @@ const ManageUsersPage: React.FC = () => {
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [address, setAddress] = useState('');
+  const [addressNumber, setAddressNumber] = useState('');
+  const [addressComplement, setAddressComplement] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [zipCode, setZipCode] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [professionalPercentage, setProfessionalPercentage] = useState('50');
   const [password, setPassword] = useState('');
   const [roles, setRoles] = useState<string[]>(['client']);
   
@@ -61,6 +87,9 @@ const ManageUsersPage: React.FC = () => {
   
   // Dependent activation state
   const [isActivating, setIsActivating] = useState<number | null>(null);
+  
+  // Password visibility
+  const [showPassword, setShowPassword] = useState(false);
 
   // Get API URL
   const getApiUrl = () => {
@@ -149,6 +178,19 @@ const ManageUsersPage: React.FC = () => {
         console.warn('Dependents not available');
         setDependents([]);
       }
+
+      // Fetch categories for professional users
+      const categoriesResponse = await fetch(`${apiUrl}/api/service-categories`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (categoriesResponse.ok) {
+        const categoriesData = await categoriesResponse.json();
+        setCategories(categoriesData);
+      } else {
+        console.warn('Categories not available');
+        setCategories([]);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Não foi possível carregar os dados');
@@ -194,6 +236,16 @@ const ManageUsersPage: React.FC = () => {
     setCpf('');
     setEmail('');
     setPhone('');
+    setBirthDate('');
+    setAddress('');
+    setAddressNumber('');
+    setAddressComplement('');
+    setNeighborhood('');
+    setCity('');
+    setState('');
+    setZipCode('');
+    setCategoryId('');
+    setProfessionalPercentage('50');
     setPassword('');
     setRoles(['client']);
     setSelectedUser(null);
@@ -206,6 +258,16 @@ const ManageUsersPage: React.FC = () => {
     setCpf(user.cpf || '');
     setEmail(user.email || '');
     setPhone(user.phone || '');
+    setBirthDate(user.birth_date || '');
+    setAddress(user.address || '');
+    setAddressNumber(user.address_number || '');
+    setAddressComplement(user.address_complement || '');
+    setNeighborhood(user.neighborhood || '');
+    setCity(user.city || '');
+    setState(user.state || '');
+    setZipCode(user.zip_code || '');
+    setCategoryId(''); // Will need to be fetched from user data
+    setProfessionalPercentage(user.professional_percentage?.toString() || '50');
     setPassword('');
     setRoles(user.roles);
     setSelectedUser(user);
@@ -257,6 +319,26 @@ const ManageUsersPage: React.FC = () => {
           name,
           email: email || null,
           phone: phone.replace(/\D/g, '') || null,
+          birth_date: birthDate || null,
+          address: address || null,
+          address_number: addressNumber || null,
+          address_complement: addressComplement || null,
+          neighborhood: neighborhood || null,
+          city: city || null,
+          state: state || null,
+          zip_code: zipCode.replace(/\D/g, '') || null,
+          category_id: roles.includes('professional') && categoryId ? parseInt(categoryId) : null,
+          professional_percentage: roles.includes('professional') ? parseInt(professionalPercentage) : null,
+          birth_date: birthDate || null,
+          address: address || null,
+          address_number: addressNumber || null,
+          address_complement: addressComplement || null,
+          neighborhood: neighborhood || null,
+          city: city || null,
+          state: state || null,
+          zip_code: zipCode.replace(/\D/g, '') || null,
+          category_id: roles.includes('professional') && categoryId ? parseInt(categoryId) : null,
+          professional_percentage: roles.includes('professional') ? parseInt(professionalPercentage) : null,
           roles,
         };
 
@@ -356,6 +438,11 @@ const ManageUsersPage: React.FC = () => {
       return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
     }
     return phone;
+  };
+
+  const formatZipCode = (zipCode: string) => {
+    if (!zipCode) return '';
+    return zipCode.replace(/(\d{5})(\d{3})/, '$1-$2');
   };
 
   const formatDate = (dateString: string) => {
@@ -547,6 +634,9 @@ const ManageUsersPage: React.FC = () => {
                       Contato
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Endereço
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Funções
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -594,6 +684,24 @@ const ManageUsersPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {user.address && (
+                              <div>
+                                {user.address}
+                                {user.address_number && `, ${user.address_number}`}
+                              </div>
+                            )}
+                            {user.city && user.state && (
+                              <div className="text-xs text-gray-500">
+                                {user.city}, {user.state}
+                              </div>
+                            )}
+                            {!user.address && (
+                              <span className="text-gray-400">Não informado</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex flex-wrap gap-1">
                             {user.roles.map((role) => (
                               <span
@@ -609,6 +717,11 @@ const ManageUsersPage: React.FC = () => {
                                 {getRoleInfo([role])}
                               </span>
                             ))}
+                            {user.roles.includes('professional') && user.category_name && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {user.category_name} - {user.professional_percentage}%
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -815,7 +928,7 @@ const ManageUsersPage: React.FC = () => {
       {/* User form modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">
                 {modalMode === 'create' ? 'Adicionar Usuário' : 'Editar Usuário'}
@@ -841,103 +954,320 @@ const ManageUsersPage: React.FC = () => {
             )}
 
             <form onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="input"
-                  required
-                />
-              </div>
-
-              {modalMode === 'create' && (
-                <div className="mb-4">
-                  <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-1">
-                    CPF (opcional)
-                  </label>
-                  <input
-                    id="cpf"
-                    type="text"
-                    value={formatCpf(cpf)}
-                    onChange={(e) => setCpf(e.target.value.replace(/\D/g, ''))}
-                    className="input"
-                    placeholder="000.000.000-00"
-                  />
-                </div>
-              )}
-
-              <div className="mb-4">
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email (opcional)
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input"
-                />
-              </div>
-
-              <div className="mb-4">
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                  Telefone (opcional)
-                </label>
-                <input
-                  id="phone"
-                  type="text"
-                  value={formatPhone(phone)}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                  className="input"
-                  placeholder="(00) 00000-0000"
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Funções
-                </label>
-                <div className="space-y-2">
-                  {['client', 'professional', 'admin'].map((role) => (
-                    <label key={role} className="flex items-center">
+              <div className="space-y-6">
+                {/* Personal Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <User className="h-5 w-5 mr-2 text-red-600" />
+                    Informações Pessoais
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                        Nome Completo *
+                      </label>
                       <input
-                        type="checkbox"
-                        checked={roles.includes(role)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setRoles([...roles, role]);
-                          } else {
-                            setRoles(roles.filter(r => r !== role));
-                          }
-                        }}
-                        className="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
+                        id="name"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="input"
+                        required
                       />
-                      <span className="ml-2 text-sm text-gray-600">
-                        {getRoleInfo([role])}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+                    </div>
 
-              <div className="mb-6">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  {modalMode === 'create' ? 'Senha' : 'Nova Senha (deixe em branco para manter)'}
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input"
-                  required={modalMode === 'create'}
-                  minLength={6}
-                />
+                    {modalMode === 'create' && (
+                      <div>
+                        <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-1">
+                          CPF (opcional)
+                        </label>
+                        <input
+                          id="cpf"
+                          type="text"
+                          value={formatCpf(cpf)}
+                          onChange={(e) => setCpf(e.target.value.replace(/\D/g, ''))}
+                          className="input"
+                          placeholder="000.000.000-00"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                        Email (opcional)
+                      </label>
+                      <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                        Telefone (opcional)
+                      </label>
+                      <input
+                        id="phone"
+                        type="text"
+                        value={formatPhone(phone)}
+                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                        className="input"
+                        placeholder="(00) 00000-0000"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700 mb-1">
+                        Data de Nascimento (opcional)
+                      </label>
+                      <input
+                        id="birthDate"
+                        type="date"
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address Information */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Endereço (opcional)
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700 mb-1">
+                        CEP
+                      </label>
+                      <input
+                        id="zipCode"
+                        type="text"
+                        value={formatZipCode(zipCode)}
+                        onChange={(e) => setZipCode(e.target.value.replace(/\D/g, ''))}
+                        className="input"
+                        placeholder="00000-000"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+                        Endereço
+                      </label>
+                      <input
+                        id="address"
+                        type="text"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="addressNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                        Número
+                      </label>
+                      <input
+                        id="addressNumber"
+                        type="text"
+                        value={addressNumber}
+                        onChange={(e) => setAddressNumber(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="addressComplement" className="block text-sm font-medium text-gray-700 mb-1">
+                        Complemento
+                      </label>
+                      <input
+                        id="addressComplement"
+                        type="text"
+                        value={addressComplement}
+                        onChange={(e) => setAddressComplement(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="neighborhood" className="block text-sm font-medium text-gray-700 mb-1">
+                        Bairro
+                      </label>
+                      <input
+                        id="neighborhood"
+                        type="text"
+                        value={neighborhood}
+                        onChange={(e) => setNeighborhood(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
+                        Cidade
+                      </label>
+                      <input
+                        id="city"
+                        type="text"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="input"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
+                        Estado
+                      </label>
+                      <select
+                        id="state"
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
+                        className="input"
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="AC">Acre</option>
+                        <option value="AL">Alagoas</option>
+                        <option value="AP">Amapá</option>
+                        <option value="AM">Amazonas</option>
+                        <option value="BA">Bahia</option>
+                        <option value="CE">Ceará</option>
+                        <option value="DF">Distrito Federal</option>
+                        <option value="ES">Espírito Santo</option>
+                        <option value="GO">Goiás</option>
+                        <option value="MA">Maranhão</option>
+                        <option value="MT">Mato Grosso</option>
+                        <option value="MS">Mato Grosso do Sul</option>
+                        <option value="MG">Minas Gerais</option>
+                        <option value="PA">Pará</option>
+                        <option value="PB">Paraíba</option>
+                        <option value="PR">Paraná</option>
+                        <option value="PE">Pernambuco</option>
+                        <option value="PI">Piauí</option>
+                        <option value="RJ">Rio de Janeiro</option>
+                        <option value="RN">Rio Grande do Norte</option>
+                        <option value="RS">Rio Grande do Sul</option>
+                        <option value="RO">Rondônia</option>
+                        <option value="RR">Roraima</option>
+                        <option value="SC">Santa Catarina</option>
+                        <option value="SP">São Paulo</option>
+                        <option value="SE">Sergipe</option>
+                        <option value="TO">Tocantins</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Roles */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Funções no Sistema
+                  </h3>
+                  
+                  <div className="space-y-2">
+                    {['client', 'professional', 'admin'].map((role) => (
+                      <label key={role} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={roles.includes(role)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setRoles([...roles, role]);
+                            } else {
+                              setRoles(roles.filter(r => r !== role));
+                              // Clear professional fields if unchecking professional
+                              if (role === 'professional') {
+                                setCategoryId('');
+                                setProfessionalPercentage('50');
+                              }
+                            }
+                          }}
+                          className="rounded border-gray-300 text-red-600 shadow-sm focus:border-red-300 focus:ring focus:ring-red-200 focus:ring-opacity-50"
+                        />
+                        <span className="ml-2 text-sm text-gray-600">
+                          {getRoleInfo([role])}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Professional specific fields */}
+                {roles.includes('professional') && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Briefcase className="h-5 w-5 mr-2 text-blue-600" />
+                      Informações Profissionais
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="categoryId" className="block text-sm font-medium text-gray-700 mb-1">
+                          Categoria Profissional *
+                        </label>
+                        <select
+                          id="categoryId"
+                          value={categoryId}
+                          onChange={(e) => setCategoryId(e.target.value)}
+                          className="input"
+                          required={roles.includes('professional')}
+                        >
+                          <option value="">Selecione uma categoria</option>
+                          {categories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+                        {categories.length === 0 && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Nenhuma categoria disponível. Cadastre categorias primeiro.
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="professionalPercentage" className="block text-sm font-medium text-gray-700 mb-1">
+                          Porcentagem do Profissional (%) *
+                        </label>
+                        <input
+                          id="professionalPercentage"
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={professionalPercentage}
+                          onChange={(e) => setProfessionalPercentage(e.target.value)}
+                          className="input"
+                          required={roles.includes('professional')}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Porcentagem que o profissional recebe das consultas do convênio
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-blue-50 p-4 rounded-lg mt-4">
+                      <h4 className="font-medium text-blue-900 mb-2">Informações sobre porcentagem:</h4>
+                      <ul className="text-sm text-blue-700 space-y-1">
+                        <li>• O profissional recebe a porcentagem definida das consultas do convênio</li>
+                        <li>• O convênio fica com o restante (100% - porcentagem do profissional)</li>
+                        <li>• Consultas particulares: profissional recebe 100%</li>
+                        <li>• Padrão: 50% para o profissional, 50% para o convênio</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* Security */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Segurança
               </div>
 
               <div className="flex justify-end">
