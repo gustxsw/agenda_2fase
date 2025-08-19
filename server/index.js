@@ -31,6 +31,17 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
+
+// Helper function for safe JSON responses
+const safeJsonResponse = (res, status, data) => {
+  try {
+    return res.status(status).json(data);
+  } catch (error) {
+    console.error('Error sending JSON response:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 app.use(express.static('dist'));
 
 // MercadoPago configuration
