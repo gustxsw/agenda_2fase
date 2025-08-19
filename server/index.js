@@ -192,7 +192,7 @@ const createTables = async () => {
       )
     `);
 
-    // Create payments table
+    // Create client_payments table for subscription payments
     await pool.query(`
       CREATE TABLE IF NOT EXISTS client_payments (
         id SERIAL PRIMARY KEY,
