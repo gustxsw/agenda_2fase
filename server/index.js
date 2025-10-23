@@ -581,19 +581,19 @@ const initializeDatabase = async () => {
     // Insert default system settings
     await pool.query(`
       INSERT INTO system_settings (key, value, description) 
-      SELECT 'subscription_price', '250.00', 'Preço da assinatura mensal'
+      SELECT 'subscription_price', '2.0', 'Preço da assinatura mensal'
       WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'subscription_price')
     `);
 
     await pool.query(`
       INSERT INTO system_settings (key, value, description) 
-      SELECT 'dependent_price', '50.00', 'Preço da ativação de dependente'
+      SELECT 'dependent_price', '1.0', 'Preço da ativação de dependente'
       WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'dependent_price')
     `);
 
     await pool.query(`
       INSERT INTO system_settings (key, value, description) 
-      SELECT 'agenda_access_price', '24.99', 'Preço do acesso à agenda'
+      SELECT 'agenda_access_price', '0.50', 'Preço do acesso à agenda'
       WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE key = 'agenda_access_price')
     `);
 
@@ -4549,7 +4549,7 @@ app.post(
             title: "Assinatura Cartão Quiro Ferreira",
             description: "Ativação da assinatura mensal do cartão de convênio",
             quantity: 1,
-            unit_price: 250.0,
+            unit_price: 2.0,
             currency_id: "BRL",
           },
         ],
@@ -4587,7 +4587,7 @@ app.post(
     `,
         [
           user_id,
-          250.0,
+          2.0,
           "pending",
           subscriptionResult.id,
           `subscription_${user_id}_${Date.now()}`,
@@ -4650,7 +4650,7 @@ app.post(
             title: `Ativação de Dependente - ${dependent.name}`,
             description: "Ativação de dependente no cartão de convênio",
             quantity: 1,
-            unit_price: 50.0,
+            unit_price: 1.0,
             currency_id: "BRL",
           },
         ],
@@ -4692,7 +4692,7 @@ app.post(
     `,
         [
           dependent_id,
-          50.0,
+          1.0,
           "pending",
           dependentPaymentResult.id,
           `dependent_${dependent_id}_${Date.now()}`,
@@ -4812,7 +4812,7 @@ app.post(
             description:
               "Assinatura mensal do sistema de agendamentos (30 dias)",
             quantity: 1,
-            unit_price: 24.99,
+            unit_price: 0.5,
             currency_id: "BRL",
           },
         ],
@@ -4851,7 +4851,7 @@ app.post(
         [
           req.user.id,
           duration_days,
-          24.99,
+          0.5,
           "pending",
           agendaResult.id,
           `agenda_${req.user.id}_${duration_days}_${Date.now()}`,
@@ -5691,7 +5691,7 @@ app.post(
         id: payment_id || `test_${Date.now()}`,
         status: "approved",
         external_reference: external_reference,
-        transaction_amount: 24.99, // Default value, will be overwritten if needed by specific processing functions
+        transaction_amount: 0.5, // Default value, will be overwritten if needed by specific processing functions
       };
 
       console.log("🔧 [MANUAL] Processing with mock payment:", mockPayment);
