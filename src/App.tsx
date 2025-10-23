@@ -10,6 +10,7 @@ import AuthLayout from "./layouts/AuthLayout";
 import LoginPage from "./pages/LoginPage";
 import RoleSelectionPage from "./pages/RoleSelectionPage";
 import RegisterPage from "./pages/RegisterPage";
+import MaintenancePage from "./pages/MaintenancePage";
 import ClientHomePage from "./pages/client/ClientHomePage";
 import ProfessionalsPage from "./pages/client/ProfessionalsPage";
 import ProfessionalHomePage from "./pages/professional/ProfessionalHomePage";
@@ -75,6 +76,9 @@ function App() {
 
   return (
     <Routes>
+      {/* 🔧 MAINTENANCE ROUTE - ACCESSIBLE WITHOUT LOGIN */}
+      <Route path="/manutencao" element={<MaintenancePage />} />
+      
       {/* 🔥 ROOT ROUTE - SEMPRE LOGIN */}
       <Route path="/" element={<LoginPage />} />
 

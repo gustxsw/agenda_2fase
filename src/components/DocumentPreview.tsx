@@ -1,7 +1,9 @@
+"use client";
+
 import type React from "react";
 import { useState, useEffect } from "react";
-import { useAuth } from "../../contexts/AuthContext";
-import MedicalRecordPreviewModal from "../../components/MedicalRecordPreviewModal";
+import { useAuth } from "../contexts/AuthContext";
+import SimplePDFGenerator from "./SimplePDFGenerator";
 import {
   Stethoscope,
   Plus,
@@ -13,7 +15,6 @@ import {
   Eye,
   X,
   Check,
-  Download,
   Printer,
 } from "lucide-react";
 
@@ -61,10 +62,6 @@ const MedicalRecordsPage: React.FC = () => {
 
   // Form state
   const [formData, setFormData] = useState({
-    patient_type: "private" as "convenio" | "private",
-    client_cpf: "",
-    patient_name: "",
-    patient_cpf: "",
     private_patient_id: "",
     chief_complaint: "",
     history_present_illness: "",
@@ -85,14 +82,6 @@ const MedicalRecordsPage: React.FC = () => {
       height: "",
     },
   });
-
-  // Client search state (for convenio patients)
-  const [clientSearchResult, setClientSearchResult] = useState<any>(null);
-  const [dependents, setDependents] = useState<any[]>([]);
-  const [selectedDependentId, setSelectedDependentId] = useState<number | null>(
-    null
-  );
-  const [isSearching, setIsSearching] = useState(false);
 
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -205,10 +194,6 @@ const MedicalRecordsPage: React.FC = () => {
   const openCreateModal = () => {
     setModalMode("create");
     setFormData({
-      patient_type: "private",
-      client_cpf: "",
-      patient_name: "",
-      patient_cpf: "",
       private_patient_id: "",
       chief_complaint: "",
       history_present_illness: "",
@@ -230,25 +215,13 @@ const MedicalRecordsPage: React.FC = () => {
       },
     });
     setSelectedRecord(null);
-    setClientSearchResult(null);
-    setDependents([]);
-    setSelectedDependentId(null);
     setIsModalOpen(true);
   };
 
   const openEditModal = (record: MedicalRecord) => {
     setModalMode("edit");
-
-    const matchingPatient = patients.find(
-      (p) => p.name === record.patient_name || p.cpf === record.patient_cpf
-    );
-
     setFormData({
-      patient_type: "private", // Default to private for editing
-      client_cpf: "",
-      patient_name: record.patient_name || "",
-      patient_cpf: record.patient_cpf || "",
-      private_patient_id: matchingPatient ? matchingPatient.id.toString() : "",
+      private_patient_id: "", // Would need to be set based on the record
       chief_complaint: record.chief_complaint || "",
       history_present_illness: record.history_present_illness || "",
       past_medical_history: record.past_medical_history || "",
@@ -280,9 +253,6 @@ const MedicalRecordsPage: React.FC = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setIsViewModalOpen(false);
-    setClientSearchResult(null);
-    setDependents([]);
-    setSelectedDependentId(null);
     setError("");
     setSuccess("");
   };
@@ -308,165 +278,15 @@ const MedicalRecordsPage: React.FC = () => {
     }
   };
 
-  const searchClientByCpf = async () => {
-    if (!formData.client_cpf) return;
-
-    try {
-      setIsSearching(true);
-      setError("");
-
-      const token = localStorage.getItem("token");
-      const apiUrl = getApiUrl();
-      const cleanCpf = formData.client_cpf.replace(/\D/g, "");
-
-      // First, try to find a dependent
-      const dependentResponse = await fetch(
-        `${apiUrl}/api/dependents/search?cpf=${cleanCpf}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (dependentResponse.ok) {
-        const dependentData = await dependentResponse.json();
-
-        if (dependentData.status !== "active") {
-          setError("Este dependente não possui assinatura ativa.");
-          return;
-        }
-
-        setClientSearchResult({
-          id: dependentData.user_id,
-          name: dependentData.client_name,
-          subscription_status: "active",
-        });
-        setSelectedDependentId(dependentData.id);
-        setDependents([]);
-
-        // Set patient data for the form
-        setFormData((prev) => ({
-          ...prev,
-          patient_name: dependentData.name,
-          patient_cpf: dependentData.cpf,
-        }));
-        return;
-      }
-
-      // If not found as dependent, try as client
-      const clientResponse = await fetch(
-        `${apiUrl}/api/clients/lookup?cpf=${cleanCpf}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (!clientResponse.ok) {
-        if (clientResponse.status === 404) {
-          setError("Cliente ou dependente não encontrado.");
-        } else {
-          setError("Erro ao buscar cliente.");
-        }
-        return;
-      }
-
-      const clientData = await clientResponse.json();
-
-      if (clientData.subscription_status !== "active") {
-        setError("Este cliente não possui assinatura ativa.");
-        return;
-      }
-
-      setClientSearchResult(clientData);
-      setSelectedDependentId(null);
-
-      // Set patient data for the form
-      setFormData((prev) => ({
-        ...prev,
-        patient_name: clientData.name,
-        patient_cpf: clientData.cpf,
-      }));
-
-      // Fetch dependents
-      const dependentsResponse = await fetch(
-        `${apiUrl}/api/dependents?client_id=${clientData.id}&status=active`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (dependentsResponse.ok) {
-        const dependentsData = await dependentsResponse.json();
-        setDependents(dependentsData);
-      }
-    } catch (error) {
-      setError("Erro ao buscar paciente.");
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const formatCpf = (value: string) => {
-    if (!value) return "";
-    const numericValue = value.replace(/\D/g, "");
-    return numericValue.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    // Validate patient selection
-    if (formData.patient_type === "private" && !formData.private_patient_id) {
-      setError("Selecione um paciente particular");
-      return;
-    }
-
-    if (formData.patient_type === "convenio" && !clientSearchResult) {
-      setError("Busque e selecione um cliente ou dependente do convênio");
-      return;
-    }
-
     try {
       const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
-      // Prepare patient data for the medical record
-      let patientName, patientCpf;
-
-      if (formData.patient_type === "private") {
-        const patient = patients.find(
-          (p) => p.id.toString() === formData.private_patient_id
-        );
-        if (!patient) {
-          setError("Paciente particular não encontrado");
-          return;
-        }
-        patientName = patient.name;
-        patientCpf = patient.cpf || "";
-      } else {
-        // Convenio patient
-        if (selectedDependentId) {
-          const dependent = dependents.find(
-            (d) => d.id === selectedDependentId
-          );
-          patientName = dependent ? dependent.name : clientSearchResult.name;
-          patientCpf = dependent ? dependent.cpf : formData.client_cpf;
-        } else {
-          patientName = clientSearchResult.name;
-          patientCpf = formData.client_cpf;
-        }
-      }
-
-      // Add patient info to form data
-      const submitData = {
-        ...formData,
-        patient_type: formData.patient_type,
-        patient_name: patientName,
-        patient_cpf: patientCpf,
-      };
-
-      console.log("🔄 Medical record submit data:", submitData);
       const url =
         modalMode === "create"
           ? `${apiUrl}/api/medical-records`
@@ -480,12 +300,11 @@ const MedicalRecordsPage: React.FC = () => {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(submitData),
+        body: JSON.stringify(formData),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("❌ Medical record error:", errorData);
         throw new Error(errorData.message || "Erro ao salvar prontuário");
       }
 
@@ -558,225 +377,14 @@ const MedicalRecordsPage: React.FC = () => {
     setRecordToPreview(null);
   };
 
-  // Função de impressão direta para prontuários
-  const printMedicalRecordDirect = (record: MedicalRecord) => {
-    try {
-      console.log("🔄 Starting direct medical record print");
-
-      // Gerar HTML do prontuário
-      const vitalSigns = record.vital_signs || {};
-      const hasVitalSigns = Object.values(vitalSigns).some(
-        (value) => value && value.toString().trim()
-      );
-
-      let vitalSignsHTML = "";
-      if (hasVitalSigns) {
-        const vitalSignItems = [
-          { label: "Pressão Arterial", value: vitalSigns.blood_pressure },
-          { label: "Freq. Cardíaca", value: vitalSigns.heart_rate },
-          { label: "Temperatura", value: vitalSigns.temperature },
-          { label: "Freq. Respiratória", value: vitalSigns.respiratory_rate },
-          { label: "Sat. O₂", value: vitalSigns.oxygen_saturation },
-          { label: "Peso", value: vitalSigns.weight },
-          { label: "Altura", value: vitalSigns.height },
-        ].filter((item) => item.value && item.value.toString().trim());
-
-        if (vitalSignItems.length > 0) {
-          vitalSignsHTML = `
-            <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #ffffff;">
-              <h3 style="margin: 0 0 10px 0; color: #c11c22; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-weight: bold;">Sinais Vitais</h3>
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 15px 0;">
-                ${vitalSignItems
-                  .map(
-                    (item) => `
-                  <div style="text-align: center; padding: 10px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px;">
-                    <div style="font-size: 11px; color: #666666; margin-bottom: 5px;">${item.label}</div>
-                    <div style="font-weight: bold; color: #c11c22;">${item.value}</div>
-                  </div>
-                `
-                  )
-                  .join("")}
-              </div>
-            </div>
-          `;
-        }
-      }
-
-      const medicalSections = [
-        { title: "Queixa Principal", content: record.chief_complaint },
-        {
-          title: "História da Doença Atual",
-          content: record.history_present_illness,
-        },
-        {
-          title: "História Médica Pregressa",
-          content: record.past_medical_history,
-        },
-        { title: "Medicamentos em Uso", content: record.medications },
-        { title: "Alergias", content: record.allergies },
-        { title: "Exame Físico", content: record.physical_examination },
-        { title: "Diagnóstico", content: record.diagnosis },
-        { title: "Plano de Tratamento", content: record.treatment_plan },
-        { title: "Observações Gerais", content: record.notes },
-      ].filter((section) => section.content && section.content.trim());
-
-      const medicalSectionsHTML = medicalSections
-        .map(
-          (section) => `
-        <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; page-break-inside: avoid; background: #ffffff;">
-          <h3 style="margin: 0 0 10px 0; color: #c11c22; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 5px; font-weight: bold;">${section.title}</h3>
-          <p style="color: #000000; margin: 10px 0; text-align: justify;">${section.content}</p>
-        </div>
-      `
-        )
-        .join("");
-
-      const htmlContent = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prontuário Médico - ${record.patient_name}</title>
-    <style>
-        @page { size: A4; margin: 15mm; }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Times New Roman', serif !important;
-            font-size: 14px !important;
-            line-height: 1.6 !important;
-            color: #000000 !important;
-            background: #ffffff !important;
-            padding: 20px !important;
-            margin: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 40px;
-            border-bottom: 2px solid #333;
-            padding-bottom: 20px;
-        }
-        .logo {
-            font-size: 24px !important;
-            font-weight: bold !important;
-            color: #333 !important;
-            margin-bottom: 10px;
-        }
-        .title {
-            font-size: 20px !important;
-            font-weight: bold !important;
-            text-transform: uppercase;
-            margin: 30px 0 !important;
-            text-align: center;
-            color: #000000 !important;
-        }
-        .patient-info {
-            background: #f9f9f9 !important;
-            padding: 15px !important;
-            border-left: 4px solid #333 !important;
-            margin: 20px 0 !important;
-            border-radius: 4px;
-        }
-        .signature {
-            margin-top: 60px !important;
-            text-align: center;
-        }
-        .signature-line {
-            border-top: 1px solid #000000 !important;
-            width: 300px;
-            margin: 40px auto 10px !important;
-        }
-        .footer {
-            margin-top: 40px !important;
-            text-align: center;
-            font-size: 12px !important;
-            color: #666666 !important;
-            border-top: 1px solid #dddddd !important;
-            padding-top: 20px !important;
-        }
-        * { color: #000000 !important; }
-        h1, h2, h3, h4, h5, h6 { color: #333 !important; }
-        strong { font-weight: bold !important; color: #000000 !important; }
-        @media print {
-            body { margin: 0 !important; padding: 20px !important; background: #ffffff !important; }
-            * { color: #000000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        }
-    </style>
-</head>
-<body>
-
-    <div class="title">Prontuário Médico</div>
-
-    <div class="patient-info">
-        <strong>Paciente:</strong> ${record.patient_name}<br>
-        <strong>Data do Atendimento:</strong> ${new Date(
-          record.created_at
-        ).toLocaleDateString("pt-BR")}<br>
-        <strong>Data de Emissão:</strong> ${new Date().toLocaleDateString(
-          "pt-BR"
-        )}
-    </div>
-
-    ${vitalSignsHTML}
-
-    ${medicalSectionsHTML}
-
-    ${
-      medicalSections.length === 0
-        ? `
-    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background: #ffffff;">
-        <p style="color: #000000; margin: 10px 0; text-align: justify;"><em>Prontuário médico sem informações clínicas detalhadas registradas.</em></p>
-    </div>
-    `
-        : ""
-    }
-
-    <div class="signature">
-        <div class="signature-line"></div>
-        <div>
-            <strong>${professionalData.name}</strong><br>
-            ${professionalData.specialty}<br>
-            ${professionalData.crm ? `Registro: ${professionalData.crm}` : ""}
-        </div>
-    </div>
-
-
-    <script>
-        window.onload = function() {
-            setTimeout(function() {
-                window.print();
-                setTimeout(function() {
-                    window.close();
-                }, 1000);
-            }, 500);
-        };
-    </script>
-</body>
-</html>`;
-
-      // Criar nova janela
-      const printWindow = window.open("", "_blank", "width=800,height=600");
-
-      if (!printWindow) {
-        throw new Error("Popup foi bloqueado. Permita popups para imprimir.");
-      }
-
-      // Escrever e fechar documento
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-
-      setSuccess("Janela de impressão aberta! Use Ctrl+P se necessário.");
-    } catch (error) {
-      console.error("Error printing medical record:", error);
-      setError(
-        error instanceof Error ? error.message : "Erro ao imprimir prontuário"
-      );
-    }
-  };
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("pt-BR", {
+    // Convert from UTC (database) to Brazil local time for display
+    const utcDate = new Date(dateString);
+    const docPreviewUtcDate = new Date(dateString);
+    const docPreviewLocalDate = new Date(
+      docPreviewUtcDate.getTime() - 3 * 60 * 60 * 1000
+    );
+    return docPreviewLocalDate.toLocaleDateString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -939,11 +547,11 @@ const MedicalRecordsPage: React.FC = () => {
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => printMedicalRecordDirect(record)}
-                          className="text-purple-600 hover:text-purple-900"
-                          title="Imprimir Direto"
+                          onClick={() => openPreviewModal(record)}
+                          className="text-green-600 hover:text-green-900"
+                          title="Gerar Documento"
                         >
-                          <Download className="h-4 w-4" />
+                          <Printer className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => openEditModal(record)}
@@ -995,146 +603,26 @@ const MedicalRecordsPage: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="p-6">
               <div className="space-y-6">
-                {/* Patient Type Selection */}
+                {/* Patient Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tipo de Paciente *
+                    Paciente *
                   </label>
                   <select
-                    name="patient_type"
-                    value={formData.patient_type}
-                    onChange={(e) => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        patient_type: e.target.value as "convenio" | "private",
-                        client_cpf: "",
-                        private_patient_id: "",
-                      }));
-                      setClientSearchResult(null);
-                      setDependents([]);
-                      setSelectedDependentId(null);
-                    }}
+                    name="private_patient_id"
+                    value={formData.private_patient_id}
+                    onChange={handleInputChange}
                     className="input"
                     required
                   >
-                    <option value="private">Paciente Particular</option>
-                    <option value="convenio">Cliente do Convênio</option>
+                    <option value="">Selecione um paciente</option>
+                    {patients.map((patient) => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
-
-                {/* Convenio Patient Search */}
-                {formData.patient_type === "convenio" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Buscar por CPF *
-                    </label>
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={formatCpf(formData.client_cpf)}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            client_cpf: e.target.value.replace(/\D/g, ""),
-                          }))
-                        }
-                        className="input flex-1"
-                        placeholder="000.000.000-00"
-                      />
-                      <button
-                        type="button"
-                        onClick={searchClientByCpf}
-                        className="btn btn-secondary"
-                        disabled={isSearching || !formData.client_cpf}
-                      >
-                        {isSearching ? "Buscando..." : "Buscar"}
-                      </button>
-                    </div>
-
-                    {/* Found Client */}
-                    {clientSearchResult && (
-                      <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
-                        <div className="flex items-center mb-2">
-                          <User className="h-4 w-4 text-green-600 mr-2" />
-                          <span className="font-medium text-green-800">
-                            Cliente: {clientSearchResult.name}
-                          </span>
-                        </div>
-
-                        {/* Dependents Selection */}
-                        {dependents.length > 0 && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Dependente (opcional)
-                            </label>
-                            <select
-                              value={selectedDependentId || ""}
-                              onChange={(e) => {
-                                const depId = e.target.value
-                                  ? Number(e.target.value)
-                                  : null;
-                                setSelectedDependentId(depId);
-
-                                // Update patient data based on selection
-                                if (depId) {
-                                  const dependent = dependents.find(
-                                    (d) => d.id === depId
-                                  );
-                                  if (dependent) {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      patient_name: dependent.name,
-                                      patient_cpf: dependent.cpf,
-                                    }));
-                                  }
-                                } else {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    patient_name: clientSearchResult.name,
-                                    patient_cpf: formData.client_cpf,
-                                  }));
-                                }
-                              }}
-                              className="input"
-                            >
-                              <option value="">
-                                Prontuário para o titular
-                              </option>
-                              {dependents.map((dependent) => (
-                                <option key={dependent.id} value={dependent.id}>
-                                  {dependent.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Private Patient Selection */}
-                {formData.patient_type === "private" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Paciente Particular *
-                    </label>
-                    <select
-                      name="private_patient_id"
-                      value={formData.private_patient_id}
-                      onChange={handleInputChange}
-                      className="input"
-                      required
-                    >
-                      <option value="">Selecione um paciente</option>
-                      {patients.map((patient) => (
-                        <option key={patient.id} value={patient.id}>
-                          {patient.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
 
                 {/* Vital Signs */}
                 <div>
@@ -1498,6 +986,16 @@ const MedicalRecordsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Medical Record Preview Modal */}
+      {showPreviewModal && recordToPreview && (
+        <SimplePDFGenerator
+          isOpen={showPreviewModal}
+          onClose={closePreviewModal}
+          recordData={recordToPreview}
+          professionalData={professionalData}
+        />
+      )}
+
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1527,15 +1025,6 @@ const MedicalRecordsPage: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Preview Modal */}
-      {showPreviewModal && recordToPreview && (
-        <MedicalRecordPreviewModal
-          record={recordToPreview}
-          professionalData={professionalData}
-          onClose={closePreviewModal}
-        />
       )}
     </div>
   );

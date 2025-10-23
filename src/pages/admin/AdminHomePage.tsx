@@ -120,7 +120,10 @@ const AdminHomePage: React.FC = () => {
 
         if (!usersResponse.ok) {
           throw new Error("Falha ao carregar dados de usuários");
-        console.error("Consultations response error:", consultationsResponse.status);
+          console.error(
+            "Consultations response error:",
+            consultationsResponse.status
+          );
         }
 
         const usersData = await usersResponse.json();
@@ -178,10 +181,10 @@ const AdminHomePage: React.FC = () => {
 
         // Calculate user counts correctly using roles array
         const clientCount = usersData.filter(
-          (u: any) => u.roles && u.roles.includes('client')
+          (u: any) => u.roles && u.roles.includes("client")
         ).length;
         const professionalCount = usersData.filter(
-          (u: any) => u.roles && u.roles.includes('professional')
+          (u: any) => u.roles && u.roles.includes("professional")
         ).length;
 
         setUserCounts({
@@ -189,17 +192,23 @@ const AdminHomePage: React.FC = () => {
           professionals: Number(professionalCount) || 0,
           total: Number(usersData.length) || 0,
         });
-        
+
         // Fetch dependents data for additional stats
         try {
-          const dependentsResponse = await fetch(`${apiUrl}/api/admin/dependents`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          
+          const dependentsResponse = await fetch(
+            `${apiUrl}/api/admin/dependents`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
           if (dependentsResponse.ok) {
             const dependentsData = await dependentsResponse.json();
-            console.log("Dependents data loaded for stats:", dependentsData.length);
-            
+            console.log(
+              "Dependents data loaded for stats:",
+              dependentsData.length
+            );
+
             // You could add dependent stats here if needed
           }
         } catch (error) {
@@ -226,7 +235,11 @@ const AdminHomePage: React.FC = () => {
   // Calculate total clinic revenue (what admin will receive)
   const calculateClinicRevenue = () => {
     if (!monthlyRevenue) return 0;
-    if (!monthlyRevenue.revenue_by_professional || !Array.isArray(monthlyRevenue.revenue_by_professional)) return 0;
+    if (
+      !monthlyRevenue.revenue_by_professional ||
+      !Array.isArray(monthlyRevenue.revenue_by_professional)
+    )
+      return 0;
     return monthlyRevenue.revenue_by_professional.reduce(
       (total, prof) => total + (Number(prof.clinic_revenue) || 0),
       0
@@ -361,7 +374,8 @@ const AdminHomePage: React.FC = () => {
                   <p className="text-2xl font-bold text-orange-700">
                     {formatCurrency(
                       monthlyRevenue.revenue_by_professional?.reduce(
-                        (total, prof) => total + (Number(prof.professional_payment) || 0),
+                        (total, prof) =>
+                          total + (Number(prof.professional_payment) || 0),
                         0
                       ) || 0
                     )}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { User, MapPin, Plus, Edit, Trash2, Eye, EyeOff, Save, X, Check } from 'lucide-react';
+import { User, MapPin, Plus, Edit, Trash2, Eye, EyeOff, Save, X, Check, FileImage, Upload } from 'lucide-react';
+import UploadSignatureModal from '../../components/UploadSignatureModal';
 
 type AttendanceLocation = {
   id: number;
@@ -61,6 +62,10 @@ const ProfessionalProfilePage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [locationToDelete, setLocationToDelete] = useState<AttendanceLocation | null>(null);
 
+  // Signature state
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+
   // Get API URL
   const getApiUrl = () => {
     if (
@@ -105,6 +110,16 @@ const ProfessionalProfilePage: React.FC = () => {
       if (locationsResponse.ok) {
         const locationsData = await locationsResponse.json();
         setLocations(locationsData);
+      }
+
+      // Fetch signature
+      const signatureResponse = await fetch(`${apiUrl}/api/professionals/${user?.id}/signature`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (signatureResponse.ok) {
+        const signatureData = await signatureResponse.json();
+        setSignatureUrl(signatureData.signature_url);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -297,6 +312,11 @@ const ProfessionalProfilePage: React.FC = () => {
     }
   };
 
+  const handleSignatureSuccess = () => {
+    // Refresh signature data
+    fetchData();
+  };
+
   const formatZipCode = (value: string) => {
     const numericValue = value.replace(/\D/g, '');
     const limitedValue = numericValue.slice(0, 8);
@@ -335,7 +355,8 @@ const ProfessionalProfilePage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profile Information */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center mb-6">
             <User className="h-6 w-6 text-red-600 mr-2" />
             <h2 className="text-xl font-semibold">Informações Pessoais</h2>
@@ -458,6 +479,68 @@ const ProfessionalProfilePage: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+
+          {/* Digital Signature Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <FileImage className="h-6 w-6 text-red-600 mr-2" />
+                <h2 className="text-xl font-semibold">Assinatura Digital</h2>
+              </div>
+              
+              <button
+                onClick={() => setShowSignatureModal(true)}
+                className="btn btn-primary flex items-center"
+              >
+                <Upload className="h-5 w-5 mr-2" />
+                {signatureUrl ? 'Alterar Assinatura' : 'Adicionar Assinatura'}
+              </button>
+            </div>
+
+            {signatureUrl ? (
+              <div className="text-center">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                  <img
+                    src={signatureUrl}
+                    alt="Sua assinatura digital"
+                    className="max-w-full max-h-24 mx-auto border border-gray-300 rounded bg-white"
+                    style={{ maxHeight: '96px' }}
+                  />
+                </div>
+                <p className="text-sm text-gray-600">
+                  Esta assinatura será incluída automaticamente em todos os documentos que você gerar.
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-lg">
+                <FileImage className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Nenhuma assinatura cadastrada
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Adicione sua assinatura digital para que ela apareça automaticamente nos documentos gerados.
+                </p>
+                <button
+                  onClick={() => setShowSignatureModal(true)}
+                  className="btn btn-primary inline-flex items-center"
+                >
+                  <Upload className="h-5 w-5 mr-2" />
+                  Adicionar Assinatura
+                </button>
+              </div>
+            )}
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+              <h4 className="font-medium text-blue-900 mb-2">💡 Como funciona:</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• Faça upload de uma imagem da sua assinatura</li>
+                <li>• A assinatura será incluída automaticamente em atestados, receitas e outros documentos</li>
+                <li>• Você pode alterar ou remover a assinatura a qualquer momento</li>
+                <li>• Use uma imagem com fundo branco para melhor resultado</li>
+              </ul>
+            </div>
+          </div>
         </div>
 
         {/* Attendance Locations */}
@@ -707,14 +790,14 @@ const ProfessionalProfilePage: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Telefone
+                      Registro Profissional
                     </label>
                     <input
                       type="text"
                       value={locationData.phone}
                       onChange={(e) => setLocationData(prev => ({ ...prev, phone: formatPhone(e.target.value) }))}
                       className="input"
-                      placeholder="(00) 00000-0000"
+                      placeholder="Ex: CREFITO 12345/GO, CRM 12345/GO"
                     />
                   </div>
                 </div>
@@ -781,6 +864,14 @@ const ProfessionalProfilePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Signature Upload Modal */}
+      <UploadSignatureModal
+        isOpen={showSignatureModal}
+        onClose={() => setShowSignatureModal(false)}
+        onSuccess={handleSignatureSuccess}
+        currentSignatureUrl={signatureUrl}
+      />
     </div>
   );
 };

@@ -1,5 +1,17 @@
-import React, { useState, useEffect } from "react";
-import { Phone, MapPin, Briefcase, Mail, Calendar, Camera, X, Filter, Search } from "lucide-react";
+"use client";
+
+import type React from "react";
+import { useState, useEffect } from "react";
+import {
+  Phone,
+  MapPin,
+  Briefcase,
+  Mail,
+  Calendar,
+  X,
+  Filter,
+  Search,
+} from "lucide-react";
 
 type Professional = {
   id: number;
@@ -19,13 +31,15 @@ type Professional = {
 
 const ProfessionalsPage: React.FC = () => {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
-  const [filteredProfessionals, setFilteredProfessionals] = useState<Professional[]>([]);
+  const [filteredProfessionals, setFilteredProfessionals] = useState<
+    Professional[]
+  >([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  
+
   // Photo modal state
   const [selectedPhoto, setSelectedPhoto] = useState<{
     url: string;
@@ -49,17 +63,20 @@ const ProfessionalsPage: React.FC = () => {
       try {
         setIsLoading(true);
         setError("");
-        
+
         const token = localStorage.getItem("token");
         const apiUrl = getApiUrl();
 
-        console.log("Fetching professionals from:", `${apiUrl}/api/professionals`);
+        console.log(
+          "Fetching professionals from:",
+          `${apiUrl}/api/professionals`
+        );
 
         const response = await fetch(`${apiUrl}/api/professionals`, {
-          method: 'GET',
+          method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
         });
 
@@ -67,21 +84,26 @@ const ProfessionalsPage: React.FC = () => {
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || "Falha ao carregar profissionais");
+          throw new Error(
+            errorData.message || "Falha ao carregar profissionais"
+          );
         }
 
         const data = await response.json();
         console.log("Professionals data received:", data);
-        
+
         setProfessionals(data);
-        
+
         // Extract unique cities for filter
         const uniqueCities = data
           .map((prof: Professional) => prof.city)
           .filter((city: string) => city && city.trim() !== "")
-          .filter((city: string, index: number, array: string[]) => array.indexOf(city) === index)
+          .filter(
+            (city: string, index: number, array: string[]) =>
+              array.indexOf(city) === index
+          )
           .sort();
-        
+
         setAvailableCities(uniqueCities);
       } catch (error) {
         console.error("Error fetching professionals:", error);
@@ -100,15 +122,16 @@ const ProfessionalsPage: React.FC = () => {
 
     // Filter by search term (name or category)
     if (searchTerm) {
-      filtered = filtered.filter(prof =>
-        prof.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        prof.category_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        (prof) =>
+          prof.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          prof.category_name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     // Filter by city
     if (selectedCity) {
-      filtered = filtered.filter(prof => prof.city === selectedCity);
+      filtered = filtered.filter((prof) => prof.city === selectedCity);
     }
 
     setFilteredProfessionals(filtered);
@@ -118,7 +141,7 @@ const ProfessionalsPage: React.FC = () => {
   const openPhotoModal = (photoUrl: string, professionalName: string) => {
     setSelectedPhoto({
       url: photoUrl,
-      name: professionalName
+      name: professionalName,
     });
   };
 
@@ -130,31 +153,35 @@ const ProfessionalsPage: React.FC = () => {
   // Handle escape key to close modal
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         closePhotoModal();
       }
     };
 
     if (selectedPhoto) {
-      document.addEventListener('keydown', handleEscape);
+      document.addEventListener("keydown", handleEscape);
       // Prevent body scroll when modal is open
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     }
 
     return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "unset";
     };
   }, [selectedPhoto]);
 
   const formatPhone = (phone: string) => {
     if (!phone) return "Não informado";
-    
+
     const cleaned = phone.replace(/\D/g, "");
     if (cleaned.length === 11) {
-      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
+      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(
+        7
+      )}`;
     } else if (cleaned.length === 10) {
-      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+      return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(
+        6
+      )}`;
     }
     return phone;
   };
@@ -168,7 +195,7 @@ const ProfessionalsPage: React.FC = () => {
       professional.city,
       professional.state,
     ].filter(Boolean);
-    
+
     return parts.length > 0 ? parts.join(", ") : "Endereço não informado";
   };
 
@@ -191,14 +218,13 @@ const ProfessionalsPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <div>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Buscar por nome ou especialidade..."
-              className="input pl-10"
+              className="input"
             />
           </div>
 
@@ -254,13 +280,14 @@ const ProfessionalsPage: React.FC = () => {
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <Briefcase className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm || selectedCity ? 'Nenhum profissional encontrado' : 'Nenhum profissional cadastrado'}
+            {searchTerm || selectedCity
+              ? "Nenhum profissional encontrado"
+              : "Nenhum profissional cadastrado"}
           </h3>
           <p className="text-gray-600">
             {searchTerm || selectedCity
-              ? 'Tente ajustar os filtros de busca.'
-              : 'Não há profissionais cadastrados no momento.'
-            }
+              ? "Tente ajustar os filtros de busca."
+              : "Não há profissionais cadastrados no momento."}
           </p>
         </div>
       ) : (
@@ -276,26 +303,37 @@ const ProfessionalsPage: React.FC = () => {
                   <div className="w-20 h-20 mx-auto mb-3 relative">
                     {professional.photo_url ? (
                       <button
-                        onClick={() => openPhotoModal(professional.photo_url!, professional.name)}
+                        onClick={() =>
+                          openPhotoModal(
+                            professional.photo_url!,
+                            professional.name
+                          )
+                        }
                         className="w-full h-full rounded-full overflow-hidden border-2 border-red-100 hover:border-red-300 transition-colors cursor-pointer group"
                         title="Clique para ampliar a foto"
                       >
                         <img
-                          src={professional.photo_url}
+                          src={professional.photo_url || "/placeholder.svg"}
                           alt={`Foto de ${professional.name}`}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
+                            target.style.display = "none";
                             const parent = target.parentElement;
                             if (parent && parent.nextElementSibling) {
-                              (parent.nextElementSibling as HTMLElement).classList.remove('hidden');
+                              (
+                                parent.nextElementSibling as HTMLElement
+                              ).classList.remove("hidden");
                             }
                           }}
                         />
                       </button>
                     ) : null}
-                    <div className={`w-full h-full bg-red-100 rounded-full flex items-center justify-center ${professional.photo_url ? 'hidden' : ''}`}>
+                    <div
+                      className={`w-full h-full bg-red-100 rounded-full flex items-center justify-center ${
+                        professional.photo_url ? "hidden" : ""
+                      }`}
+                    >
                       <Briefcase className="h-8 w-8 text-red-600" />
                     </div>
                   </div>
@@ -340,11 +378,16 @@ const ProfessionalsPage: React.FC = () => {
                 {/* Action Button */}
                 {professional.phone && (
                   <a
-                    href={`tel:${professional.phone.replace(/\D/g, '')}`}
-                    className="block w-full text-center bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors duration-200 font-medium"
+                    href={`https://wa.me/55${professional.phone.replace(
+                      /\D/g,
+                      ""
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full text-center bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors duration-200 font-medium"
                   >
                     <Phone className="h-4 w-4 inline mr-2" />
-                    Ligar
+                    Entrar em contato pelo WhatsApp
                   </a>
                 )}
               </div>
@@ -357,11 +400,11 @@ const ProfessionalsPage: React.FC = () => {
       {selectedPhoto && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
           {/* Backdrop - click to close */}
-          <div 
+          <div
             className="absolute inset-0 cursor-pointer"
             onClick={closePhotoModal}
           />
-          
+
           {/* Modal Content */}
           <div className="relative max-w-4xl max-h-full w-full h-full flex items-center justify-center">
             {/* Close Button */}
@@ -372,15 +415,15 @@ const ProfessionalsPage: React.FC = () => {
             >
               <X className="h-6 w-6" />
             </button>
-            
+
             {/* Professional Name */}
             <div className="absolute top-4 left-4 z-10 bg-black bg-opacity-50 text-white px-4 py-2 rounded-lg">
               <p className="font-medium">{selectedPhoto.name}</p>
             </div>
-            
+
             {/* Image */}
             <img
-              src={selectedPhoto.url}
+              src={selectedPhoto.url || "/placeholder.svg"}
               alt={`Foto de ${selectedPhoto.name}`}
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()} // Prevent closing when clicking on image

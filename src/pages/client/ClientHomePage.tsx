@@ -1,8 +1,19 @@
-import React, { useState, useEffect } from "react";
+"use client";
+
+import type React from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { CalendarClock, AlertCircle, Filter, User, Users, Check, Clock, CheckCircle, XCircle, X } from "lucide-react";
+import {
+  CalendarClock,
+  AlertCircle,
+  User,
+  Users,
+  Clock,
+  CheckCircle,
+  XCircle,
+  X,
+  Search,
+} from "lucide-react";
 import DependentsSection from "./DependentsSection";
 import PaymentSection from "./PaymentSection";
 
@@ -27,19 +38,23 @@ const ClientHomePage: React.FC = () => {
   const { user } = useAuth();
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [dependents, setDependents] = useState<Dependent[]>([]);
-  const [filteredConsultations, setFilteredConsultations] = useState<Consultation[]>([]);
-  const [selectedFilter, setSelectedFilter] = useState<string>('all');
-  const [isLoading, setIsLoading] = useState(true);
+  const [filteredConsultations, setFilteredConsultations] = useState<
+    Consultation[]
+  >([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState("all");
+  const [selectedPatient, setSelectedPatient] = useState("all");
   const [error, setError] = useState("");
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("");
   const [subscriptionExpiry, setSubscriptionExpiry] = useState<string | null>(
     null
   );
   const [paymentFeedback, setPaymentFeedback] = useState<{
-    type: 'success' | 'failure' | 'pending' | null;
+    type: "success" | "failure" | "pending" | null;
     paymentType: string | null;
     message: string;
-  }>({ type: null, paymentType: null, message: '' });
+  }>({ type: null, paymentType: null, message: "" });
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Get API URL with fallback
   const getApiUrl = () => {
@@ -56,51 +71,53 @@ const ClientHomePage: React.FC = () => {
   // Handle payment feedback from URL parameters
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const paymentStatus = urlParams.get('payment');
-    const paymentType = urlParams.get('type');
-    
+    const paymentStatus = urlParams.get("payment");
+    const paymentType = urlParams.get("type");
+
     if (paymentStatus) {
-      let message = '';
-      
-      if (paymentStatus === 'success') {
-        if (paymentType === 'dependent') {
-          message = 'Pagamento do dependente aprovado! O dependente será ativado em breve.';
-        } else if (paymentType === 'agenda') {
-          message = 'Pagamento da consulta aprovado! Sua consulta foi confirmada.';
+      let message = "";
+
+      if (paymentStatus === "success") {
+        if (paymentType === "dependent") {
+          message =
+            "Pagamento do dependente aprovado! O dependente será ativado em breve.";
+        } else if (paymentType === "agenda") {
+          message =
+            "Pagamento da consulta aprovado! Sua consulta foi confirmada.";
         } else {
-          message = 'Pagamento da assinatura aprovado com sucesso!';
+          message = "Pagamento da assinatura aprovado com sucesso!";
         }
-      } else if (paymentStatus === 'failure') {
-        if (paymentType === 'dependent') {
-          message = 'Falha no pagamento do dependente. Tente novamente.';
-        } else if (paymentType === 'agenda') {
-          message = 'Falha no pagamento da consulta. Tente novamente.';
+      } else if (paymentStatus === "failure") {
+        if (paymentType === "dependent") {
+          message = "Falha no pagamento do dependente. Tente novamente.";
+        } else if (paymentType === "agenda") {
+          message = "Falha no pagamento da consulta. Tente novamente.";
         } else {
-          message = 'Falha no pagamento da assinatura. Tente novamente.';
+          message = "Falha no pagamento da assinatura. Tente novamente.";
         }
-      } else if (paymentStatus === 'pending') {
-        if (paymentType === 'dependent') {
-          message = 'Pagamento do dependente está sendo processado.';
-        } else if (paymentType === 'agenda') {
-          message = 'Pagamento da consulta está sendo processado.';
+      } else if (paymentStatus === "pending") {
+        if (paymentType === "dependent") {
+          message = "Pagamento do dependente está sendo processado.";
+        } else if (paymentType === "agenda") {
+          message = "Pagamento da consulta está sendo processado.";
         } else {
-          message = 'Pagamento da assinatura está sendo processado.';
+          message = "Pagamento da assinatura está sendo processado.";
         }
       }
-      
+
       setPaymentFeedback({
-        type: paymentStatus as 'success' | 'failure' | 'pending',
+        type: paymentStatus as "success" | "failure" | "pending",
         paymentType,
-        message
+        message,
       });
-      
+
       // Clear URL parameters after showing feedback
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);
-      
+
       // Auto-hide feedback after 10 seconds
       setTimeout(() => {
-        setPaymentFeedback({ type: null, paymentType: null, message: '' });
+        setPaymentFeedback({ type: null, paymentType: null, message: "" });
       }, 10000);
     }
   }, []);
@@ -116,31 +133,40 @@ const ClientHomePage: React.FC = () => {
         console.log("Fetching client data from:", apiUrl);
 
         // Fetch consultations
-        const consultationsResponse = await fetch(`${apiUrl}/api/consultations/client/${user?.id}`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+        const consultationsResponse = await fetch(
+          `${apiUrl}/api/consultations/client/${user?.id}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
         if (consultationsResponse.ok) {
           const consultationsData = await consultationsResponse.json();
           console.log("Consultations loaded:", consultationsData.length);
           setConsultations(consultationsData);
         } else {
-          console.warn("Consultations not available:", consultationsResponse.status);
+          console.warn(
+            "Consultations not available:",
+            consultationsResponse.status
+          );
           setConsultations([]);
         }
 
         // Fetch dependents
-        const dependentsResponse = await fetch(`${apiUrl}/api/dependents/${user?.id}`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+        const dependentsResponse = await fetch(
+          `${apiUrl}/api/dependents?client_id=${user?.id}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
         if (dependentsResponse.ok) {
           const dependentsData = await dependentsResponse.json();
@@ -186,23 +212,46 @@ const ClientHomePage: React.FC = () => {
 
   // Filter consultations based on selected filter
   useEffect(() => {
-    if (selectedFilter === 'all') {
-      setFilteredConsultations(consultations);
-    } else if (selectedFilter === 'titular') {
-      // Show only consultations for the titular (client_name matches user name)
-      setFilteredConsultations(consultations.filter(c => c.client_name === user?.name));
-    } else {
-      // Show consultations for specific dependent
-      const dependent = dependents.find(d => d.id.toString() === selectedFilter);
+    let filtered = consultations;
+
+    // Filter by selected user (all, titular, or specific dependent)
+    if (selectedFilter === "titular") {
+      filtered = filtered.filter((c) => c.client_name === user?.name);
+    } else if (selectedFilter !== "all") {
+      const dependent = dependents.find(
+        (d) => d.id.toString() === selectedFilter
+      );
       if (dependent) {
-        setFilteredConsultations(consultations.filter(c => c.client_name === dependent.name));
+        filtered = filtered.filter((c) => c.client_name === dependent.name);
       }
     }
-  }, [consultations, selectedFilter, dependents, user?.name]);
+
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const searchValue = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(
+        (consultation) =>
+          consultation.client_name?.toLowerCase().includes(searchValue) ||
+          consultation.service_name?.toLowerCase().includes(searchValue) ||
+          consultation.professional_name?.toLowerCase().includes(searchValue)
+      );
+    }
+
+    setFilteredConsultations(filtered);
+  }, [consultations, selectedFilter, dependents, user?.name, searchTerm]);
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return format(date, "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR });
+    const clientHomeUtcDate = new Date(dateString);
+    const clientHomeLocalDate = new Date(
+      clientHomeUtcDate.getTime() - 3 * 60 * 60 * 1000
+    );
+    return clientHomeLocalDate.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const formatCurrency = (value: number) => {
@@ -214,24 +263,34 @@ const ClientHomePage: React.FC = () => {
 
   const getFilterOptions = () => {
     const options = [
-      { value: 'all', label: 'Todas as consultas', icon: <CalendarClock className="h-4 w-4" /> },
-      { value: 'titular', label: `${user?.name} (Titular)`, icon: <User className="h-4 w-4" /> }
+      {
+        value: "all",
+        label: "Todas as consultas",
+        icon: <CalendarClock className="h-4 w-4" />,
+      },
+      {
+        value: "titular",
+        label: `${user?.name} (Titular)`,
+        icon: <User className="h-4 w-4" />,
+      },
     ];
 
     // Only show active dependents in filter (check individual status)
-    dependents.filter(d => d.subscription_status === 'active').forEach(dependent => {
-      options.push({
-        value: dependent.id.toString(),
-        label: dependent.name,
-        icon: <Users className="h-4 w-4" />
+    dependents
+      .filter((d) => d.subscription_status === "active")
+      .forEach((dependent) => {
+        options.push({
+          value: dependent.id.toString(),
+          label: dependent.name,
+          icon: <Users className="h-4 w-4" />,
+        });
       });
-    });
 
     return options;
   };
 
   const dismissPaymentFeedback = () => {
-    setPaymentFeedback({ type: null, paymentType: null, message: '' });
+    setPaymentFeedback({ type: null, paymentType: null, message: "" });
   };
 
   return (
@@ -243,38 +302,48 @@ const ClientHomePage: React.FC = () => {
 
       {/* Payment Feedback */}
       {paymentFeedback.type && (
-        <div className={`border-l-4 p-4 mb-6 relative ${
-          paymentFeedback.type === 'success' 
-            ? 'bg-green-50 border-green-600' 
-            : paymentFeedback.type === 'failure'
-            ? 'bg-red-50 border-red-600'
-            : 'bg-yellow-50 border-yellow-600'
-        }`}>
+        <div
+          className={`border-l-4 p-4 mb-6 relative ${
+            paymentFeedback.type === "success"
+              ? "bg-green-50 border-green-600"
+              : paymentFeedback.type === "failure"
+              ? "bg-red-50 border-red-600"
+              : "bg-yellow-50 border-yellow-600"
+          }`}
+        >
           <div className="flex items-start">
             <div className="flex-shrink-0">
-              {paymentFeedback.type === 'success' && <CheckCircle className="h-5 w-5 text-green-600" />}
-              {paymentFeedback.type === 'failure' && <XCircle className="h-5 w-5 text-red-600" />}
-              {paymentFeedback.type === 'pending' && <Clock className="h-5 w-5 text-yellow-600" />}
+              {paymentFeedback.type === "success" && (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              )}
+              {paymentFeedback.type === "failure" && (
+                <XCircle className="h-5 w-5 text-red-600" />
+              )}
+              {paymentFeedback.type === "pending" && (
+                <Clock className="h-5 w-5 text-yellow-600" />
+              )}
             </div>
             <div className="ml-3 flex-1">
-              <p className={`font-medium ${
-                paymentFeedback.type === 'success' 
-                  ? 'text-green-800' 
-                  : paymentFeedback.type === 'failure'
-                  ? 'text-red-800'
-                  : 'text-yellow-800'
-              }`}>
+              <p
+                className={`font-medium ${
+                  paymentFeedback.type === "success"
+                    ? "text-green-800"
+                    : paymentFeedback.type === "failure"
+                    ? "text-red-800"
+                    : "text-yellow-800"
+                }`}
+              >
                 {paymentFeedback.message}
               </p>
             </div>
             <button
               onClick={dismissPaymentFeedback}
               className={`ml-3 ${
-                paymentFeedback.type === 'success' 
-                  ? 'text-green-600 hover:text-green-800' 
-                  : paymentFeedback.type === 'failure'
-                  ? 'text-red-600 hover:text-red-800'
-                  : 'text-yellow-600 hover:text-yellow-800'
+                paymentFeedback.type === "success"
+                  ? "text-green-600 hover:text-green-800"
+                  : paymentFeedback.type === "failure"
+                  ? "text-red-600 hover:text-red-800"
+                  : "text-yellow-600 hover:text-yellow-800"
               }`}
             >
               <X className="h-5 w-5" />
@@ -295,23 +364,49 @@ const ClientHomePage: React.FC = () => {
         </div>
       )}
 
-      {subscriptionStatus === "pending" && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-600 p-4 mb-6">
+      {/* Subscription Status Display for Active Clients */}
+      {subscriptionStatus === "active" && subscriptionExpiry && (
+        <div className="bg-green-50 border-l-4 border-green-600 p-4 mb-6">
           <div className="flex items-center">
-            <AlertCircle className="h-5 w-5 text-yellow-600 mr-2" />
-            <p className="text-yellow-700">
-              Complete seu cadastro realizando o pagamento da assinatura.
-            </p>
+            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+            <div>
+              <p className="text-green-700 font-medium">
+                Sua assinatura está ativa
+              </p>
+              <p className="text-green-600 text-sm">
+                Válida até:{" "}
+                {new Date(subscriptionExpiry).toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {user && (
-        <PaymentSection
-          userId={user.id}
-          subscriptionStatus={subscriptionStatus}
-          subscriptionExpiry={subscriptionExpiry}
-        />
+      {subscriptionStatus !== "active" && (
+        <>
+          {subscriptionStatus === "pending" && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-600 p-4 mb-6">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-yellow-600 mr-2" />
+                <p className="text-yellow-700">
+                  Complete seu cadastro realizando o pagamento da assinatura.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {user && (
+            <PaymentSection
+              userId={user.id}
+              subscriptionStatus={subscriptionStatus}
+              subscriptionExpiry={subscriptionExpiry}
+            />
+          )}
+        </>
       )}
 
       {user && <DependentsSection clientId={user.id} />}
@@ -323,14 +418,26 @@ const ClientHomePage: React.FC = () => {
             <h2 className="text-xl font-semibold">Histórico de Consultas</h2>
           </div>
 
-          {/* Filter dropdown */}
-          {(consultations.length > 0 || dependents.length > 0) && (
-            <div className="flex items-center space-x-2">
-              <Filter className="h-5 w-5 text-gray-500" />
+          {/* Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por cliente ou serviço..."
+                className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Filter dropdown */}
+            {(consultations.length > 0 || dependents.length > 0) && (
               <select
                 value={selectedFilter}
                 onChange={(e) => setSelectedFilter(e.target.value)}
-                className="input w-auto min-w-[200px]"
+                className="input"
               >
                 {getFilterOptions().map((option) => (
                   <option key={option.value} value={option.value}>
@@ -338,8 +445,8 @@ const ClientHomePage: React.FC = () => {
                   </option>
                 ))}
               </select>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {isLoading ? (
@@ -353,20 +460,20 @@ const ClientHomePage: React.FC = () => {
           <div className="text-center py-8 bg-gray-50 rounded-lg">
             <CalendarClock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {selectedFilter === 'all' 
-                ? 'Nenhuma consulta encontrada'
+              {selectedFilter === "all"
+                ? "Nenhuma consulta encontrada"
                 : `Nenhuma consulta encontrada para ${
-                    selectedFilter === 'titular' 
-                      ? 'o titular' 
-                      : dependents.find(d => d.id.toString() === selectedFilter)?.name || 'este usuário'
-                  }`
-              }
+                    selectedFilter === "titular"
+                      ? "o titular"
+                      : dependents.find(
+                          (d) => d.id.toString() === selectedFilter
+                        )?.name || "este usuário"
+                  }`}
             </h3>
             <p className="text-gray-600">
-              {selectedFilter === 'all' 
-                ? 'Você ainda não possui consultas registradas.'
-                : 'Não há consultas registradas para este usuário.'
-              }
+              {selectedFilter === "all"
+                ? "Você ainda não possui consultas registradas."
+                : "Não há consultas registradas para este usuário."}
             </p>
           </div>
         ) : (
@@ -378,7 +485,6 @@ const ClientHomePage: React.FC = () => {
                   <th>Paciente</th>
                   <th>Serviço</th>
                   <th>Profissional</th>
-                  <th>Valor</th>
                 </tr>
               </thead>
               <tbody>
@@ -402,7 +508,6 @@ const ClientHomePage: React.FC = () => {
                     </td>
                     <td>{consultation.service_name}</td>
                     <td>{consultation.professional_name}</td>
-                    <td>{formatCurrency(consultation.value)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -413,21 +518,18 @@ const ClientHomePage: React.FC = () => {
         {/* Summary */}
         {filteredConsultations.length > 0 && (
           <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <div className="flex justify-between items-center">
+            <div className="text-center">
               <span className="text-sm text-gray-600">
                 {filteredConsultations.length} consulta(s) encontrada(s)
-                {selectedFilter !== 'all' && (
+                {selectedFilter !== "all" && (
                   <span className="ml-1">
-                    para {selectedFilter === 'titular' 
-                      ? 'o titular' 
-                      : dependents.find(d => d.id.toString() === selectedFilter)?.name
-                    }
+                    para{" "}
+                    {selectedFilter === "titular"
+                      ? "o titular"
+                      : dependents.find(
+                          (d) => d.id.toString() === selectedFilter
+                        )?.name}
                   </span>
-                )}
-              </span>
-              <span className="text-sm font-medium text-gray-900">
-                Total: {formatCurrency(
-                  filteredConsultations.reduce((sum, c) => sum + c.value, 0)
                 )}
               </span>
             </div>
@@ -437,16 +539,9 @@ const ClientHomePage: React.FC = () => {
 
       <div className="card">
         <h2 className="text-xl font-semibold mb-4">Informações do Convênio</h2>
-        <div className="space-y-2">
-          <p>
-            <span className="font-medium">Telefone para contato:</span> (64)
-            98124-9199
-          </p>
-          <p>
-            <span className="font-medium">Horário de atendimento:</span> Segunda
-            a Sexta, das 8h às 18h
-          </p>
-        </div>
+        <p className="text-gray-600">
+          Informações sobre seu convênio e benefícios disponíveis.
+        </p>
       </div>
     </div>
   );

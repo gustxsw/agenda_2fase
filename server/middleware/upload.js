@@ -63,22 +63,44 @@ const createStorage = () => {
     throw new Error("Cloudinary not properly configured");
   }
 
-  return new CloudinaryStorage({
+  const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: "quiro-ferreira/professionals", // Folder in Cloudinary
+      folder: (req, file) => {
+        // Different folders based on field name
+        if (file.fieldname === 'signature') {
+          return 'quiro-ferreira/signatures';
+        }
+        return 'quiro-ferreira/professionals';
+      },
       allowed_formats: ["jpg", "jpeg", "png", "webp"],
-      transformation: [
-        {
-          width: 400,
-          height: 400,
-          crop: "fill",
-          gravity: "face",
-          quality: "auto:good",
-        },
-      ],
+      transformation: (req, file) => {
+        // Different transformations based on field name
+        if (file.fieldname === 'signature') {
+          return [
+            {
+              width: 300,
+              height: 100,
+              crop: "fit",
+              background: "white",
+              quality: "auto:good",
+            },
+          ];
+        }
+        return [
+          {
+            width: 400,
+            height: 400,
+            crop: "fill",
+            gravity: "face",
+            quality: "auto:good",
+          },
+        ];
+      },
     },
   });
+
+  return storage;
 };
 
 // Create multer instance

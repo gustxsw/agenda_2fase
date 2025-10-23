@@ -31,15 +31,15 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
               <Menu className="h-6 w-6 text-gray-600" />
             </button>
 
-            {/* 🔥 LOGO SEMPRE VAI PARA A RAIZ (LOGIN) */}
-            <Link to="/" className="ml-2 md:ml-0">
+            {/* Logo sem link - não clicável */}
+            <div className="ml-2 md:ml-0">
               <img
                 src="/logo_quiroferreira.svg"
                 alt="Logo Quiro Ferreira"
                 className="h-24 w-auto"
                 style={{ maxHeight: "100px" }}
               />
-            </Link>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">

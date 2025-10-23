@@ -1,17 +1,13 @@
-import React, { useState, useEffect } from "react";
+import type React from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import TimeInput from "../../components/TimeInput";
 import {
-  Search,
-  Calendar,
-  User,
-  Users,
-  AlertTriangle,
-  MapPin,
-  UserPlus,
-  X,
-  Check,
-} from "lucide-react";
+  validateTimeSlot,
+  type SlotDuration,
+} from "../../utils/timeSlotValidation";
+import { Search, Calendar, User, Users, AlertTriangle } from "lucide-react";
 
 type Service = {
   id: number;
@@ -92,6 +88,7 @@ const RegisterConsultationPage: React.FC = () => {
   >([]);
   const [hasSchedulingSubscription, setHasSchedulingSubscription] =
     useState(false);
+  const [slotDuration, setSlotDuration] = useState<SlotDuration>(30);
   const [isLoading, setIsLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState("");
@@ -187,7 +184,7 @@ const RegisterConsultationPage: React.FC = () => {
   useEffect(() => {
     if (categoryId) {
       const filtered = services.filter(
-        (service) => service.category_id === parseInt(categoryId)
+        (service) => service.category_id === Number.parseInt(categoryId)
       );
       setFilteredServices(filtered);
       setServiceId(null);
@@ -219,7 +216,7 @@ const RegisterConsultationPage: React.FC = () => {
 
       // First, try to find a dependent with this CPF
       const dependentResponse = await fetch(
-        `${apiUrl}/api/dependents/lookup?cpf=${cleanCpf}`,
+        `${apiUrl}/api/dependents/search?cpf=${cleanCpf}`,
         {
           method: "GET",
           headers: {
@@ -232,7 +229,7 @@ const RegisterConsultationPage: React.FC = () => {
         const dependentData = await dependentResponse.json();
 
         // 🔥 Check if the dependent has active subscription
-        if (dependentData.dependent_subscription_status !== "active") {
+        if (dependentData.status !== "active") {
           setError(
             "Este dependente não pode ser atendido pois não possui assinatura ativa."
           );
@@ -243,11 +240,15 @@ const RegisterConsultationPage: React.FC = () => {
         setFoundDependent(dependentData);
         setClientId(dependentData.client_id);
         setClientName(dependentData.client_name);
-        setSubscriptionStatus(dependentData.dependent_subscription_status);
+        setSubscriptionStatus(dependentData.status);
         setSelectedDependentId(dependentData.id);
-        setDependents([]);
+        setDependents([]); // No dependents list needed when found directly
         setSuccess(
-          `Dependente encontrado: ${dependentData.name} (Titular: ${dependentData.client_name}) - Status: Ativo`
+          `Dependente encontrado: ${dependentData.name} (Titular: ${
+            dependentData.client_name
+          }) - Status: ${
+            dependentData.status === "active" ? "Ativo" : "Inativo"
+          }`
         );
         return;
       }
@@ -292,7 +293,7 @@ const RegisterConsultationPage: React.FC = () => {
 
       // Fetch dependents
       const dependentsResponse = await fetch(
-        `${apiUrl}/api/dependents/${clientData.id}`,
+        `${apiUrl}/api/dependents?client_id=${clientData.id}&status=active`,
         {
           method: "GET",
           headers: {
@@ -303,6 +304,7 @@ const RegisterConsultationPage: React.FC = () => {
 
       if (dependentsResponse.ok) {
         const dependentsData = await dependentsResponse.json();
+        // Filter only active dependents
         setDependents(dependentsData);
       }
 
@@ -362,8 +364,15 @@ const RegisterConsultationPage: React.FC = () => {
     setError("");
     setSuccess("");
 
+    // Validate time format and slot
+    const timeValidation = validateTimeSlot(time, slotDuration);
+    if (!timeValidation.isValid) {
+      setError(timeValidation.error || "Horário inválido");
+      return;
+    }
+
     // Validate form
-    if (!clientId && !selectedDependentId) {
+    if (!clientId && !selectedDependentId && !foundDependent) {
       setError("É necessário selecionar um cliente ou dependente");
       return;
     }
@@ -391,8 +400,8 @@ const RegisterConsultationPage: React.FC = () => {
       return;
     }
 
-    // Combine date and time
-    const dateTime = new Date(`${date}T${time}`);
+    const localDateTime = new Date(`${date}T${time}`);
+    const utcDateTime = localDateTime.toISOString();
 
     try {
       setIsLoading(true);
@@ -400,6 +409,33 @@ const RegisterConsultationPage: React.FC = () => {
       const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
+      // Prepare consultation data with proper patient identification
+      const consultationData: any = {
+        professional_id: user?.id,
+        service_id: serviceId,
+        location_id: locationId ? Number.parseInt(locationId) : null,
+        value: Number(value),
+        date: utcDateTime, // Send UTC ISO string instead of local datetime
+        status: "scheduled",
+        notes: null,
+      };
+
+      // Set patient based on what was found
+      if (foundDependent) {
+        // Direct dependent search result
+        consultationData.dependent_id = foundDependent.id;
+        console.log("🎯 Using found dependent:", foundDependent.id);
+      } else if (selectedDependentId) {
+        // Selected from dependents list
+        consultationData.dependent_id = selectedDependentId;
+        console.log("🎯 Using selected dependent:", selectedDependentId);
+      } else if (clientId) {
+        // Client (titular)
+        consultationData.user_id = clientId;
+        console.log("🎯 Using client:", clientId);
+      }
+
+      console.log("🔄 Final consultation data:", consultationData);
       // Create both consultation record and appointment
       const response = await fetch(`${apiUrl}/api/consultations`, {
         method: "POST",
@@ -407,20 +443,7 @@ const RegisterConsultationPage: React.FC = () => {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          client_id: selectedDependentId ? null : clientId,
-          dependent_id: selectedDependentId,
-          private_patient_id: null,
-          professional_id: user?.id,
-          service_id: serviceId,
-          location_id: locationId ? parseInt(locationId) : null,
-          value: Number(value),
-          date: dateTime.toISOString(),
-          // Add appointment data
-          appointment_date: date,
-          appointment_time: time,
-          create_appointment: true,
-        }),
+        body: JSON.stringify(consultationData),
       });
 
       console.log("📡 Consultation creation response status:", response.status);
@@ -428,7 +451,15 @@ const RegisterConsultationPage: React.FC = () => {
       if (!response.ok) {
         const errorData = await response.json();
         console.error("❌ Consultation creation failed:", errorData);
-        throw new Error(errorData.message || "Falha ao registrar consulta");
+        if (response.status === 409 && errorData.conflict) {
+          setError(
+            errorData.message ||
+              "Este horário já está ocupado. Por favor, escolha outro horário."
+          );
+        } else {
+          setError(errorData.message || "Falha ao registrar consulta");
+        }
+        return;
       }
 
       const responseData = await response.json();
@@ -449,13 +480,7 @@ const RegisterConsultationPage: React.FC = () => {
       setDate("");
       setTime("");
 
-      setSuccess(
-        `Consulta registrada e agendamento criado com sucesso! ${
-          responseData.appointment
-            ? "Agendamento ID: " + responseData.appointment.id
-            : ""
-        }`
-      );
+      setSuccess("Consulta registrada com sucesso!");
 
       // Redirect after a delay
       setTimeout(() => {
@@ -794,23 +819,13 @@ const RegisterConsultationPage: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="time"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Hora
-                  </label>
-                  <input
-                    id="time"
-                    type="time"
-                    value={time}
-                    onChange={(e) => setTime(e.target.value)}
-                    className="input"
-                    disabled={isLoading}
-                    required
-                  />
-                </div>
+                <TimeInput
+                  value={time}
+                  onChange={setTime}
+                  label="Horário"
+                  required
+                  disabled={isLoading}
+                />
               </div>
             </div>
           )}
