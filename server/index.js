@@ -44,6 +44,7 @@ const corsOptions = {
     "http://localhost:3000",
     "https://cartaoquiroferreira.com.br",
     "https://www.cartaoquiroferreira.com.br",
+    "https://testes-quiro-ferreira.onrender.com/",
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -662,7 +663,7 @@ const logAuditAction = async (
 const getProductionUrls = () => {
   const baseUrl =
     process.env.NODE_ENV === "production"
-      ? "https://www.cartaoquiroferreira.com.br"
+      ? "https://testes-quiro-ferreira.onrender.com/"
       : "http://localhost:5173";
 
   return {
@@ -688,12 +689,12 @@ const getProductionUrls = () => {
     },
     webhook:
       process.env.NODE_ENV === "production"
-        ? "https://www.cartaoquiroferreira.com.br/api/webhooks/payment-success"
+        ? "https://testes-quiro-ferreira.onrender.com//api/webhooks/payment-success"
         : "http://localhost:3001/api/webhooks/payment-success",
     // Webhook alternativo para mobile
     webhookAlt:
       process.env.NODE_ENV === "production"
-        ? "https://www.cartaoquiroferreira.com.br/api/webhook/payment"
+        ? "https://testes-quiro-ferreira.onrender.com//api/webhook/payment"
         : "http://localhost:3001/api/webhook/payment",
   };
 };
