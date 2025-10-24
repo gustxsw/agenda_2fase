@@ -359,10 +359,18 @@ const ProfessionalHomePage: React.FC = () => {
     }
   }, [user?.id]);
 
-  // ✅ CORRIGIDO: evita dupla conversão e mostra o horário certo no Brasil
+  // ⚠️ Gambiarra provisória — ajusta -3h no frontend apenas para exibição
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
-    return new Date(dateString).toLocaleString("pt-BR", {
+
+    // Converte a string em data
+    const d = new Date(dateString);
+
+    // Subtrai 3 horas
+    d.setHours(d.getHours() - 3);
+
+    // Formata normalmente
+    return d.toLocaleString("pt-BR", {
       dateStyle: "short",
       timeStyle: "short",
     });
