@@ -353,8 +353,13 @@ const ProfessionalHomePage: React.FC = () => {
     }
   }, [user?.id]);
 
+  // ✅ CORRIGIDO: evita dupla conversão e mostra o horário certo no Brasil
   const formatDate = (dateString: string) => {
-    return formatToBrazilDateTime(dateString);
+    if (!dateString) return "";
+    return new Date(dateString).toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
   };
 
   const formatCurrency = (value: number | string) => {
