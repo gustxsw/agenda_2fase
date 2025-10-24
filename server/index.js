@@ -1598,6 +1598,78 @@ app.get(
   }
 );
 
+// ===== PROFESSIONAL REPORT DETAILED =====
+app.get(
+  "/api/reports/professional-detailed",
+  authenticate,
+  authorize(["professional"]),
+  async (req, res) => {
+    try {
+      const professionalId = req.user.id;
+      const { start_date, end_date } = req.query;
+
+      console.log("📊 Generating detailed report for:", professionalId);
+      console.log("📅 Date range:", start_date, end_date);
+
+      if (!start_date || !end_date) {
+        return res
+          .status(400)
+          .json({ message: "Datas inicial e final são obrigatórias" });
+      }
+
+      const result = await pool.query(
+        `
+        SELECT 
+          COUNT(*) AS total_consultations,
+          SUM(CASE WHEN (user_id IS NOT NULL OR dependent_id IS NOT NULL) THEN 1 ELSE 0 END) AS convenio_consultations,
+          SUM(CASE WHEN private_patient_id IS NOT NULL THEN 1 ELSE 0 END) AS private_consultations,
+          COALESCE(SUM(value), 0) AS total_revenue,
+          COALESCE(SUM(CASE WHEN (user_id IS NOT NULL OR dependent_id IS NOT NULL) THEN value ELSE 0 END), 0) AS convenio_revenue,
+          COALESCE(SUM(CASE WHEN private_patient_id IS NOT NULL THEN value ELSE 0 END), 0) AS private_revenue
+        FROM consultations
+        WHERE professional_id = $1
+          AND date BETWEEN $2::timestamptz AND $3::timestamptz
+          AND status != 'cancelled'
+      `,
+        [professionalId, `${start_date}T00:00:00Z`, `${end_date}T23:59:59Z`]
+      );
+
+      const summary = result.rows[0];
+
+      // Busca porcentagem e repasse
+      const profData = await pool.query(
+        `SELECT percentage FROM users WHERE id = $1`,
+        [professionalId]
+      );
+
+      const percentage = profData.rows[0]?.percentage || 50;
+      const convenioRevenue = parseFloat(summary.convenio_revenue || 0);
+      const privateRevenue = parseFloat(summary.private_revenue || 0);
+      const totalRevenue = parseFloat(summary.total_revenue || 0);
+
+      const professionalShare =
+        convenioRevenue * (percentage / 100) + privateRevenue;
+      const amountToPay = totalRevenue - professionalShare;
+
+      res.json({
+        summary: {
+          total_consultations: parseInt(summary.total_consultations || 0),
+          convenio_consultations: parseInt(summary.convenio_consultations || 0),
+          private_consultations: parseInt(summary.private_consultations || 0),
+          total_revenue: totalRevenue,
+          convenio_revenue: convenioRevenue,
+          private_revenue: privateRevenue,
+          professional_percentage: percentage,
+          amount_to_pay: amountToPay,
+        },
+      });
+    } catch (error) {
+      console.error("❌ Error generating detailed report:", error);
+      res.status(500).json({ message: "Erro ao gerar relatório detalhado" });
+    }
+  }
+);
+
 // Create new consultation
 app.post(
   "/api/consultations",
