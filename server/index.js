@@ -44,7 +44,7 @@ const corsOptions = {
     "http://localhost:3000",
     "https://cartaoquiroferreira.com.br",
     "https://www.cartaoquiroferreira.com.br",
-    "https://testes-quiro-ferreira.onrender.com/",
+    "https://testes-quiro-ferreira.onrender.com",
   ],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

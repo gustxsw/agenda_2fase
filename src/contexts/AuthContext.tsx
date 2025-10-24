@@ -27,9 +27,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Get API URL
   const getApiUrl = () => {
-    if (window.location.hostname === 'www.cartaoquiroferreira.com.br' || 
-        window.location.hostname === 'cartaoquiroferreira.com.br') {
-      return 'https://www.cartaoquiroferreira.com.br';
+    if (window.location.hostname === 'www.testes-quiro-ferreira.onrender.com' || 
+        window.location.hostname === 'testes-quiro-ferreira.onrender.com') {
+      return 'https://testes-quiro-ferreira.onrender.com';
     }
     return 'http://localhost:3001';
   };
