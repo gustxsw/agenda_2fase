@@ -4582,12 +4582,13 @@ app.post(
         body: preferenceData,
       });
 
-      console.log("📦 MercadoPago response (subscription):", subscriptionResult);
+      console.log(
+        "📦 MercadoPago response (subscription):",
+        subscriptionResult
+      );
 
       const preferenceId =
-        subscriptionResult?.body?.id ??
-        subscriptionResult?.id ??
-        null;
+        subscriptionResult?.body?.id ?? subscriptionResult?.id ?? null;
 
       const initPoint =
         subscriptionResult?.body?.init_point ??
@@ -4595,7 +4596,10 @@ app.post(
         subscriptionResult?.init_point ??
         null;
 
-      console.log("✅ Subscription preference created:", { preferenceId, initPoint });
+      console.log("✅ Subscription preference created:", {
+        preferenceId,
+        initPoint,
+      });
 
       // Save payment record
       await pool.query(
@@ -4697,12 +4701,13 @@ app.post(
         body: preferenceData,
       });
 
-      console.log("📦 MercadoPago response (dependent):", dependentPaymentResult);
+      console.log(
+        "📦 MercadoPago response (dependent):",
+        dependentPaymentResult
+      );
 
       const preferenceId =
-        dependentPaymentResult?.body?.id ??
-        dependentPaymentResult?.id ??
-        null;
+        dependentPaymentResult?.body?.id ?? dependentPaymentResult?.id ?? null;
 
       const initPoint =
         dependentPaymentResult?.body?.init_point ??
@@ -4710,7 +4715,10 @@ app.post(
         dependentPaymentResult?.init_point ??
         null;
 
-      console.log("✅ Dependent preference created:", { preferenceId, initPoint });
+      console.log("✅ Dependent preference created:", {
+        preferenceId,
+        initPoint,
+      });
 
       // Save payment record
       await pool.query(
@@ -4789,12 +4797,13 @@ app.post(
         body: preferenceData,
       });
 
-      console.log("📦 MercadoPago response (professional):", professionalResult);
+      console.log(
+        "📦 MercadoPago response (professional):",
+        professionalResult
+      );
 
       const preferenceId =
-        professionalResult?.body?.id ??
-        professionalResult?.id ??
-        null;
+        professionalResult?.body?.id ?? professionalResult?.id ?? null;
 
       const initPoint =
         professionalResult?.body?.init_point ??
@@ -4802,7 +4811,10 @@ app.post(
         professionalResult?.init_point ??
         null;
 
-      console.log("✅ Professional preference created:", { preferenceId, initPoint });
+      console.log("✅ Professional preference created:", {
+        preferenceId,
+        initPoint,
+      });
 
       // Save payment record
       await pool.query(
@@ -4883,10 +4895,7 @@ app.post(
 
       console.log("📦 MercadoPago response (agenda):", agendaResult);
 
-      const preferenceId =
-        agendaResult?.body?.id ??
-        agendaResult?.id ??
-        null;
+      const preferenceId = agendaResult?.body?.id ?? agendaResult?.id ?? null;
 
       const initPoint =
         agendaResult?.body?.init_point ??

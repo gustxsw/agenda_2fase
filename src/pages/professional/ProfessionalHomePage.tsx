@@ -272,6 +272,12 @@ const ProfessionalHomePage: React.FC = () => {
       const revenueData = await revenueResponse.json();
       console.log("✅ Revenue data received:", revenueData);
 
+      // 🔎 Log temporário para ver formato das datas
+      const sample = revenueData?.consultations
+        ?.slice?.(0, 3)
+        ?.map((c: any) => c?.date);
+      console.log("⏱️ RAW dates sample:", sample);
+
       setRevenueReport(revenueData);
     } catch (error) {
       console.error("❌ Error fetching data:", error);
