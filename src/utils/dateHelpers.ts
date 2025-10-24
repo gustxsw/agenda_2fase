@@ -102,16 +102,20 @@ export function formatToBrazilTimeOnly(utcDateString: string): string {
  * @param utcDateString - UTC date string from backend
  * @returns Formatted date and time string (DD/MM/YYYY HH:MM)
  */
-export function formatToBrazilDateTime(utcDateString: string): string {
-  const date = new Date(utcDateString);
+export function formatToBrazilDateTime(dateString: string) {
+  if (!dateString) return "";
+
+  // Detecta se a string já contém o offset do Brasil
+  const alreadyLocalized =
+    dateString.includes("-03:00") || dateString.includes("-02:00");
+
+  const date = new Date(dateString);
+
   return date.toLocaleString("pt-BR", {
-    timeZone: BRAZIL_TIMEZONE,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
+    dateStyle: "short",
+    timeStyle: "short",
+    // Só aplica o fuso se a data for UTC pura (sem offset)
+    ...(alreadyLocalized ? {} : { timeZone: "America/Sao_Paulo" }),
   });
 }
 
