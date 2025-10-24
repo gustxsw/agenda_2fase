@@ -1,5 +1,14 @@
-import React, { useState } from 'react';
-import { Calendar, CreditCard, Gift, Clock, CheckCircle, AlertCircle, ExternalLink, Star } from 'lucide-react';
+import React, { useState } from "react";
+import {
+  Calendar,
+  CreditCard,
+  Gift,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  ExternalLink,
+  Star,
+} from "lucide-react";
 
 declare global {
   interface Window {
@@ -14,19 +23,19 @@ type SchedulingAccessPaymentProps = {
 
 const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
   professionalName,
-  onPaymentSuccess
+  onPaymentSuccess,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // Get API URL
   const getApiUrl = () => {
     if (
       window.location.hostname === "testes-quiro-ferreira.onrender.com" ||
-      window.location.hostname === "www.testes-quiro-ferreira.onrender.com"
+      window.location.hostname === "testes-quiro-ferreira.onrender.com"
     ) {
-      return "https://www.testes-quiro-ferreira.onrender.com";
+      return "https://testes-quiro-ferreira.onrender.com";
     }
     return "http://localhost:3001";
   };
@@ -34,58 +43,62 @@ const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
   const handlePayment = async () => {
     try {
       setIsLoading(true);
-      setError('');
-      setSuccess('');
+      setError("");
+      setSuccess("");
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
-      console.log('🔄 Creating agenda payment...');
+      console.log("🔄 Creating agenda payment...");
 
-      const response = await fetch(`${apiUrl}/api/professional/create-agenda-payment`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          duration_days: 30 // 1 month
-        })
-      });
+      const response = await fetch(
+        `${apiUrl}/api/professional/create-agenda-payment`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            duration_days: 30, // 1 month
+          }),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Erro ao criar pagamento');
+        throw new Error(errorData.message || "Erro ao criar pagamento");
       }
 
       const data = await response.json();
-      console.log('✅ Payment preference created:', data);
+      console.log("✅ Payment preference created:", data);
 
-      setSuccess('Redirecionando para o pagamento...');
-      
+      setSuccess("Redirecionando para o pagamento...");
+
       // Clear any existing payment feedback
       const currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.delete('payment');
-      currentUrl.searchParams.delete('type');
+      currentUrl.searchParams.delete("payment");
+      currentUrl.searchParams.delete("type");
       window.history.replaceState({}, document.title, currentUrl.toString());
 
       // Redirect to MercadoPago
       setTimeout(() => {
         window.location.href = data.init_point;
       }, 1000);
-
     } catch (error) {
-      console.error('❌ Payment error:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao processar pagamento');
+      console.error("❌ Payment error:", error);
+      setError(
+        error instanceof Error ? error.message : "Erro ao processar pagamento"
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
     }).format(value);
   };
 
@@ -102,38 +115,47 @@ const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
               Acesso à Agenda
             </h1>
             <p className="text-gray-600">
-              Olá, <span className="font-medium">{professionalName}</span>! 
-              Para usar o sistema de agendamentos, você precisa de uma assinatura ativa.
+              Olá, <span className="font-medium">{professionalName}</span>! Para
+              usar o sistema de agendamentos, você precisa de uma assinatura
+              ativa.
             </p>
           </div>
 
           {/* Features Section */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-8">
             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-              <Star className="h-6 w-6 text-yellow-500 mr-2" />
-              O que está incluído na assinatura:
+              <Star className="h-6 w-6 text-yellow-500 mr-2" />O que está
+              incluído na assinatura:
             </h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-3">
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                  <span className="text-gray-700">Sistema completo de agendamentos</span>
+                  <span className="text-gray-700">
+                    Sistema completo de agendamentos
+                  </span>
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                  <span className="text-gray-700">Gestão de pacientes particulares</span>
+                  <span className="text-gray-700">
+                    Gestão de pacientes particulares
+                  </span>
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                  <span className="text-gray-700">Prontuários médicos digitais</span>
+                  <span className="text-gray-700">
+                    Prontuários médicos digitais
+                  </span>
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                  <span className="text-gray-700">Geração de documentos médicos</span>
+                  <span className="text-gray-700">
+                    Geração de documentos médicos
+                  </span>
                 </div>
               </div>
-              
+
               <div className="space-y-3">
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
@@ -141,15 +163,21 @@ const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                  <span className="text-gray-700">Notificações via WhatsApp</span>
+                  <span className="text-gray-700">
+                    Notificações via WhatsApp
+                  </span>
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                  <span className="text-gray-700">Suporte técnico especializado</span>
+                  <span className="text-gray-700">
+                    Suporte técnico especializado
+                  </span>
                 </div>
                 <div className="flex items-center">
                   <CheckCircle className="h-5 w-5 text-green-600 mr-3 flex-shrink-0" />
-                  <span className="text-gray-700">Atualizações automáticas</span>
+                  <span className="text-gray-700">
+                    Atualizações automáticas
+                  </span>
                 </div>
               </div>
             </div>
@@ -168,7 +196,8 @@ const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
                 <span className="text-gray-600 ml-2">/mês</span>
               </div>
               <p className="text-red-700 text-sm">
-                Acesso completo ao sistema de agendamentos e todas as funcionalidades
+                Acesso completo ao sistema de agendamentos e todas as
+                funcionalidades
               </p>
             </div>
           </div>
@@ -193,7 +222,7 @@ const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
             <button
               onClick={handlePayment}
               className={`w-full btn btn-primary flex items-center justify-center text-lg py-4 ${
-                isLoading ? 'opacity-70 cursor-not-allowed' : ''
+                isLoading ? "opacity-70 cursor-not-allowed" : ""
               }`}
               disabled={isLoading}
             >
@@ -225,7 +254,7 @@ const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
             <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
               Por que assinar a agenda?
             </h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center">
                 <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -236,22 +265,26 @@ const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
                   Gerencie seus horários de forma profissional e eficiente
                 </p>
               </div>
-              
+
               <div className="text-center">
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                   <Gift className="h-6 w-6 text-green-600" />
                 </div>
-                <h4 className="font-medium text-gray-900 mb-2">Produtividade</h4>
+                <h4 className="font-medium text-gray-900 mb-2">
+                  Produtividade
+                </h4>
                 <p className="text-sm text-gray-600">
                   Aumente sua produtividade com ferramentas especializadas
                 </p>
               </div>
-              
+
               <div className="text-center">
                 <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
                   <Star className="h-6 w-6 text-purple-600" />
                 </div>
-                <h4 className="font-medium text-gray-900 mb-2">Profissionalismo</h4>
+                <h4 className="font-medium text-gray-900 mb-2">
+                  Profissionalismo
+                </h4>
                 <p className="text-sm text-gray-600">
                   Ofereça um atendimento mais profissional aos seus pacientes
                 </p>
@@ -262,7 +295,8 @@ const SchedulingAccessPayment: React.FC<SchedulingAccessPaymentProps> = ({
           {/* Contact Info */}
           <div className="mt-8 pt-6 border-t border-gray-200 text-center">
             <p className="text-sm text-gray-600">
-              Dúvidas? Entre em contato: <span className="font-medium">(64) 98124-9199</span>
+              Dúvidas? Entre em contato:{" "}
+              <span className="font-medium">(64) 98124-9199</span>
             </p>
           </div>
         </div>

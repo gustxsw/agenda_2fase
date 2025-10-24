@@ -61,9 +61,9 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
   const getApiUrl = () => {
     if (
       window.location.hostname === "testes-quiro-ferreira.onrender.com" ||
-      window.location.hostname === "www.testes-quiro-ferreira.onrender.com"
+      window.location.hostname === "testes-quiro-ferreira.onrender.com"
     ) {
-      return "https://www.testes-quiro-ferreira.onrender.com";
+      return "https://testes-quiro-ferreira.onrender.com";
     }
 
     return "http://localhost:3001";
@@ -86,13 +86,16 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
         `${apiUrl}/api/dependents?client_id=${clientId}`
       );
 
-      const response = await fetch(`${apiUrl}/api/dependents?client_id=${clientId}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        `${apiUrl}/api/dependents?client_id=${clientId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       console.log("📡 Dependents response status:", response.status);
 
@@ -358,14 +361,14 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
     // For birth dates, don't apply timezone conversion - just format the date as-is
-    if (dateString.includes('T')) {
+    if (dateString.includes("T")) {
       // If it's a datetime string, extract just the date part
-      const datePart = dateString.split('T')[0];
-      const [year, month, day] = datePart.split('-');
+      const datePart = dateString.split("T")[0];
+      const [year, month, day] = datePart.split("-");
       return `${day}/${month}/${year}`;
     } else {
       // If it's already a date string, format it directly
-      const [year, month, day] = dateString.split('-');
+      const [year, month, day] = dateString.split("-");
       return `${day}/${month}/${year}`;
     }
   };
@@ -516,9 +519,8 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
             <div className="text-center">
               <div className="text-lg font-bold text-green-600">
                 {
-                  dependents.filter(
-                    (d) => d.subscription_status === "active"
-                  ).length
+                  dependents.filter((d) => d.subscription_status === "active")
+                    .length
                 }
               </div>
               <div className="text-green-700">Ativos</div>
@@ -526,9 +528,8 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
             <div className="text-center">
               <div className="text-lg font-bold text-yellow-600">
                 {
-                  dependents.filter(
-                    (d) => d.subscription_status === "pending"
-                  ).length
+                  dependents.filter((d) => d.subscription_status === "pending")
+                    .length
                 }
               </div>
               <div className="text-yellow-700">Aguardando</div>
@@ -536,9 +537,8 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
             <div className="text-center">
               <div className="text-lg font-bold text-red-600">
                 {
-                  dependents.filter(
-                    (d) => d.subscription_status === "expired"
-                  ).length
+                  dependents.filter((d) => d.subscription_status === "expired")
+                    .length
                 }
               </div>
               <div className="text-red-700">Vencidos</div>
@@ -546,9 +546,8 @@ const DependentsSection: React.FC<DependentsSectionProps> = ({ clientId }) => {
             <div className="text-center">
               <div className="text-lg font-bold text-blue-600">
                 {formatCurrency(
-                  dependents.filter(
-                    (d) => d.subscription_status === "pending"
-                  ).length * 50
+                  dependents.filter((d) => d.subscription_status === "pending")
+                    .length * 50
                 )}
               </div>
               <div className="text-blue-700">Total Pendente</div>

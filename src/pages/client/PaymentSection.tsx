@@ -34,10 +34,10 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
   // Get API URL - PRODUCTION READY
   const getApiUrl = () => {
     if (
-      window.location.hostname === "www.testes-quiro-ferreira.onrender.com" ||
+      window.location.hostname === "testes-quiro-ferreira.onrender.com" ||
       window.location.hostname === "testes-quiro-ferreira.onrender.com"
     ) {
-      return "https://www.testes-quiro-ferreira.onrender.com";
+      return "https://testes-quiro-ferreira.onrender.com";
     }
 
     return "http://localhost:3001";

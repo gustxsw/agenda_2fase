@@ -27,7 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Get API URL
   const getApiUrl = () => {
-    if (window.location.hostname === 'www.testes-quiro-ferreira.onrender.com' || 
+    if (window.location.hostname === 'testes-quiro-ferreira.onrender.com' || 
         window.location.hostname === 'testes-quiro-ferreira.onrender.com') {
       return 'https://testes-quiro-ferreira.onrender.com';
     }

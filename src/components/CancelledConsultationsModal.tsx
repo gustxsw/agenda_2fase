@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  XCircle, 
-  Calendar, 
-  User, 
-  Users, 
-  Search, 
-  X, 
+import React, { useState, useEffect } from "react";
+import {
+  XCircle,
+  Calendar,
+  User,
+  Users,
+  Search,
+  X,
   AlertCircle,
   MessageSquare,
   Clock,
   MapPin,
-  RefreshCw
-} from 'lucide-react';
+  RefreshCw,
+} from "lucide-react";
 
 type CancelledConsultation = {
   id: number;
@@ -24,7 +24,7 @@ type CancelledConsultation = {
   cancelled_at: string;
   cancelled_by_name: string;
   is_dependent: boolean;
-  patient_type: 'convenio' | 'private';
+  patient_type: "convenio" | "private";
   location_name: string | null;
 };
 
@@ -34,26 +34,28 @@ type CancelledConsultationsModalProps = {
   autoRefresh?: boolean;
 };
 
-const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = ({
-  isOpen,
-  onClose,
-  autoRefresh = false
-}) => {
-  const [cancelledConsultations, setCancelledConsultations] = useState<CancelledConsultation[]>([]);
-  const [filteredConsultations, setFilteredConsultations] = useState<CancelledConsultation[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+const CancelledConsultationsModal: React.FC<
+  CancelledConsultationsModalProps
+> = ({ isOpen, onClose, autoRefresh = false }) => {
+  const [cancelledConsultations, setCancelledConsultations] = useState<
+    CancelledConsultation[]
+  >([]);
+  const [filteredConsultations, setFilteredConsultations] = useState<
+    CancelledConsultation[]
+  >([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [startDate, setStartDate] = useState(getDefaultStartDate());
   const [endDate, setEndDate] = useState(getDefaultEndDate());
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // Get API URL
   const getApiUrl = () => {
     if (
       window.location.hostname === "testes-quiro-ferreira.onrender.com" ||
-      window.location.hostname === "www.testes-quiro-ferreira.onrender.com"
+      window.location.hostname === "testes-quiro-ferreira.onrender.com"
     ) {
-      return "https://www.testes-quiro-ferreira.onrender.com";
+      return "https://testes-quiro-ferreira.onrender.com";
     }
     return "http://localhost:3001";
   };
@@ -62,12 +64,12 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
   function getDefaultStartDate() {
     const date = new Date();
     date.setDate(1); // First day of current month
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   }
 
   function getDefaultEndDate() {
     const date = new Date();
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   }
 
   useEffect(() => {
@@ -87,11 +89,20 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
 
     // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(consultation =>
-        consultation.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        consultation.service_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        consultation.professional_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        consultation.cancellation_reason?.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        (consultation) =>
+          consultation.patient_name
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          consultation.service_name
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          consultation.professional_name
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          consultation.cancellation_reason
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase())
       );
     }
 
@@ -101,42 +112,54 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
   const fetchCancelledConsultations = async () => {
     try {
       setIsLoading(true);
-      setError('');
+      setError("");
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
-      console.log('🔄 [MODAL-CANCEL] Fetching cancelled consultations');
+      console.log("🔄 [MODAL-CANCEL] Fetching cancelled consultations");
 
       const response = await fetch(
         `${apiUrl}/api/reports/cancelled-consultations?start_date=${startDate}&end_date=${endDate}`,
         {
-          method: 'GET',
+          method: "GET",
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-          credentials: 'include'
+          credentials: "include",
         }
       );
 
-      console.log('📡 [MODAL-CANCEL] Response status:', response.status);
+      console.log("📡 [MODAL-CANCEL] Response status:", response.status);
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Sessão expirada. Faça login novamente.');
+          throw new Error("Sessão expirada. Faça login novamente.");
         }
         const errorData = await response.json();
-        console.error('❌ [MODAL-CANCEL] Error response:', errorData);
-        throw new Error(errorData.message || 'Erro ao carregar consultas canceladas');
+        console.error("❌ [MODAL-CANCEL] Error response:", errorData);
+        throw new Error(
+          errorData.message || "Erro ao carregar consultas canceladas"
+        );
       }
 
       const data = await response.json();
-      console.log('✅ [MODAL-CANCEL] Cancelled consultations loaded:', data.length);
+      console.log(
+        "✅ [MODAL-CANCEL] Cancelled consultations loaded:",
+        data.length
+      );
       setCancelledConsultations(data);
     } catch (error) {
-      console.error('❌ [MODAL-CANCEL] Error fetching cancelled consultations:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao carregar consultas canceladas');
+      console.error(
+        "❌ [MODAL-CANCEL] Error fetching cancelled consultations:",
+        error
+      );
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Erro ao carregar consultas canceladas"
+      );
       setCancelledConsultations([]);
     } finally {
       setIsLoading(false);
@@ -151,50 +174,59 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
   const formatDate = (dateString: string) => {
     // Convert from UTC (database) to Brazil local time for display
     const cancelledUtcDate = new Date(dateString);
-    const cancelledLocalDate = new Date(cancelledUtcDate.getTime() - (3 * 60 * 60 * 1000));
-    return cancelledLocalDate.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    const cancelledLocalDate = new Date(
+      cancelledUtcDate.getTime() - 3 * 60 * 60 * 1000
+    );
+    return cancelledLocalDate.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
     }).format(value);
   };
 
   const getPatientTypeDisplay = (consultation: CancelledConsultation) => {
-    if (consultation.patient_type === 'private') {
+    if (consultation.patient_type === "private") {
       return {
         icon: <User className="h-3 w-3 text-purple-600" />,
-        label: 'Particular',
-        className: 'bg-purple-100 text-purple-800'
+        label: "Particular",
+        className: "bg-purple-100 text-purple-800",
       };
     } else if (consultation.is_dependent) {
       return {
         icon: <Users className="h-3 w-3 text-blue-600" />,
-        label: 'Dependente',
-        className: 'bg-blue-100 text-blue-800'
+        label: "Dependente",
+        className: "bg-blue-100 text-blue-800",
       };
     } else {
       return {
         icon: <User className="h-3 w-3 text-green-600" />,
-        label: 'Titular',
-        className: 'bg-green-100 text-green-800'
+        label: "Titular",
+        className: "bg-green-100 text-green-800",
       };
     }
   };
 
   // Statistics
   const totalCancelled = cancelledConsultations.length;
-  const totalValue = cancelledConsultations.reduce((sum, c) => sum + c.value, 0);
-  const convenioCount = cancelledConsultations.filter(c => c.patient_type === 'convenio').length;
-  const privateCount = cancelledConsultations.filter(c => c.patient_type === 'private').length;
+  const totalValue = cancelledConsultations.reduce(
+    (sum, c) => sum + c.value,
+    0
+  );
+  const convenioCount = cancelledConsultations.filter(
+    (c) => c.patient_type === "convenio"
+  ).length;
+  const privateCount = cancelledConsultations.filter(
+    (c) => c.patient_type === "private"
+  ).length;
 
   if (!isOpen) return null;
 
@@ -206,13 +238,15 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
           <div className="flex items-center">
             <XCircle className="h-6 w-6 text-red-600 mr-3" />
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Consultas Canceladas</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                Consultas Canceladas
+              </h2>
               <p className="text-sm text-gray-600">
                 Histórico de consultas canceladas
               </p>
             </div>
           </div>
-          
+
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -223,7 +257,10 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
 
         {/* Date Range Filter */}
         <div className="p-6 border-b border-gray-200 bg-white">
-          <form onSubmit={handleDateRangeSubmit} className="flex items-end space-x-4">
+          <form
+            onSubmit={handleDateRangeSubmit}
+            className="flex items-end space-x-4"
+          >
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Data Inicial
@@ -253,7 +290,7 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
             <button
               type="submit"
               className={`btn btn-primary flex items-center ${
-                isLoading ? 'opacity-70 cursor-not-allowed' : ''
+                isLoading ? "opacity-70 cursor-not-allowed" : ""
               }`}
               disabled={isLoading}
             >
@@ -263,7 +300,7 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
                   Carregando...
                 </>
               ) : (
-                'Filtrar'
+                "Filtrar"
               )}
             </button>
           </form>
@@ -274,25 +311,33 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">{totalCancelled}</div>
+                <div className="text-2xl font-bold text-red-600">
+                  {totalCancelled}
+                </div>
                 <div className="text-sm text-gray-600">Total Canceladas</div>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{convenioCount}</div>
+                <div className="text-2xl font-bold text-green-600">
+                  {convenioCount}
+                </div>
                 <div className="text-sm text-gray-600">Convênio</div>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">{privateCount}</div>
+                <div className="text-2xl font-bold text-purple-600">
+                  {privateCount}
+                </div>
                 <div className="text-sm text-gray-600">Particulares</div>
               </div>
             </div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-gray-600">{formatCurrency(totalValue)}</div>
+                <div className="text-2xl font-bold text-gray-600">
+                  {formatCurrency(totalValue)}
+                </div>
                 <div className="text-sm text-gray-600">Valor Total</div>
               </div>
             </div>
@@ -325,19 +370,22 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
           {isLoading ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Carregando consultas canceladas...</p>
+              <p className="text-gray-600">
+                Carregando consultas canceladas...
+              </p>
             </div>
           ) : filteredConsultations.length === 0 ? (
             <div className="text-center py-12">
               <XCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {searchTerm ? 'Nenhuma consulta encontrada' : 'Nenhuma consulta cancelada'}
+                {searchTerm
+                  ? "Nenhuma consulta encontrada"
+                  : "Nenhuma consulta cancelada"}
               </h3>
               <p className="text-gray-600">
-                {searchTerm 
-                  ? 'Tente ajustar os termos de busca.'
-                  : 'Não há consultas canceladas no período selecionado.'
-                }
+                {searchTerm
+                  ? "Tente ajustar os termos de busca."
+                  : "Não há consultas canceladas no período selecionado."}
               </p>
             </div>
           ) : (
@@ -371,7 +419,7 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredConsultations.map((consultation) => {
                     const patientTypeInfo = getPatientTypeDisplay(consultation);
-                    
+
                     return (
                       <tr key={consultation.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -387,14 +435,18 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
                               <div className="text-sm font-medium text-gray-900">
                                 {consultation.patient_name}
                               </div>
-                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${patientTypeInfo.className}`}>
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${patientTypeInfo.className}`}
+                              >
                                 {patientTypeInfo.label}
                               </span>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{consultation.service_name}</div>
+                          <div className="text-sm text-gray-900">
+                            {consultation.service_name}
+                          </div>
                           {consultation.location_name && (
                             <div className="text-xs text-gray-500 flex items-center mt-1">
                               <MapPin className="h-3 w-3 mr-1" />
@@ -403,7 +455,9 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{consultation.professional_name}</div>
+                          <div className="text-sm text-gray-900">
+                            {consultation.professional_name}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
@@ -457,12 +511,17 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
               <div>
                 <span className="font-medium text-red-800">Período:</span>
                 <div className="text-red-700">
-                  {new Date(startDate).toLocaleDateString('pt-BR')} a {new Date(endDate).toLocaleDateString('pt-BR')}
+                  {new Date(startDate).toLocaleDateString("pt-BR")} a{" "}
+                  {new Date(endDate).toLocaleDateString("pt-BR")}
                 </div>
               </div>
               <div>
-                <span className="font-medium text-red-800">Total Canceladas:</span>
-                <div className="text-red-700">{filteredConsultations.length}</div>
+                <span className="font-medium text-red-800">
+                  Total Canceladas:
+                </span>
+                <div className="text-red-700">
+                  {filteredConsultations.length}
+                </div>
               </div>
               <div>
                 <span className="font-medium text-red-800">Valor Total:</span>
@@ -471,7 +530,11 @@ const CancelledConsultationsModal: React.FC<CancelledConsultationsModalProps> = 
               <div>
                 <span className="font-medium text-red-800">Com Motivo:</span>
                 <div className="text-red-700">
-                  {cancelledConsultations.filter(c => c.cancellation_reason).length} de {totalCancelled}
+                  {
+                    cancelledConsultations.filter((c) => c.cancellation_reason)
+                      .length
+                  }{" "}
+                  de {totalCancelled}
                 </div>
               </div>
             </div>

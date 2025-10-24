@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { FileText, Download, Save, X, Eye, AlertCircle, CheckCircle, Printer } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import {
+  FileText,
+  Download,
+  Save,
+  X,
+  Eye,
+  AlertCircle,
+  CheckCircle,
+  Printer,
+} from "lucide-react";
 
 declare global {
   interface Window {
@@ -42,17 +51,17 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
   const { user } = useAuth();
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
 
   // Get API URL
   const getApiUrl = () => {
     if (
       window.location.hostname === "testes-quiro-ferreira.onrender.com" ||
-      window.location.hostname === "www.testes-quiro-ferreira.onrender.com"
+      window.location.hostname === "testes-quiro-ferreira.onrender.com"
     ) {
-      return "https://www.testes-quiro-ferreira.onrender.com";
+      return "https://testes-quiro-ferreira.onrender.com";
     }
     return "http://localhost:3001";
   };
@@ -61,19 +70,22 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
   useEffect(() => {
     const fetchSignature = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem("token");
         const apiUrl = getApiUrl();
 
-        const response = await fetch(`${apiUrl}/api/professionals/${user?.id}/signature`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await fetch(
+          `${apiUrl}/api/professionals/${user?.id}/signature`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
 
         if (response.ok) {
           const signatureData = await response.json();
           setSignatureUrl(signatureData.signature_url);
         }
       } catch (error) {
-        console.warn('Could not load signature:', error);
+        console.warn("Could not load signature:", error);
       }
     };
 
@@ -85,31 +97,37 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
   // Generate HTML content for the medical record
   const generateHTML = () => {
     const vitalSigns = recordData.vital_signs || {};
-    const hasVitalSigns = Object.values(vitalSigns).some(value => value && value.toString().trim());
+    const hasVitalSigns = Object.values(vitalSigns).some(
+      (value) => value && value.toString().trim()
+    );
 
-    let vitalSignsHTML = '';
+    let vitalSignsHTML = "";
     if (hasVitalSigns) {
       const vitalSignItems = [
-        { label: 'Pressão Arterial', value: vitalSigns.blood_pressure },
-        { label: 'Freq. Cardíaca', value: vitalSigns.heart_rate },
-        { label: 'Temperatura', value: vitalSigns.temperature },
-        { label: 'Freq. Respiratória', value: vitalSigns.respiratory_rate },
-        { label: 'Sat. O₂', value: vitalSigns.oxygen_saturation },
-        { label: 'Peso', value: vitalSigns.weight },
-        { label: 'Altura', value: vitalSigns.height }
-      ].filter(item => item.value && item.value.toString().trim());
+        { label: "Pressão Arterial", value: vitalSigns.blood_pressure },
+        { label: "Freq. Cardíaca", value: vitalSigns.heart_rate },
+        { label: "Temperatura", value: vitalSigns.temperature },
+        { label: "Freq. Respiratória", value: vitalSigns.respiratory_rate },
+        { label: "Sat. O₂", value: vitalSigns.oxygen_saturation },
+        { label: "Peso", value: vitalSigns.weight },
+        { label: "Altura", value: vitalSigns.height },
+      ].filter((item) => item.value && item.value.toString().trim());
 
       if (vitalSignItems.length > 0) {
         vitalSignsHTML = `
           <div class="section">
             <h3>Sinais Vitais</h3>
             <div class="vital-signs-grid">
-              ${vitalSignItems.map(item => `
+              ${vitalSignItems
+                .map(
+                  (item) => `
                 <div class="vital-sign-item">
                   <div class="vital-sign-label">${item.label}</div>
                   <div class="vital-sign-value">${item.value}</div>
                 </div>
-              `).join('')}
+              `
+                )
+                .join("")}
             </div>
           </div>
         `;
@@ -117,23 +135,33 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
     }
 
     const medicalSections = [
-      { title: 'Queixa Principal', content: recordData.chief_complaint },
-      { title: 'História da Doença Atual', content: recordData.history_present_illness },
-      { title: 'História Médica Pregressa', content: recordData.past_medical_history },
-      { title: 'Medicamentos em Uso', content: recordData.medications },
-      { title: 'Alergias', content: recordData.allergies },
-      { title: 'Exame Físico', content: recordData.physical_examination },
-      { title: 'Diagnóstico', content: recordData.diagnosis },
-      { title: 'Plano de Tratamento', content: recordData.treatment_plan },
-      { title: 'Observações Gerais', content: recordData.notes }
-    ].filter(section => section.content && section.content.trim());
+      { title: "Queixa Principal", content: recordData.chief_complaint },
+      {
+        title: "História da Doença Atual",
+        content: recordData.history_present_illness,
+      },
+      {
+        title: "História Médica Pregressa",
+        content: recordData.past_medical_history,
+      },
+      { title: "Medicamentos em Uso", content: recordData.medications },
+      { title: "Alergias", content: recordData.allergies },
+      { title: "Exame Físico", content: recordData.physical_examination },
+      { title: "Diagnóstico", content: recordData.diagnosis },
+      { title: "Plano de Tratamento", content: recordData.treatment_plan },
+      { title: "Observações Gerais", content: recordData.notes },
+    ].filter((section) => section.content && section.content.trim());
 
-    const medicalSectionsHTML = medicalSections.map(section => `
+    const medicalSectionsHTML = medicalSections
+      .map(
+        (section) => `
       <div class="section">
         <h3>${section.title}</h3>
         <p>${section.content}</p>
       </div>
-    `).join('');
+    `
+      )
+      .join("");
 
     return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -311,29 +339,38 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
 
     <div class="patient-info">
         <strong>Paciente:</strong> ${recordData.patient_name}<br>
-        <strong>Data do Atendimento:</strong> ${new Date(recordData.created_at).toLocaleDateString('pt-BR')}<br>
-        <strong>Data de Emissão:</strong> ${new Date().toLocaleDateString('pt-BR')}
+        <strong>Data do Atendimento:</strong> ${new Date(
+          recordData.created_at
+        ).toLocaleDateString("pt-BR")}<br>
+        <strong>Data de Emissão:</strong> ${new Date().toLocaleDateString(
+          "pt-BR"
+        )}
     </div>
 
     ${vitalSignsHTML}
 
     ${medicalSectionsHTML}
 
-    ${medicalSections.length === 0 ? `
+    ${
+      medicalSections.length === 0
+        ? `
     <div class="section">
         <p><em>Prontuário médico sem informações clínicas detalhadas registradas.</em></p>
     </div>
-    ` : ''}
+    `
+        : ""
+    }
 
     <div class="signature">
-        ${signatureUrl ? 
-          `<img src="${signatureUrl}" alt="Assinatura" class="signature-image" />` : 
-          '<div class="signature-line"></div>'
+        ${
+          signatureUrl
+            ? `<img src="${signatureUrl}" alt="Assinatura" class="signature-image" />`
+            : '<div class="signature-line"></div>'
         }
         <div>
             <strong>${professionalData.name}</strong><br>
             ${professionalData.specialty}<br>
-            ${professionalData.crm ? `Registro: ${professionalData.crm}` : ''}
+            ${professionalData.crm ? `Registro: ${professionalData.crm}` : ""}
         </div>
     </div>
 
@@ -344,19 +381,19 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
   // Função de impressão direta e confiável
   const printMedicalRecord = () => {
     try {
-      setError('');
-      setSuccess('');
-      
-      console.log('🔄 Starting medical record print process');
-      
+      setError("");
+      setSuccess("");
+
+      console.log("🔄 Starting medical record print process");
+
       // Gerar HTML otimizado
       const htmlContent = generateHTML();
-      
+
       // Criar nova janela para impressão
-      const printWindow = window.open('', '_blank', 'width=800,height=600');
-      
+      const printWindow = window.open("", "_blank", "width=800,height=600");
+
       if (!printWindow) {
-        throw new Error('Popup foi bloqueado. Permita popups para imprimir.');
+        throw new Error("Popup foi bloqueado. Permita popups para imprimir.");
       }
 
       // Escrever conteúdo na nova janela
@@ -367,7 +404,7 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
       printWindow.onload = () => {
         setTimeout(() => {
           printWindow.print();
-          
+
           // Fechar janela após impressão
           setTimeout(() => {
             printWindow.close();
@@ -375,13 +412,14 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
         }, 500);
       };
 
-      setSuccess('Janela de impressão aberta! Use Ctrl+P se necessário.');
-      
-      console.log('✅ Print window opened successfully');
-      
+      setSuccess("Janela de impressão aberta! Use Ctrl+P se necessário.");
+
+      console.log("✅ Print window opened successfully");
     } catch (error) {
-      console.error('❌ Error in print process:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao imprimir prontuário');
+      console.error("❌ Error in print process:", error);
+      setError(
+        error instanceof Error ? error.message : "Erro ao imprimir prontuário"
+      );
     }
   };
 
@@ -389,20 +427,22 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
   const downloadAsHTML = () => {
     try {
       const htmlContent = generateHTML();
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      link.download = `Prontuario_${recordData.patient_name.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.html`;
+      link.download = `Prontuario_${recordData.patient_name
+        .replace(/[^a-zA-Z0-9\s]/g, "")
+        .replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.html`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      
-      setSuccess('Prontuário baixado em HTML com sucesso!');
+
+      setSuccess("Prontuário baixado em HTML com sucesso!");
     } catch (error) {
-      console.error('Error downloading HTML:', error);
-      setError('Erro ao baixar HTML');
+      console.error("Error downloading HTML:", error);
+      setError("Erro ao baixar HTML");
     }
   };
 
@@ -416,13 +456,15 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
           <div className="flex items-center">
             <FileText className="h-6 w-6 text-red-600 mr-3" />
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Preview do Prontuário Médico</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                Preview do Prontuário Médico
+              </h2>
               <p className="text-sm text-gray-600">
                 Paciente: {recordData.patient_name}
               </p>
             </div>
           </div>
-          
+
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -449,16 +491,16 @@ const MedicalRecordPreviewModal: React.FC<MedicalRecordPreviewModalProps> = ({
         {/* Document Preview */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div 
+            <div
               className="p-8"
               dangerouslySetInnerHTML={{ __html: generateHTML() }}
               style={{
-                fontFamily: 'Times New Roman, serif',
-                lineHeight: '1.6',
-                color: '#333',
-                maxWidth: '210mm',
-                margin: '0 auto',
-                backgroundColor: 'white'
+                fontFamily: "Times New Roman, serif",
+                lineHeight: "1.6",
+                color: "#333",
+                maxWidth: "210mm",
+                margin: "0 auto",
+                backgroundColor: "white",
               }}
             />
           </div>
