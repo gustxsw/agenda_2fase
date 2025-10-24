@@ -4582,7 +4582,20 @@ app.post(
         body: preferenceData,
       });
 
-      console.log("✅ Subscription preference created:", subscriptionResult.id);
+      console.log("📦 MercadoPago response (subscription):", subscriptionResult);
+
+      const preferenceId =
+        subscriptionResult?.body?.id ??
+        subscriptionResult?.id ??
+        null;
+
+      const initPoint =
+        subscriptionResult?.body?.init_point ??
+        subscriptionResult?.body?.sandbox_init_point ??
+        subscriptionResult?.init_point ??
+        null;
+
+      console.log("✅ Subscription preference created:", { preferenceId, initPoint });
 
       // Save payment record
       await pool.query(
@@ -4594,14 +4607,14 @@ app.post(
           user_id,
           2.0,
           "pending",
-          subscriptionResult.id,
+          preferenceId,
           `subscription_${user_id}_${Date.now()}`,
         ]
       );
 
       res.json({
-        preference_id: subscriptionResult.id,
-        init_point: subscriptionResult.init_point,
+        preference_id: preferenceId,
+        init_point: initPoint,
       });
     } catch (error) {
       console.error("❌ Error creating subscription:", error);
@@ -4684,10 +4697,20 @@ app.post(
         body: preferenceData,
       });
 
-      console.log(
-        "✅ Dependent preference created:",
-        dependentPaymentResult.id
-      );
+      console.log("📦 MercadoPago response (dependent):", dependentPaymentResult);
+
+      const preferenceId =
+        dependentPaymentResult?.body?.id ??
+        dependentPaymentResult?.id ??
+        null;
+
+      const initPoint =
+        dependentPaymentResult?.body?.init_point ??
+        dependentPaymentResult?.body?.sandbox_init_point ??
+        dependentPaymentResult?.init_point ??
+        null;
+
+      console.log("✅ Dependent preference created:", { preferenceId, initPoint });
 
       // Save payment record
       await pool.query(
@@ -4699,14 +4722,14 @@ app.post(
           dependent_id,
           1.0,
           "pending",
-          dependentPaymentResult.id,
+          preferenceId,
           `dependent_${dependent_id}_${Date.now()}`,
         ]
       );
 
       res.json({
-        preference_id: dependentPaymentResult.id,
-        init_point: dependentPaymentResult.init_point,
+        preference_id: preferenceId,
+        init_point: initPoint,
       });
     } catch (error) {
       console.error("❌ Error creating dependent payment:", error);
@@ -4766,7 +4789,20 @@ app.post(
         body: preferenceData,
       });
 
-      console.log("✅ Professional preference created:", professionalResult.id);
+      console.log("📦 MercadoPago response (professional):", professionalResult);
+
+      const preferenceId =
+        professionalResult?.body?.id ??
+        professionalResult?.id ??
+        null;
+
+      const initPoint =
+        professionalResult?.body?.init_point ??
+        professionalResult?.body?.sandbox_init_point ??
+        professionalResult?.init_point ??
+        null;
+
+      console.log("✅ Professional preference created:", { preferenceId, initPoint });
 
       // Save payment record
       await pool.query(
@@ -4778,14 +4814,14 @@ app.post(
           req.user.id,
           Number.parseFloat(amount),
           "pending",
-          professionalResult.id,
+          preferenceId,
           `professional_${req.user.id}_${Date.now()}`,
         ]
       );
 
       res.json({
-        preference_id: professionalResult.id,
-        init_point: professionalResult.init_point,
+        preference_id: preferenceId,
+        init_point: initPoint,
       });
     } catch (error) {
       console.error("❌ Error creating professional payment:", error);
@@ -4845,7 +4881,20 @@ app.post(
 
       const agendaResult = await preference.create({ body: preferenceData });
 
-      console.log("✅ Agenda preference created:", agendaResult.id);
+      console.log("📦 MercadoPago response (agenda):", agendaResult);
+
+      const preferenceId =
+        agendaResult?.body?.id ??
+        agendaResult?.id ??
+        null;
+
+      const initPoint =
+        agendaResult?.body?.init_point ??
+        agendaResult?.body?.sandbox_init_point ??
+        agendaResult?.init_point ??
+        null;
+
+      console.log("✅ Agenda preference created:", { preferenceId, initPoint });
 
       // Save payment record
       await pool.query(
@@ -4858,14 +4907,14 @@ app.post(
           duration_days,
           0.5,
           "pending",
-          agendaResult.id,
+          preferenceId,
           `agenda_${req.user.id}_${duration_days}_${Date.now()}`,
         ]
       );
 
       res.json({
-        preference_id: agendaResult.id,
-        init_point: agendaResult.init_point,
+        preference_id: preferenceId,
+        init_point: initPoint,
       });
     } catch (error) {
       console.error("❌ Error creating agenda payment:", error);
