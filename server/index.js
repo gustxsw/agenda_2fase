@@ -1577,7 +1577,17 @@ app.get(
         });
       });
 
-      res.json(result.rows);
+      // ✅ Ajusta o fuso horário para America/Sao_Paulo
+      const consultationsWithBrazilTZ = result.rows.map((row) => ({
+        ...row,
+        date: row.date
+          ? new Date(row.date).toLocaleString("sv-SE", {
+              timeZone: "America/Sao_Paulo",
+            })
+          : null,
+      }));
+
+      res.json(consultationsWithBrazilTZ);
     } catch (error) {
       console.error(
         "❌ [AGENDA-QUERY] Error fetching consultations for agenda:",
@@ -6766,5 +6776,3 @@ process.on("SIGINT", async () => {
 
 // Start the server
 startServer();
-
-//testando 1,2,3
