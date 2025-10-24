@@ -56,10 +56,10 @@ const ManageSchedulingAccessPage: React.FC = () => {
   // Get API URL
   const getApiUrl = () => {
     if (
-      window.location.hostname === "cartaoquiroferreira.com.br" ||
-      window.location.hostname === "www.cartaoquiroferreira.com.br"
+      window.location.hostname === "testes-quiro-ferreira.onrender.com" ||
+      window.location.hostname === "www.testes-quiro-ferreira.onrender.com"
     ) {
-      return "https://www.cartaoquiroferreira.com.br";
+      return "https://www.testes-quiro-ferreira.onrender.com";
     }
     return "http://localhost:3001";
   };

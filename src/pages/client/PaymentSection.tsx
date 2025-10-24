@@ -34,10 +34,10 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
   // Get API URL - PRODUCTION READY
   const getApiUrl = () => {
     if (
-      window.location.hostname === "www.cartaoquiroferreira.com.br" ||
-      window.location.hostname === "cartaoquiroferreira.com.br"
+      window.location.hostname === "www.testes-quiro-ferreira.onrender.com" ||
+      window.location.hostname === "testes-quiro-ferreira.onrender.com"
     ) {
-      return "https://www.cartaoquiroferreira.com.br";
+      return "https://www.testes-quiro-ferreira.onrender.com";
     }
 
     return "http://localhost:3001";
@@ -198,9 +198,7 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
   // 🔥 VERIFICAÇÃO SECUNDÁRIA: Se status é ativo, mostrar apenas informações
   if (verifiedStatus === "active") {
     console.log("✅ CLIENTE ATIVO: Mostrando apenas status da assinatura");
-    return (
-      null
-    );
+    return null;
   }
 
   // 🔥 VERIFICAÇÃO TERCIÁRIA: Só mostrar pagamento se realmente não for ativo

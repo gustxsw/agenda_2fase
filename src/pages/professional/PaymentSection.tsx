@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { CreditCard, AlertCircle, CheckCircle, ExternalLink } from "lucide-react";
+import {
+  CreditCard,
+  AlertCircle,
+  CheckCircle,
+  ExternalLink,
+} from "lucide-react";
 
 declare global {
   interface Window {
@@ -19,10 +24,10 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({ amount }) => {
   // Get API URL - PRODUCTION READY
   const getApiUrl = () => {
     if (
-      window.location.hostname === "www.cartaoquiroferreira.com.br" ||
-      window.location.hostname === "cartaoquiroferreira.com.br"
+      window.location.hostname === "www.testes-quiro-ferreira.onrender.com" ||
+      window.location.hostname === "testes-quiro-ferreira.onrender.com"
     ) {
-      return "https://www.cartaoquiroferreira.com.br";
+      return "https://www.testes-quiro-ferreira.onrender.com";
     }
 
     return "http://localhost:3001";
@@ -103,7 +108,7 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({ amount }) => {
 
       // Redirect to MercadoPago
       setTimeout(() => {
-        window.open(data.init_point, '_blank');
+        window.open(data.init_point, "_blank");
       }, 1000);
     } catch (error) {
       console.error("Payment error:", error);
@@ -144,10 +149,13 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({ amount }) => {
 
       <div className="space-y-4">
         <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-          <h3 className="font-medium mb-2 text-red-900">Detalhes do Pagamento</h3>
+          <h3 className="font-medium mb-2 text-red-900">
+            Detalhes do Pagamento
+          </h3>
           <div className="space-y-2">
             <p className="text-sm text-red-700">
-              Valor a ser repassado ao convênio referente às consultas realizadas este mês
+              Valor a ser repassado ao convênio referente às consultas
+              realizadas este mês
             </p>
             <p className="font-bold text-lg text-red-900">
               Total a pagar: {formatCurrency(validAmount)}
@@ -197,8 +205,8 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({ amount }) => {
 
         <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
           <p className="text-sm text-blue-700">
-            <strong>💡 Dica:</strong> Após o pagamento, o valor será automaticamente 
-            atualizado em seu relatório financeiro.
+            <strong>💡 Dica:</strong> Após o pagamento, o valor será
+            automaticamente atualizado em seu relatório financeiro.
           </p>
         </div>
       </div>
