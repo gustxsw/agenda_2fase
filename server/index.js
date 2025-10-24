@@ -65,6 +65,10 @@ if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../dist")));
 }
 
+if (process.env.NODE_ENV === "production") {
+  process.env.TZ = "America/Sao_Paulo";
+}
+
 // Initialize MercadoPago SDK v2
 console.log("🔄 Initializing MercadoPago SDK v2...");
 const client = new MercadoPagoConfig({
