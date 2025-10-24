@@ -667,7 +667,7 @@ const logAuditAction = async (
 const getProductionUrls = () => {
   const baseUrl =
     process.env.NODE_ENV === "production"
-      ? "https://testes-quiro-ferreira.onrender.com/"
+      ? "https://testes-quiro-ferreira.onrender.com"
       : "http://localhost:5173";
 
   return {
@@ -693,12 +693,12 @@ const getProductionUrls = () => {
     },
     webhook:
       process.env.NODE_ENV === "production"
-        ? "https://testes-quiro-ferreira.onrender.com//api/webhooks/payment-success"
+        ? "https://testes-quiro-ferreira.onrender.com/api/webhooks/payment-success"
         : "http://localhost:3001/api/webhooks/payment-success",
     // Webhook alternativo para mobile
     webhookAlt:
       process.env.NODE_ENV === "production"
-        ? "https://testes-quiro-ferreira.onrender.com//api/webhook/payment"
+        ? "https://testes-quiro-ferreira.onrender.com/api/webhook/payment"
         : "http://localhost:3001/api/webhook/payment",
   };
 };
