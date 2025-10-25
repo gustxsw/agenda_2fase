@@ -1,5 +1,13 @@
-import React, { useState, useRef } from 'react';
-import { Upload, X, Check, Eye, AlertCircle, FileImage, Trash2 } from 'lucide-react';
+import React, { useState, useRef } from "react";
+import {
+  Upload,
+  X,
+  Check,
+  Eye,
+  AlertCircle,
+  FileImage,
+  Trash2,
+} from "lucide-react";
 
 type UploadSignatureModalProps = {
   isOpen: boolean;
@@ -12,22 +20,22 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  currentSignatureUrl
+  currentSignatureUrl,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get API URL
   const getApiUrl = () => {
     if (
-      window.location.hostname === "testes-quiro-ferreira.onrender.com" ||
-      window.location.hostname === "testes-quiro-ferreira.onrender.com"
+      window.location.hostname === "cartaoquiroferreira.com.br" ||
+      window.location.hostname === "www.cartaoquiroferreira.com.br"
     ) {
-      return "https://testes-quiro-ferreira.onrender.com";
+      return "https://www.cartaoquiroferreira.com.br";
     }
     return "http://localhost:3001";
   };
@@ -36,18 +44,20 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Por favor, selecione apenas arquivos de imagem (PNG, JPEG, JPG)');
+    if (!file.type.startsWith("image/")) {
+      setError(
+        "Por favor, selecione apenas arquivos de imagem (PNG, JPEG, JPG)"
+      );
       return;
     }
 
     // Validate file size (2MB max for signatures)
     if (file.size > 2 * 1024 * 1024) {
-      setError('A imagem deve ter no máximo 2MB');
+      setError("A imagem deve ter no máximo 2MB");
       return;
     }
 
@@ -64,60 +74,65 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
   const clearSelection = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      setError('Selecione uma imagem para fazer upload');
+      setError("Selecione uma imagem para fazer upload");
       return;
     }
 
     try {
       setIsUploading(true);
-      setError('');
-      setSuccess('');
+      setError("");
+      setSuccess("");
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
 
       // Get current user ID from localStorage
-      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
       const userId = userData.id;
 
       if (!userId) {
-        throw new Error('Usuário não identificado');
+        throw new Error("Usuário não identificado");
       }
 
-      console.log('🔄 Uploading signature for professional:', userId);
+      console.log("🔄 Uploading signature for professional:", userId);
 
       const formData = new FormData();
-      formData.append('signature', selectedFile);
+      formData.append("signature", selectedFile);
 
-      const response = await fetch(`${apiUrl}/api/professionals/${userId}/signature`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      const response = await fetch(
+        `${apiUrl}/api/professionals/${userId}/signature`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
 
-      console.log('📡 Signature upload response status:', response.status);
+      console.log("📡 Signature upload response status:", response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ Signature upload error:', errorData);
-        throw new Error(errorData.message || 'Erro ao fazer upload da assinatura');
+        console.error("❌ Signature upload error:", errorData);
+        throw new Error(
+          errorData.message || "Erro ao fazer upload da assinatura"
+        );
       }
 
       const result = await response.json();
-      console.log('✅ Signature uploaded successfully:', result);
+      console.log("✅ Signature uploaded successfully:", result);
 
-      setSuccess('Assinatura digital salva com sucesso!');
+      setSuccess("Assinatura digital salva com sucesso!");
 
       // Clear form and close modal after success
       setTimeout(() => {
@@ -125,10 +140,13 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
         onSuccess();
         onClose();
       }, 1500);
-
     } catch (error) {
-      console.error('❌ Error uploading signature:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao fazer upload da assinatura');
+      console.error("❌ Error uploading signature:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Erro ao fazer upload da assinatura"
+      );
     } finally {
       setIsUploading(false);
     }
@@ -139,40 +157,44 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
 
     try {
       setIsUploading(true);
-      setError('');
-      setSuccess('');
+      setError("");
+      setSuccess("");
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const apiUrl = getApiUrl();
-      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
       const userId = userData.id;
 
-      console.log('🔄 Removing current signature for professional:', userId);
+      console.log("🔄 Removing current signature for professional:", userId);
 
-      const response = await fetch(`${apiUrl}/api/professionals/${userId}/signature`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${apiUrl}/api/professionals/${userId}/signature`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      console.log('📡 Signature removal response status:', response.status);
+      console.log("📡 Signature removal response status:", response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Erro ao remover assinatura');
+        throw new Error(errorData.message || "Erro ao remover assinatura");
       }
 
-      setSuccess('Assinatura removida com sucesso!');
+      setSuccess("Assinatura removida com sucesso!");
 
       setTimeout(() => {
         onSuccess();
         onClose();
       }, 1500);
-
     } catch (error) {
-      console.error('❌ Error removing signature:', error);
-      setError(error instanceof Error ? error.message : 'Erro ao remover assinatura');
+      console.error("❌ Error removing signature:", error);
+      setError(
+        error instanceof Error ? error.message : "Erro ao remover assinatura"
+      );
     } finally {
       setIsUploading(false);
     }
@@ -188,7 +210,9 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold flex items-center">
               <FileImage className="h-6 w-6 text-red-600 mr-2" />
-              {currentSignatureUrl ? 'Gerenciar Assinatura Digital' : 'Upload de Assinatura Digital'}
+              {currentSignatureUrl
+                ? "Gerenciar Assinatura Digital"
+                : "Upload de Assinatura Digital"}
             </h2>
             <button
               onClick={onClose}
@@ -219,14 +243,16 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
           {/* Current Signature Display */}
           {currentSignatureUrl && !selectedFile && (
             <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Assinatura Atual</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Assinatura Atual
+              </h3>
               <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-6">
                 <div className="text-center">
                   <img
                     src={currentSignatureUrl}
                     alt="Assinatura atual"
                     className="max-w-full max-h-32 mx-auto mb-4 border border-gray-200 rounded"
-                    style={{ maxHeight: '120px' }}
+                    style={{ maxHeight: "120px" }}
                   />
                   <p className="text-sm text-gray-600 mb-4">
                     Esta é sua assinatura digital atual
@@ -258,9 +284,11 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
           {(!currentSignatureUrl || selectedFile) && (
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                {selectedFile ? 'Nova Assinatura Selecionada' : 'Selecionar Assinatura'}
+                {selectedFile
+                  ? "Nova Assinatura Selecionada"
+                  : "Selecionar Assinatura"}
               </h3>
-              
+
               {!selectedFile ? (
                 <div
                   onClick={() => fileInputRef.current?.click()}
@@ -278,16 +306,17 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
                 <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-6">
                   <div className="text-center">
                     <img
-                      src={previewUrl || ''}
+                      src={previewUrl || ""}
                       alt="Preview da assinatura"
                       className="max-w-full max-h-32 mx-auto mb-4 border border-gray-200 rounded bg-white"
-                      style={{ maxHeight: '120px' }}
+                      style={{ maxHeight: "120px" }}
                     />
                     <p className="text-sm text-gray-600 mb-4">
                       <strong>Arquivo:</strong> {selectedFile.name}
                     </p>
                     <p className="text-xs text-gray-500 mb-4">
-                      <strong>Tamanho:</strong> {(selectedFile.size / 1024).toFixed(1)} KB
+                      <strong>Tamanho:</strong>{" "}
+                      {(selectedFile.size / 1024).toFixed(1)} KB
                     </p>
                     <div className="flex justify-center space-x-3">
                       <button
@@ -324,13 +353,18 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
 
           {/* Instructions */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h4 className="font-medium text-blue-900 mb-2">💡 Dicas para uma boa assinatura:</h4>
+            <h4 className="font-medium text-blue-900 mb-2">
+              💡 Dicas para uma boa assinatura:
+            </h4>
             <ul className="text-sm text-blue-700 space-y-1">
               <li>• Use fundo branco ou transparente</li>
               <li>• Assinatura deve estar bem visível e legível</li>
               <li>• Evite bordas ou elementos desnecessários</li>
               <li>• Tamanho recomendado: 300x100 pixels</li>
-              <li>• A assinatura será redimensionada automaticamente nos documentos</li>
+              <li>
+                • A assinatura será redimensionada automaticamente nos
+                documentos
+              </li>
             </ul>
           </div>
 
@@ -343,12 +377,12 @@ const UploadSignatureModal: React.FC<UploadSignatureModalProps> = ({
             >
               Cancelar
             </button>
-            
+
             {selectedFile && (
               <button
                 onClick={handleUpload}
                 className={`btn btn-primary flex items-center ${
-                  isUploading ? 'opacity-70 cursor-not-allowed' : ''
+                  isUploading ? "opacity-70 cursor-not-allowed" : ""
                 }`}
                 disabled={isUploading}
               >

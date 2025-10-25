@@ -138,10 +138,10 @@ const SchedulingPage: React.FC = () => {
   // Get API URL
   const getApiUrl = () => {
     if (
-      window.location.hostname === "testes-quiro-ferreira.onrender.com" ||
-      window.location.hostname === "testes-quiro-ferreira.onrender.com"
+      window.location.hostname === "cartaoquiroferreira.com.br" ||
+      window.location.hostname === "www.cartaoquiroferreira.com.br"
     ) {
-      return "https://testes-quiro-ferreira.onrender.com";
+      return "https://www.cartaoquiroferreira.com.br";
     }
     return "http://localhost:3001";
   };
